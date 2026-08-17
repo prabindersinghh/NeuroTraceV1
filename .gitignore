@@ -31,6 +31,7 @@ _verify/
 neurotrace-v2/backend/media/
 neurotrace-v2/backend/tests/.pytest_neurotrace.sqlite3
 *.sqlite3
+*.sqlite3-journal
 *.db
 *.log
 
