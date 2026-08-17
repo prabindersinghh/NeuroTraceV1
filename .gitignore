@@ -1,0 +1,46 @@
+# ---- secrets ----
+.env
+.env.*
+!.env.example
+!.env.development
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- node ----
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# ---- build / tooling caches ----
+.cache/
+.tmp/
+.pipcache/
+_extracted/
+_verify/
+
+# ---- runtime artefacts ----
+neurotrace-v2/backend/media/
+neurotrace-v2/backend/tests/.pytest_neurotrace.sqlite3
+*.sqlite3
+*.db
+*.log
+
+# ---- v1 prototype local data ----
+patient_data/
+baseline.json
+
+# ---- archives ----
+*.zip
+
+# ---- os ----
+Thumbs.db
+.DS_Store

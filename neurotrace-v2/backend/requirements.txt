@@ -1,0 +1,57 @@
+# NeuroTrace backend — Python 3.11 ONLY (mediapipe has no 3.12/3.13 wheels for this pin).
+# Every direct dependency is pinned for reproducibility (TRD §7).
+#
+# requirements.lock.txt holds the full transitive freeze of the environment the test suite
+# was verified against — use it when you want a byte-identical rebuild, or when you are on
+# a slow link (it skips ~200 MB of mediapipe-declared but unused jax/jaxlib/opencv-contrib).
+
+# ---------------------------------------------------------------- web / api
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+python-dotenv==1.0.1
+
+# ---------------------------------------------------------------- database
+SQLAlchemy==2.0.36
+asyncpg==0.30.0
+aiosqlite==0.20.0
+alembic==1.14.0
+greenlet==3.1.1
+
+# ---------------------------------------------------------------- auth
+PyJWT==2.10.1
+passlib==1.7.4
+bcrypt==4.0.1
+
+# ---------------------------------------------------------------- numeric core
+# numpy is held at 1.x: the mediapipe 0.10.14 wheels are built against the numpy 1 ABI.
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.2
+numba==0.59.1
+llvmlite==0.42.0
+
+# ---------------------------------------------------------------- ml: voice
+librosa==0.10.2.post1
+soundfile==0.12.1
+soxr==0.5.0.post1
+audioread==3.0.1
+pooch==1.8.2
+# Praat bindings for jitter/shimmer/HNR. If this wheel will not build on your platform,
+# drop the line and reinstall: speech.py detects the missing import and returns 0.0 for
+# those three features (HAS_PRAAT=False) instead of failing.
+praat-parselmouth==0.4.5
+
+# ---------------------------------------------------------------- ml: face
+opencv-python==4.10.0.84
+mediapipe==0.10.14
+protobuf==4.25.3
+
+# ---------------------------------------------------------------- tests
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+anyio==4.7.0

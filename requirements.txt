@@ -1,0 +1,8 @@
+streamlit
+numpy
+librosa
+soundfile
+opencv-python
+mediapipe
+scipy
+openai

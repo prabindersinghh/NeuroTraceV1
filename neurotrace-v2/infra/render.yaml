@@ -1,0 +1,41 @@
+# Render blueprint: FastAPI web service + managed Postgres.
+# Deploy with:  Render dashboard -> New -> Blueprint -> point at this repo.
+#
+# rootDir is the backend folder, so Render builds from neurotrace-v2/backend.
+services:
+  - type: web
+    name: neurotrace-api
+    runtime: docker
+    plan: starter
+    rootDir: neurotrace-v2/backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neurotrace-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true          # Render generates a strong secret on first deploy
+      - key: FRONTEND_ORIGIN
+        sync: false                  # set to the Vercel URL after the frontend is live
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SEED
+        value: "42"
+      - key: DELETE_RAW_MEDIA
+        value: "true"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "14"
+      - key: DEMO_MODE
+        value: "true"                # set to false once real data is in the database
+
+databases:
+  - name: neurotrace-db
+    plan: basic-256mb
+    postgresMajorVersion: "15"

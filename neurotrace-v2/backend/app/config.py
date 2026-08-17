@@ -1,0 +1,81 @@
+"""Runtime settings. Everything secret comes from the environment / .env — never from code."""
+from __future__ import annotations
+
+import random
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(BACKEND_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # --- app ---
+    app_name: str = "NeuroTrace API"
+    env: str = "development"
+    debug: bool = False
+    seed: int = 42
+
+    # --- database (async driver required) ---
+    database_url: str = "postgresql+asyncpg://neurotrace:neurotrace@localhost:5432/neurotrace"
+
+    # --- auth ---
+    jwt_secret: str = "change-me-in-env-file"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 14
+
+    # --- cors ---
+    frontend_origin: str = "http://localhost:5173"
+
+    # --- demo ---
+    # Exposes POST /demo/seed without auth. Fine for the pitch build; turn it off for
+    # anything holding real data.
+    demo_mode: bool = True
+
+    # --- media ---
+    media_dir: Path = BACKEND_DIR / "media"
+    delete_raw_media: bool = True
+    max_upload_bytes: int = 25 * 1024 * 1024
+
+    @field_validator("database_url")
+    @classmethod
+    def _require_async_driver(cls, v: str) -> str:
+        if v.startswith("postgresql://"):
+            # psycopg2-style URL handed to an async engine -> upgrade it silently
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif v.startswith("sqlite://") and "+aiosqlite" not in v:
+            v = v.replace("sqlite://", "sqlite+aiosqlite://", 1)
+        return v
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    s = Settings()
+    s.media_dir.mkdir(parents=True, exist_ok=True)
+    return s
+
+
+def apply_seed(seed: int | None = None) -> int:
+    """Deterministic everywhere: seed=42 per TRD §7."""
+    seed = get_settings().seed if seed is None else seed
+    random.seed(seed)
+    np.random.seed(seed)
+    return seed
+
+
+settings = get_settings()

@@ -1,0 +1,26 @@
+# secrets
+.env
+*.env
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# runtime artefacts
+backend/media/
+backend/tests/.pytest_neurotrace.sqlite3
+*.sqlite3
+*.db
+*.log
+
+# node (phase 3)
+node_modules/
+dist/
+.vite/

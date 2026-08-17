@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* clean clinical: navy + blue, high contrast */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --primary: 221 70% 30%;            /* navy */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 214 32% 94%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 213 94% 45%;             /* action blue */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 25% 86%;
+    --input: 214 25% 86%;
+    --ring: 213 94% 45%;
+
+    --stable: 152 60% 32%;
+    --stable-soft: 152 55% 94%;
+    --watch: 35 92% 42%;
+    --watch-soft: 40 90% 94%;
+    --alert: 0 72% 45%;
+    --alert-soft: 0 80% 96%;
+
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* The patient is 55-75 with low digital literacy: never let text get small. */
+  .patient-scale {
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
+  }
+}
