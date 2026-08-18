@@ -1,4 +1,4 @@
-"""Application services: the check-in pipeline and outbound notifications."""
-from .checkin import MODALITIES, compute_checkin, scoring_keys_for
+"""Application services: the clinical pipeline, demo seeding and notifications."""
+from .session_pipeline import compute_session
 
-__all__ = ["MODALITIES", "compute_checkin", "scoring_keys_for"]
+__all__ = ["compute_session"]

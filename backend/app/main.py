@@ -12,10 +12,12 @@ from . import __version__
 from .config import apply_seed, settings
 from .db import engine
 from .routers import auth as auth_router
-from .routers import checkin as checkin_router
+from .routers import clinical_data as clinical_router
 from .routers import dashboard as dashboard_router
 from .routers import demo as demo_router
 from .routers import patients as patients_router
+from .routers import safety as safety_router
+from .routers import sessions as sessions_router
 from .schemas import HealthResponse
 
 logging.basicConfig(
@@ -54,8 +56,10 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(patients_router.router)
-app.include_router(checkin_router.router)
+app.include_router(sessions_router.router)
+app.include_router(clinical_router.router)
 app.include_router(dashboard_router.router)
+app.include_router(safety_router.router)
 app.include_router(demo_router.router)
 
 

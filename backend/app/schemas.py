@@ -1,4 +1,4 @@
-"""Pydantic v2 request/response models — one schema group per TRD §3 table."""
+"""Pydantic v2 request/response models — one group per TRD §3 table and §9 endpoint."""
 from __future__ import annotations
 
 import uuid
@@ -6,16 +6,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from .models import Band, Modality, Role, SampleStatus
+from .models import Band, BaselineState, Instrument, Role, SessionType, StrokeSide
 
 ORM = ConfigDict(from_attributes=True)
+Lang = Field(default="en", pattern="^(en|hi|pa)$")
 
 
-# --------------------------------------------------------------------------- users / auth
+# --------------------------------------------------------------------------- auth
 class UserBase(BaseModel):
     email: EmailStr
     role: Role = Role.caregiver
     full_name: str | None = Field(default=None, max_length=120)
+    lang: str = Lang
 
 
 class UserCreate(UserBase):
@@ -54,94 +56,158 @@ class PatientBase(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     age: int | None = Field(default=None, ge=0, le=130)
     sex: str | None = Field(default=None, max_length=16)
-    language: str = Field(default="en", max_length=8)
+    stroke_side: StrokeSide = StrokeSide.unknown
+    languages: list[str] = Field(default_factory=lambda: ["en"])
+    preferred_hour: float | None = Field(default=None, ge=0, le=23.99)
+    education_band: str | None = Field(default=None, max_length=24)
 
 
 class PatientCreate(PatientBase):
+    # PRD §3 locks enrolment to >= 3 months post-stroke; this is what proves it.
+    stroke_date: datetime
     user_id: uuid.UUID | None = None
+    clinician_id: uuid.UUID | None = None
 
 
 class PatientUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     age: int | None = Field(default=None, ge=0, le=130)
     sex: str | None = Field(default=None, max_length=16)
-    language: str | None = Field(default=None, max_length=8)
+    languages: list[str] | None = None
+    preferred_hour: float | None = Field(default=None, ge=0, le=23.99)
+    education_band: str | None = Field(default=None, max_length=24)
+    clinician_id: uuid.UUID | None = None
 
 
 class PatientRead(PatientBase):
     model_config = ORM
     id: uuid.UUID
     caregiver_id: uuid.UUID
+    clinician_id: uuid.UUID | None
     user_id: uuid.UUID | None
-    baseline_ready: bool
+    stroke_date: datetime | None
+    enrolment_date: datetime
+    baseline_state: BaselineState
     created_at: datetime
 
 
-# --------------------------------------------------------------------------- samples / features
-class DailySampleRead(BaseModel):
+# --------------------------------------------------------------------------- sessions
+class SessionStart(BaseModel):
+    type: SessionType = SessionType.daily
+    device_info: dict | None = None
+    offline_captured: bool = False
+
+
+class ModuleSubmit(BaseModel):
+    """Features only. The device extracts; raw media never leaves it (TRD §1)."""
+    features: dict[str, float | str | list | None]
+    quality_flag: bool = True
+    quality_detail: dict | None = None
+    extracted_on_device: bool = True
+
+
+class SessionRead(BaseModel):
     model_config = ORM
     id: uuid.UUID
     patient_id: uuid.UUID
     ts: datetime
-    audio_path: str | None
-    video_path: str | None
-    reaction_json: dict | None
-    status: SampleStatus
+    type: SessionType
+    quality_score: float
+    identity_verified: bool
+    off_window: bool
+    completed: bool
+    offline_captured: bool
 
 
-class ReactionPayload(BaseModel):
-    """Raw payload emitted by the browser tap game (TRD §4 / reaction.py)."""
-    latencies_ms: list[float] = Field(default_factory=list)
-    misses: int = 0
-    false_starts: int = 0
-
-
-class FeatureVectorRead(BaseModel):
+class ModuleResultRead(BaseModel):
     model_config = ORM
     id: uuid.UUID
-    sample_id: uuid.UUID
-    modality: Modality
+    session_id: uuid.UUID
+    module_code: str
+    domain: str
     features_json: dict
+    quality_flag: bool
     created_at: datetime
 
 
-class FeatureExtractionResult(BaseModel):
-    sample_id: uuid.UUID
-    modality: Modality
-    valid: bool
-    n_features: int
-    features: dict
+class SessionFinalizeResponse(BaseModel):
+    """TRD §9: what POST /sessions/{sid}/finalize returns."""
+    session_id: uuid.UUID
+    patient_id: uuid.UUID
+    band: Band
+    reason: str
+    gate1_passed: bool
+    gate2_passed: bool
+    persistent_domains: list[str]
+    domain_deviations: dict[str, float]
+    drivers: list[list]
+    confounders: dict
+    confidence: float
+    improving: bool
+    sustained_sessions: int = 0
+    baseline_phase: bool
+    baseline_state: str
+    explanation_en: str
+    explanation_hi: str
+    explanation_source: str
+    guardrail_violations: list[str] = Field(default_factory=list)
+    clinician_line: str
+    alert_id: uuid.UUID | None = None
+    # The safety layer attaches this to EVERY finalize response (TRD §8).
+    fast: dict = Field(default_factory=dict)
 
 
-# --------------------------------------------------------------------------- baselines
+# --------------------------------------------------------------------------- scoring
 class BaselineRead(BaseModel):
     model_config = ORM
     id: uuid.UUID
     patient_id: uuid.UUID
-    modality: Modality
-    mean_json: dict
-    std_json: dict
-    n_days: int
-    ready: bool
+    module_code: str
+    median_json: dict
+    mad_json: dict
+    n_sessions: int
+    n_rejected: int
+    n_discarded: int
+    locked: bool
+    reason: str | None
+    window_start: datetime | None
+    window_end: datetime | None
     updated_at: datetime
 
 
-# --------------------------------------------------------------------------- scores / alerts
+class DeviationRead(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    session_id: uuid.UUID
+    module_code: str
+    domain: str
+    mean_abs_z: float
+    max_abs_z: float
+    cusum_stat: float
+    cusum_alarm: bool
+    improving: bool
+    flagged: bool
+
+
 class ScoreRead(BaseModel):
     model_config = ORM
     id: uuid.UUID
     patient_id: uuid.UUID
-    sample_id: uuid.UUID
-    voice_dev: float
-    face_dev: float
-    reaction_dev: float
-    stability_score: float
+    session_id: uuid.UUID
+    domain_devs_json: dict
     band: Band
+    gate1_passed: bool
+    gate2_passed: bool
+    persistent_domains: list | None
+    drivers_json: list | None
+    confounders_json: dict | None
+    confidence: float
+    improving: bool
     reason: str | None
-    modalities_flagged: list[str] | None
+    baseline_phase: bool
     explanation_en: str | None
     explanation_hi: str | None
-    baseline_day: bool
+    explanation_source: str
     created_at: datetime
 
 
@@ -151,67 +217,149 @@ class AlertRead(BaseModel):
     patient_id: uuid.UUID
     score_id: uuid.UUID
     band: Band
-    explanation: str
+    drivers_json: list | None
+    confounders_json: dict | None
+    explanation_en: str
     explanation_hi: str | None
-    whatsapp_sent: bool
+    clinician_line: str | None
+    acknowledged_by: uuid.UUID | None
+    acknowledged_at: datetime | None
     created_at: datetime
 
 
-class CheckinResult(BaseModel):
-    """What POST /checkin/{pid}/finalize returns."""
-    sample_id: uuid.UUID
+# --------------------------------------------------------------------------- domain F/G
+class QuestionnaireSubmit(BaseModel):
+    instrument: Instrument
+    responses: list[int] | dict[str, int]
+    session_id: uuid.UUID | None = None
+
+
+class QuestionnaireRead(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
     patient_id: uuid.UUID
-    stability_score: float
-    band: Band
-    reason: str
-    baseline_day: bool
-    baseline_ready: bool
-    deviations: dict[str, float]
-    modalities_flagged: list[str]
-    valid_modalities: dict[str, bool]
-    top_drivers: list[tuple[str, float]]
-    explanation_en: str
-    explanation_hi: str
-    alert_id: uuid.UUID | None = None
+    instrument: Instrument
+    score: float
+    flags_json: dict | None
+    ts: datetime
 
 
-# --------------------------------------------------------------------------- dashboard
+class VitalSubmit(BaseModel):
+    bp_sys: int | None = Field(default=None, ge=50, le=300)
+    bp_dia: int | None = Field(default=None, ge=30, le=200)
+    ppg_features: dict | None = None
+    session_id: uuid.UUID | None = None
+
+
+class VitalRead(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    bp_sys: int | None
+    bp_dia: int | None
+    rhythm_flag: bool
+    ts: datetime
+
+
+class AdherenceSubmit(BaseModel):
+    taken: bool
+
+
+class AdherenceRead(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    taken: bool
+    ts: datetime
+
+
+# --------------------------------------------------------------------------- safety
+class AcuteReport(BaseModel):
+    symptoms: list[str] = Field(min_length=1)
+    note: str | None = Field(default=None, max_length=2000)
+    lang: str = Lang
+
+
+class AcuteResponse(BaseModel):
+    escalate: bool
+    scoring_bypassed: bool
+    reported: list[str]
+    reported_labels: list[str]
+    message: str
+    fast: dict
+    emergency_number: str
+
+
+# --------------------------------------------------------------------------- dashboards
 class TrendPoint(BaseModel):
-    """One day on the caregiver's charts."""
     date: datetime
-    sample_id: uuid.UUID
-    voice_dev: float
-    face_dev: float
-    reaction_dev: float
-    stability_score: float
+    session_id: uuid.UUID
     band: Band
-    baseline_day: bool
+    domain_devs: dict[str, float]
+    confidence: float
+    baseline_phase: bool
 
 
 class HistoryRow(BaseModel):
     date: datetime
     band: Band
-    stability_score: float
     reason: str | None
     explanation_en: str | None
     explanation_hi: str | None
-    baseline_day: bool
+    confidence: float
+    baseline_phase: bool
+    confounders: list[str] = Field(default_factory=list)
+
+
+class BaselineProgress(BaseModel):
+    state: BaselineState
+    modules_locked: int
+    modules_total: int
+    min_sessions: int
+    required_sessions: int
+    window_min_days: int
+    window_max_days: int
 
 
 class DashboardResponse(BaseModel):
-    """Everything the caregiver view needs in one request (TRD §6)."""
     patient: PatientRead
-    baseline_ready: bool
-    baseline_days_recorded: int
-    baseline_days_required: int
+    baseline: BaselineProgress
     latest: ScoreRead | None
-    latest_explanation_en: str | None
-    latest_explanation_hi: str | None
     trends: list[TrendPoint]
     history: list[HistoryRow]
     alerts: list[AlertRead]
+    adherence_streak: int
+    adherence_rate_30d: float
+    latest_questionnaires: list[QuestionnaireRead]
     dev_threshold: float
-    band_thresholds: dict[str, float]
+    # TRD §8: the FAST card renders on every dashboard, not only when the band is high.
+    fast: dict
+
+
+class ClinicPatientRow(BaseModel):
+    patient_id: uuid.UUID
+    name: str
+    age: int | None
+    band: Band | None
+    sustained_domains: list[str]
+    confidence: float
+    last_session: datetime | None
+    unacknowledged_alerts: int
+    baseline_state: BaselineState
+
+
+class ClinicListResponse(BaseModel):
+    patients: list[ClinicPatientRow]
+
+
+class AuditRow(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    actor_id: uuid.UUID | None
+    action: str
+    patient_id: uuid.UUID | None
+    meta_json: dict | None
+    ts: datetime
 
 
 # --------------------------------------------------------------------------- misc

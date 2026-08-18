@@ -51,8 +51,4 @@ def reference_day(rng, keys, drift: float = 0.0) -> dict:
     return _day(rng, keys, NORM, drift, _DOWN_IS_BAD_REFERENCE)
 
 
-# ------------------------------------------------------------------ full scoring key sets
-# One source of truth: the shipped demo seeder uses exactly this generator.
-from app.services.synthetic import FULL_NORM, synthetic_day as full_day  # noqa: E402
-
-__all__ = ["FK", "FULL_NORM", "NORM", "PLAN", "RK", "VK", "full_day", "make_rng", "reference_day"]
+__all__ = ["FK", "NORM", "PLAN", "RK", "VK", "make_rng", "reference_day"]

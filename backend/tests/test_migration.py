@@ -60,8 +60,12 @@ def _reflect(db_file: Path) -> dict[str, set[str]]:
 def test_migration_creates_every_table_from_the_trd(migrated_db: Path):
     schema = _reflect(migrated_db)
     expected = {
-        "users", "patients", "daily_samples", "feature_vectors",
-        "baselines", "scores", "alerts",
+        # TRD §3
+        "users", "patients", "sessions", "module_results", "baselines",
+        "deviations", "scores", "alerts", "questionnaires", "vitals",
+        "adherence", "audit_log",
+        # TRD §8
+        "safety_events",
     }
     assert expected <= set(schema)
     assert "alembic_version" in schema

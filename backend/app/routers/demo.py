@@ -1,8 +1,7 @@
 """/demo — one-click demo dataset for the pitch.
 
 Unauthenticated on purpose: the demo button on the login screen must work before anyone
-has an account. Gated by DEMO_MODE so a real deployment can turn it off — leaving it on in
-production would let anyone create the demo account.
+has an account. Gated by DEMO_MODE so a real deployment can turn it off.
 """
 from __future__ import annotations
 
@@ -21,7 +20,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.post("/seed")
-async def seed(session: Session) -> dict:
+async def seed(db: Session) -> dict:
     if not settings.demo_mode:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Demo mode is disabled on this deployment")
-    return await seed_demo(session)
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Demo mode is disabled on this deployment")
+    return await seed_demo(db)
