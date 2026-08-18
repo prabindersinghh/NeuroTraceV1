@@ -1,13 +1,13 @@
 # Render blueprint: FastAPI web service + managed Postgres.
 # Deploy with:  Render dashboard -> New -> Blueprint -> point at this repo.
 #
-# rootDir is the backend folder, so Render builds from neurotrace-v2/backend.
+# rootDir is the backend folder, so Render builds from the repo's backend/ directory.
 services:
   - type: web
     name: neurotrace-api
     runtime: docker
     plan: starter
-    rootDir: neurotrace-v2/backend
+    rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true

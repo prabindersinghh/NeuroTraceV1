@@ -32,7 +32,7 @@ No population thresholds. No black box. No wearable.
 ## Layout
 
 ```
-neurotrace-v2/
+NeuroTraceV1/
   backend/
     app/
       main.py            FastAPI app, CORS, /health
@@ -62,8 +62,14 @@ neurotrace-v2/
         checkin/         StepAudio · StepVideo · StepReaction
     vercel.json · tailwind.config.js · .env.example
   infra/                 render.yaml · deployment .env.example
-  DEMO_SCRIPT.md         3-minute live pitch script
-  README.md
+  docs/
+    PRD.md               product requirements
+    TRD.md               technical requirements
+    DEVELOPMENT.md       this file
+    DEMO_SCRIPT.md       3-minute live pitch script
+    BUILD_PLAN.md        the phased plan this was built from
+  legacy/v1/             the original Streamlit prototype, superseded
+  README.md              project landing page
 ```
 
 ---
@@ -122,7 +128,7 @@ docker run -d --name neurotrace-db -p 5432:5432 `
 ### 2. Install
 
 ```powershell
-cd neurotrace-v2\backend
+cd backend
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -185,7 +191,7 @@ pytest
 ### Docker
 
 ```powershell
-cd neurotrace-v2\backend
+cd backend
 docker build -t neurotrace-api .
 docker run --rm -p 8000:8000 --env-file .env neurotrace-api
 ```
@@ -197,7 +203,7 @@ The container runs `alembic upgrade head` before starting uvicorn.
 ## Run the frontend
 
 ```powershell
-cd neurotrace-v2\frontend
+cd frontend
 npm install
 copy .env.example .env.development     # VITE_API_URL=http://localhost:8000
 npm run dev                            # http://localhost:5173
@@ -216,7 +222,7 @@ Routes: `/login` `/register` `/` (caregiver or patient home) `/checkin/:pid` `/d
 Either press **Open the demo** on the login screen, or from the backend:
 
 ```powershell
-cd neurotrace-v2\backend
+cd backend
 python -m app.seed
 ```
 
@@ -306,7 +312,7 @@ for several days across more than one signal."*
 
 ## Decisions taken where the spec was ambiguous
 
-- **v2 lives in `neurotrace-v2/`** — the v1 Streamlit prototype still occupies the repo root.
+- **The repo root is the v2 app** (`backend/`, `frontend/`, `infra/`), matching TRD §2. The v1 Streamlit prototype was moved to `legacy/v1/`.
 - **Primary keys are UUIDs** (`sa.Uuid`), which maps to native `UUID` on Postgres and
   `CHAR(32)` on SQLite, so tests need no database server.
 - **JSON columns use `sa.JSON`**, not `JSONB` — nothing queries inside these documents in
@@ -372,7 +378,7 @@ for several days across more than one signal."*
 
 ### Frontend → Vercel
 
-6. Vercel → **New Project** → same repo → **Root Directory** `neurotrace-v2/frontend`.
+6. Vercel → **New Project** → same repo → **Root Directory** `frontend`.
    [vercel.json](frontend/vercel.json) supplies the build, the SPA rewrite, and a
    `Permissions-Policy` that allows camera and microphone on the app's own origin.
 7. Set `VITE_API_URL` to the Render URL. Deploy.

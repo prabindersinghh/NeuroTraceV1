@@ -28,8 +28,8 @@ _extracted/
 _verify/
 
 # ---- runtime artefacts ----
-neurotrace-v2/backend/media/
-neurotrace-v2/backend/tests/.pytest_neurotrace.sqlite3
+backend/media/
+backend/tests/.pytest_neurotrace.sqlite3
 *.sqlite3
 *.sqlite3-journal
 *.db
@@ -45,3 +45,6 @@ baseline.json
 # ---- os ----
 Thumbs.db
 .DS_Store
+
+# ---- private strategy notes, never publish ----
+compass_artifact_*.md
