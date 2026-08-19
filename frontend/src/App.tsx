@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
 import { CaregiverHome } from "@/routes/CaregiverHome";
-import { Checkin } from "@/routes/Checkin";
+import { Clinic } from "@/routes/Clinic";
 import { Dashboard } from "@/routes/Dashboard";
+import { Exam } from "@/routes/Exam";
 import { Login } from "@/routes/Login";
 import { PatientHome } from "@/routes/PatientHome";
 import { Register } from "@/routes/Register";
@@ -15,9 +17,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Role decides the landing page: a patient gets one button, a clinician gets the list. */
 function Home() {
   const { user } = useAuth();
-  return user?.role === "patient" ? <PatientHome /> : <CaregiverHome />;
+  if (user?.role === "patient") return <PatientHome />;
+  if (user?.role === "clinician") return <Clinic />;
+  return <CaregiverHome />;
 }
 
 export default function App() {
@@ -25,38 +30,10 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Home />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/caregiver"
-        element={
-          <RequireAuth>
-            <CaregiverHome />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/checkin/:patientId"
-        element={
-          <RequireAuth>
-            <Checkin />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/dashboard/:patientId"
-        element={
-          <RequireAuth>
-            <Dashboard />
-          </RequireAuth>
-        }
-      />
+      <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
+      <Route path="/clinic" element={<RequireAuth><Clinic /></RequireAuth>} />
+      <Route path="/exam/:patientId" element={<RequireAuth><Exam /></RequireAuth>} />
+      <Route path="/dashboard/:patientId" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

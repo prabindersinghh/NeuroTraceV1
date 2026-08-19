@@ -43,10 +43,12 @@ class Settings(BaseSettings):
     # anything holding real data.
     demo_mode: bool = True
 
-    # --- media ---
-    media_dir: Path = BACKEND_DIR / "media"
-    delete_raw_media: bool = True
-    max_upload_bytes: int = 25 * 1024 * 1024
+    # No media settings, deliberately.
+    #
+    # v1 accepted audio and video uploads and deleted them after extraction, which needed a
+    # storage path, a size cap and a retention flag. v2 extracts on the device, so the
+    # server never receives media at all. Removing the settings removes the possibility of
+    # a deployment turning retention back on by accident.
 
     @field_validator("database_url")
     @classmethod
@@ -65,9 +67,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    s = Settings()
-    s.media_dir.mkdir(parents=True, exist_ok=True)
-    return s
+    return Settings()
 
 
 def apply_seed(seed: int | None = None) -> int:

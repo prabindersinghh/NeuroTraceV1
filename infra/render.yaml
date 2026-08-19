@@ -26,8 +26,6 @@ services:
         value: "false"
       - key: SEED
         value: "42"
-      - key: DELETE_RAW_MEDIA
-        value: "true"
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "30"
       - key: REFRESH_TOKEN_EXPIRE_DAYS

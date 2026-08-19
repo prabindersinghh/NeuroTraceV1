@@ -59,7 +59,7 @@ export function PatientHome() {
               <span className="mt-2 block text-lg font-normal text-muted-foreground">{me.name}</span>
             </h1>
             <Link
-              to={`/checkin/${me.id}`}
+              to={`/exam/${me.id}`}
               className={cn(buttonVariants({ variant: "accent", size: "touch" }), "max-w-sm")}
             >
               {t("begin")}

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+public/mediapipe/wasm/
+public/mediapipe/*.task
+dev-dist/

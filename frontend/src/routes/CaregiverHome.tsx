@@ -1,7 +1,18 @@
+/**
+ * The caregiver's patient list and enrolment form.
+ *
+ * The enrolment form asks for the stroke date because the server refuses to enrol anyone
+ * less than three months post-discharge (PRD §3). That is not paperwork: this system
+ * reasons over days, an acute stroke evolves in seconds, and enrolling an acute patient
+ * would put them in a product that structurally cannot watch for what threatens them.
+ * The form says so plainly rather than letting the server reject it silently.
+ */
 import { ChevronRight, Plus, Stethoscope } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+
 import { AppShell } from "@/components/AppShell";
+import { EmergencyButton } from "@/components/EmergencyButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Select } from "@/components/ui/field";
@@ -9,7 +20,7 @@ import { EmptyState, ErrorState, LoadingState, Spinner } from "@/components/ui/s
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import type { Patient } from "@/lib/types";
+import type { Lang, Patient } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CaregiverHome() {
@@ -46,12 +57,15 @@ export function CaregiverHome() {
             </p>
           )}
         </div>
-        {canAdd && !adding && (
-          <Button variant="accent" onClick={() => setAdding(true)}>
-            <Plus className="h-4 w-4" aria-hidden />
-            {t("addPatient")}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <EmergencyButton patientId={patients?.[0]?.id} />
+          {canAdd && !adding && (
+            <Button variant="accent" onClick={() => setAdding(true)}>
+              <Plus className="h-4 w-4" aria-hidden />
+              {t("addPatient")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {adding && (
@@ -69,8 +83,8 @@ export function CaregiverHome() {
       {!error && patients?.length === 0 && !adding && <EmptyState>{t("noPatients")}</EmptyState>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {patients?.map((p) => (
-          <PatientCard key={p.id} patient={p} />
+        {patients?.map((patient) => (
+          <PatientCard key={patient.id} patient={patient} />
         ))}
       </div>
     </AppShell>
@@ -84,13 +98,17 @@ function PatientCard({ patient }: { patient: Patient }) {
       <CardHeader>
         <CardTitle className="text-lg">{patient.name}</CardTitle>
         <CardDescription>
-          {[patient.age ? `${patient.age}` : null, patient.sex, patient.language?.toUpperCase()]
+          {[
+            patient.age ? `${patient.age}` : null,
+            patient.sex,
+            patient.languages?.[0]?.toUpperCase(),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </CardDescription>
       </CardHeader>
       <CardContent className="mt-auto flex flex-col gap-2">
-        {!patient.baseline_ready && (
+        {patient.baseline_state !== "locked" && (
           <span className="inline-flex w-fit items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
             {t("buildingBaseline")}
           </span>
@@ -103,7 +121,7 @@ function PatientCard({ patient }: { patient: Patient }) {
           <ChevronRight className="h-4 w-4" aria-hidden />
         </Link>
         <Link
-          to={`/checkin/${patient.id}`}
+          to={`/exam/${patient.id}`}
           className={cn(buttonVariants({ variant: "accent", size: "sm" }), "w-full")}
         >
           {t("startCheckin")}
@@ -118,9 +136,17 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [sex, setSex] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [strokeDate, setStrokeDate] = useState("");
+  const [strokeSide, setStrokeSide] = useState("unknown");
+  const [language, setLanguage] = useState<Lang>("en");
+  const [hour, setHour] = useState("9");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The server enforces this; showing it in the picker avoids a rejected submission.
+  const latestAllowed = new Date(Date.now() - 90 * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -129,13 +155,16 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
     try {
       await api.createPatient({
         name,
+        stroke_date: new Date(strokeDate).toISOString(),
         age: age ? Number(age) : null,
         sex: sex || null,
-        language,
+        stroke_side: strokeSide,
+        languages: [language, "en"].filter((v, i, a) => a.indexOf(v) === i),
+        preferred_hour: hour ? Number(hour) : null,
       });
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the patient");
+      setError(err instanceof Error ? err.message : "Could not enrol the patient");
     } finally {
       setBusy(false);
     }
@@ -148,7 +177,9 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
-          <FormError>{error}</FormError>
+          <div className="sm:col-span-2">
+            <FormError>{error}</FormError>
+          </div>
 
           <div className="flex flex-col gap-1.5 sm:col-span-2">
             <Label htmlFor="p-name">{t("patientName")}</Label>
@@ -157,7 +188,14 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="p-age">{t("age")}</Label>
-            <Input id="p-age" type="number" min={0} max={130} value={age} onChange={(e) => setAge(e.target.value)} />
+            <Input
+              id="p-age"
+              type="number"
+              min={0}
+              max={130}
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -170,12 +208,51 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="p-stroke">{t("strokeDate")}</Label>
+            <Input
+              id="p-stroke"
+              type="date"
+              required
+              max={latestAllowed}
+              value={strokeDate}
+              onChange={(e) => setStrokeDate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t("strokeDateHint")}</p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="p-side">{t("affectedSide")}</Label>
+            <Select id="p-side" value={strokeSide} onChange={(e) => setStrokeSide(e.target.value)}>
+              <option value="left">{t("sideLeft")}</option>
+              <option value="right">{t("sideRight")}</option>
+              <option value="unknown">{t("sideUnknown")}</option>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="p-lang">{t("language")}</Label>
-            <Select id="p-lang" value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <Select
+              id="p-lang"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Lang)}
+            >
               <option value="en">English</option>
               <option value="hi">हिंदी</option>
+              <option value="pa">ਪੰਜਾਬੀ</option>
             </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="p-hour">{t("usualTime")}</Label>
+            <Select id="p-hour" value={hour} onChange={(e) => setHour(e.target.value)}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {`${String(h).padStart(2, "0")}:00`}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">{t("usualTimeHint")}</p>
           </div>
 
           <div className="flex gap-3 sm:col-span-2">

@@ -1,138 +1,245 @@
-/** Minimal EN/HI dictionary. The patient flow and the caregiver summary are both bilingual. */
+/**
+ * EN / HI / PA strings.
+ *
+ * Punjabi is first-class, not an afterthought: the target cohort is Tier-2/3 Punjab, and
+ * a patient who cannot read the instruction cannot perform the task. Every patient-facing
+ * string here exists in all three languages, and the exam instructions are additionally
+ * spoken aloud (see `speech-synthesis.ts`) because a meaningful share of this population
+ * has limited literacy or a post-stroke reading impairment.
+ */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
-export type Lang = "en" | "hi";
+import type { Lang } from "./types";
 
 const STRINGS = {
   // --- shell ---
-  appName: { en: "NeuroTrace", hi: "न्यूरोट्रेस" },
+  appName: { en: "NeuroTrace", hi: "न्यूरोट्रेस", pa: "ਨਿਊਰੋਟ੍ਰੇਸ" },
   tagline: {
-    en: "45 seconds a day. Catches change before it becomes an emergency.",
-    hi: "रोज़ 45 सेकंड। बदलाव को आपात स्थिति बनने से पहले पकड़ता है।",
+    en: "A daily check-in that learns what is normal for one person.",
+    hi: "रोज़ाना जाँच जो एक व्यक्ति का अपना सामान्य स्तर सीखती है।",
+    pa: "ਰੋਜ਼ਾਨਾ ਜਾਂਚ ਜੋ ਇੱਕ ਵਿਅਕਤੀ ਦਾ ਆਪਣਾ ਆਮ ਪੱਧਰ ਸਿੱਖਦੀ ਹੈ।",
   },
-  signOut: { en: "Sign out", hi: "साइन आउट" },
-  loading: { en: "Loading…", hi: "लोड हो रहा है…" },
-  retry: { en: "Try again", hi: "फिर कोशिश करें" },
-  back: { en: "Back", hi: "वापस" },
+  signOut: { en: "Sign out", hi: "साइन आउट", pa: "ਸਾਈਨ ਆਊਟ" },
+  loading: { en: "Loading…", hi: "लोड हो रहा है…", pa: "ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…" },
+  retry: { en: "Try again", hi: "फिर कोशिश करें", pa: "ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ" },
+  back: { en: "Back", hi: "वापस", pa: "ਵਾਪਸ" },
+  offline: { en: "Offline — saved on this phone", hi: "ऑफ़लाइन — इसी फ़ोन में सहेजा गया", pa: "ਆਫ਼ਲਾਈਨ — ਇਸੇ ਫ਼ੋਨ ਵਿੱਚ ਸੰਭਾਲਿਆ" },
+  pendingSync: { en: "waiting to sync", hi: "सिंक होना बाकी", pa: "ਸਿੰਕ ਹੋਣਾ ਬਾਕੀ" },
+  onDevice: {
+    en: "processed on this device · no recording left your phone",
+    hi: "इसी फ़ोन पर संसाधित · कोई रिकॉर्डिंग फ़ोन से बाहर नहीं गई",
+    pa: "ਇਸੇ ਫ਼ੋਨ 'ਤੇ ਪ੍ਰੋਸੈਸ · ਕੋਈ ਰਿਕਾਰਡਿੰਗ ਫ਼ੋਨ ਤੋਂ ਬਾਹਰ ਨਹੀਂ ਗਈ",
+  },
 
   // --- auth ---
-  signIn: { en: "Sign in", hi: "साइन इन करें" },
-  signUp: { en: "Create account", hi: "खाता बनाएँ" },
-  email: { en: "Email", hi: "ईमेल" },
-  password: { en: "Password", hi: "पासवर्ड" },
-  fullName: { en: "Your name", hi: "आपका नाम" },
-  iAmA: { en: "I am a", hi: "मैं हूँ" },
-  rolePatient: { en: "Patient", hi: "मरीज़" },
-  roleCaregiver: { en: "Caregiver", hi: "देखभालकर्ता" },
-  roleClinician: { en: "Clinician", hi: "चिकित्सक" },
-  noAccount: { en: "No account yet?", hi: "अभी खाता नहीं है?" },
-  haveAccount: { en: "Already have an account?", hi: "पहले से खाता है?" },
-  passwordHint: { en: "At least 8 characters", hi: "कम से कम 8 अक्षर" },
-  tryDemo: { en: "Open the demo", hi: "डेमो खोलें" },
+  signIn: { en: "Sign in", hi: "साइन इन करें", pa: "ਸਾਈਨ ਇਨ ਕਰੋ" },
+  signUp: { en: "Create account", hi: "खाता बनाएँ", pa: "ਖਾਤਾ ਬਣਾਓ" },
+  email: { en: "Email", hi: "ईमेल", pa: "ਈਮੇਲ" },
+  password: { en: "Password", hi: "पासवर्ड", pa: "ਪਾਸਵਰਡ" },
+  fullName: { en: "Your name", hi: "आपका नाम", pa: "ਤੁਹਾਡਾ ਨਾਂ" },
+  iAmA: { en: "I am a", hi: "मैं हूँ", pa: "ਮੈਂ ਹਾਂ" },
+  rolePatient: { en: "Patient", hi: "मरीज़", pa: "ਮਰੀਜ਼" },
+  roleCaregiver: { en: "Caregiver", hi: "देखभालकर्ता", pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲਾ" },
+  roleClinician: { en: "Clinician", hi: "चिकित्सक", pa: "ਡਾਕਟਰ" },
+  noAccount: { en: "No account yet?", hi: "अभी खाता नहीं है?", pa: "ਹਾਲੇ ਖਾਤਾ ਨਹੀਂ?" },
+  haveAccount: { en: "Already have an account?", hi: "पहले से खाता है?", pa: "ਪਹਿਲਾਂ ਤੋਂ ਖਾਤਾ ਹੈ?" },
+  passwordHint: { en: "At least 8 characters", hi: "कम से कम 8 अक्षर", pa: "ਘੱਟੋ-ਘੱਟ 8 ਅੱਖਰ" },
+  tryDemo: { en: "Open the demo", hi: "डेमो खोलें", pa: "ਡੈਮੋ ਖੋਲ੍ਹੋ" },
   demoHint: {
-    en: "Loads Ramesh, 67 — ten days of history ending in an alert.",
-    hi: "रमेश, 67 — दस दिन का इतिहास, अंत में अलर्ट।",
+    en: "Loads Ramesh, 67 — three weeks of history ending in an alert.",
+    hi: "रमेश, 67 — तीन हफ़्ते का इतिहास, अंत में अलर्ट।",
+    pa: "ਰਮੇਸ਼, 67 — ਤਿੰਨ ਹਫ਼ਤਿਆਂ ਦਾ ਇਤਿਹਾਸ, ਅੰਤ ਵਿੱਚ ਅਲਰਟ।",
   },
 
-  // --- caregiver home ---
-  yourPatients: { en: "Your patients", hi: "आपके मरीज़" },
-  addPatient: { en: "Add patient", hi: "मरीज़ जोड़ें" },
-  patientName: { en: "Name", hi: "नाम" },
-  age: { en: "Age", hi: "उम्र" },
-  sex: { en: "Sex", hi: "लिंग" },
-  language: { en: "Preferred language", hi: "पसंदीदा भाषा" },
-  save: { en: "Save", hi: "सहेजें" },
-  cancel: { en: "Cancel", hi: "रद्द करें" },
-  noPatients: { en: "No patients yet. Add one to begin.", hi: "अभी कोई मरीज़ नहीं। शुरू करने के लिए एक जोड़ें।" },
-  openDashboard: { en: "Dashboard", hi: "डैशबोर्ड" },
-  startCheckin: { en: "Start check-in", hi: "जाँच शुरू करें" },
-  buildingBaseline: { en: "Building baseline", hi: "आधार बन रहा है" },
-
-  // --- check-in ---
-  checkinTitle: { en: "Daily check-in", hi: "रोज़ाना जाँच" },
-  stepOf: { en: "Step", hi: "चरण" },
-  of: { en: "of", hi: "में से" },
-  begin: { en: "Begin", hi: "शुरू करें" },
-  next: { en: "Next", hi: "आगे" },
-
-  speakTitle: { en: "Read this out loud", hi: "इसे ज़ोर से पढ़ें" },
-  speakSentence: {
-    en: "The quick brown fox jumps over the lazy dog near the river bank.",
-    hi: "आज मौसम बहुत अच्छा है और मैं अपने परिवार के साथ बाहर घूमने जा रहा हूँ।",
+  // --- caregiver ---
+  yourPatients: { en: "Your patients", hi: "आपके मरीज़", pa: "ਤੁਹਾਡੇ ਮਰੀਜ਼" },
+  addPatient: { en: "Add patient", hi: "मरीज़ जोड़ें", pa: "ਮਰੀਜ਼ ਸ਼ਾਮਲ ਕਰੋ" },
+  patientName: { en: "Name", hi: "नाम", pa: "ਨਾਂ" },
+  age: { en: "Age", hi: "उम्र", pa: "ਉਮਰ" },
+  sex: { en: "Sex", hi: "लिंग", pa: "ਲਿੰਗ" },
+  strokeDate: { en: "Date of the stroke", hi: "स्ट्रोक की तारीख़", pa: "ਸਟ੍ਰੋਕ ਦੀ ਤਾਰੀਖ਼" },
+  strokeDateHint: {
+    en: "Enrolment requires at least three months since discharge.",
+    hi: "दाख़िले के लिए छुट्टी के कम से कम तीन महीने बाद होना ज़रूरी है।",
+    pa: "ਦਾਖ਼ਲੇ ਲਈ ਛੁੱਟੀ ਤੋਂ ਘੱਟੋ-ਘੱਟ ਤਿੰਨ ਮਹੀਨੇ ਬਾਅਦ ਹੋਣਾ ਜ਼ਰੂਰੀ ਹੈ।",
   },
-  startRecording: { en: "Start recording", hi: "रिकॉर्डिंग शुरू करें" },
-  stopRecording: { en: "Stop", hi: "रोकें" },
-  recording: { en: "Recording…", hi: "रिकॉर्ड हो रहा है…" },
+  affectedSide: { en: "Affected side", hi: "प्रभावित हिस्सा", pa: "ਪ੍ਰਭਾਵਿਤ ਪਾਸਾ" },
+  sideLeft: { en: "Left", hi: "बायाँ", pa: "ਖੱਬਾ" },
+  sideRight: { en: "Right", hi: "दायाँ", pa: "ਸੱਜਾ" },
+  sideUnknown: { en: "Not sure", hi: "पता नहीं", pa: "ਪਤਾ ਨਹੀਂ" },
+  language: { en: "Preferred language", hi: "पसंदीदा भाषा", pa: "ਪਸੰਦੀਦਾ ਭਾਸ਼ਾ" },
+  usualTime: { en: "Usual check-in time", hi: "जाँच का रोज़ का समय", pa: "ਜਾਂਚ ਦਾ ਰੋਜ਼ ਦਾ ਸਮਾਂ" },
+  usualTimeHint: {
+    en: "Sessions far from this time are flagged, because alertness swings across the day.",
+    hi: "इस समय से बहुत अलग जाँच को चिह्नित किया जाता है, क्योंकि दिनभर सतर्कता बदलती है।",
+    pa: "ਇਸ ਸਮੇਂ ਤੋਂ ਬਹੁਤ ਵੱਖਰੀ ਜਾਂਚ ਨਿਸ਼ਾਨਬੱਧ ਹੁੰਦੀ ਹੈ, ਕਿਉਂਕਿ ਦਿਨ ਭਰ ਸੁਚੇਤਤਾ ਬਦਲਦੀ ਹੈ।",
+  },
+  save: { en: "Save", hi: "सहेजें", pa: "ਸੰਭਾਲੋ" },
+  cancel: { en: "Cancel", hi: "रद्द करें", pa: "ਰੱਦ ਕਰੋ" },
+  noPatients: {
+    en: "No patients yet. Add one to begin.",
+    hi: "अभी कोई मरीज़ नहीं। शुरू करने के लिए एक जोड़ें।",
+    pa: "ਹਾਲੇ ਕੋਈ ਮਰੀਜ਼ ਨਹੀਂ। ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਇੱਕ ਸ਼ਾਮਲ ਕਰੋ।",
+  },
+  openDashboard: { en: "Dashboard", hi: "डैशबोर्ड", pa: "ਡੈਸ਼ਬੋਰਡ" },
+  startCheckin: { en: "Start check-in", hi: "जाँच शुरू करें", pa: "ਜਾਂਚ ਸ਼ੁਰੂ ਕਰੋ" },
+  buildingBaseline: { en: "Learning their normal", hi: "उनका सामान्य स्तर सीख रहे हैं", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਪੱਧਰ ਸਿੱਖ ਰਹੇ ਹਾਂ" },
 
-  faceTitle: { en: "Look at the camera", hi: "कैमरे की ओर देखें" },
-  faceInstruction: { en: "Smile, then blink twice.", hi: "मुस्कुराएँ, फिर दो बार पलक झपकाएँ।" },
-  startCamera: { en: "Start camera", hi: "कैमरा शुरू करें" },
+  // --- exam ---
+  checkinTitle: { en: "Daily check-in", hi: "रोज़ाना जाँच", pa: "ਰੋਜ਼ਾਨਾ ਜਾਂਚ" },
+  stepOf: { en: "Step", hi: "चरण", pa: "ਪੜਾਅ" },
+  of: { en: "of", hi: "में से", pa: "ਵਿੱਚੋਂ" },
+  begin: { en: "Begin", hi: "शुरू करें", pa: "ਸ਼ੁਰੂ ਕਰੋ" },
+  next: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
+  listen: { en: "Play instruction again", hi: "निर्देश फिर सुनें", pa: "ਹਦਾਇਤ ਦੁਬਾਰਾ ਸੁਣੋ" },
 
-  tapTitle: { en: "Tap when the circle turns blue", hi: "जब घेरा नीला हो, तब दबाएँ" },
-  tapInstruction: { en: "As fast as you can. 12 times.", hi: "जितनी जल्दी हो सके। 12 बार।" },
-  tapWait: { en: "Wait…", hi: "रुकिए…" },
-  tapNow: { en: "TAP", hi: "दबाएँ" },
-  tapTooSoon: { en: "Too soon — wait for blue", hi: "बहुत जल्दी — नीले का इंतज़ार करें" },
-  trial: { en: "Tap", hi: "टैप" },
+  faceTitle: { en: "Look at the camera", hi: "कैमरे की ओर देखें", pa: "ਕੈਮਰੇ ਵੱਲ ਦੇਖੋ" },
+  faceSmile: { en: "Smile widely", hi: "खुलकर मुस्कुराइए", pa: "ਖੁੱਲ੍ਹ ਕੇ ਮੁਸਕਰਾਓ" },
+  faceBrows: { en: "Raise your eyebrows", hi: "भौंहें ऊपर उठाइए", pa: "ਭਰਵੱਟੇ ਉੱਪਰ ਚੁੱਕੋ" },
+  faceEyes: { en: "Close your eyes tightly", hi: "आँखें कसकर बंद कीजिए", pa: "ਅੱਖਾਂ ਕੱਸ ਕੇ ਬੰਦ ਕਰੋ" },
+  faceCheeks: { en: "Puff out your cheeks", hi: "गाल फुलाइए", pa: "ਗੱਲ੍ਹਾਂ ਫੁਲਾਓ" },
 
-  uploading: { en: "Sending…", hi: "भेजा जा रहा है…" },
-  allDone: { en: "All done ✓", hi: "हो गया ✓" },
+  speechTitle: { en: "Now your voice", hi: "अब आपकी आवाज़", pa: "ਹੁਣ ਤੁਹਾਡੀ ਆਵਾਜ਼" },
+  speechSustain: { en: "Say 'aaah' and hold it", hi: "'आ' बोलिए और बनाए रखिए", pa: "'ਆ' ਬੋਲੋ ਅਤੇ ਕਾਇਮ ਰੱਖੋ" },
+  speechDdk: { en: "Say 'pa-ta-ka' as fast as you can", hi: "जितनी तेज़ी से हो सके 'प-त-क' बोलिए", pa: "ਜਿੰਨੀ ਤੇਜ਼ੀ ਨਾਲ ਹੋ ਸਕੇ 'ਪ-ਤ-ਕ' ਬੋਲੋ" },
+  speechSentence: { en: "Read this out loud", hi: "इसे ज़ोर से पढ़ें", pa: "ਇਸਨੂੰ ਉੱਚੀ ਪੜ੍ਹੋ" },
+  sentenceText: {
+    en: "The sun rose slowly over the quiet fields near our village.",
+    hi: "हमारे गाँव के पास शांत खेतों पर सूरज धीरे-धीरे निकला।",
+    pa: "ਸਾਡੇ ਪਿੰਡ ਕੋਲ ਸ਼ਾਂਤ ਖੇਤਾਂ ਉੱਤੇ ਸੂਰਜ ਹੌਲੀ-ਹੌਲੀ ਚੜ੍ਹਿਆ।",
+  },
+
+  tapTitle: { en: "Tap when the circle turns blue", hi: "जब घेरा नीला हो, तब दबाएँ", pa: "ਜਦੋਂ ਗੋਲਾ ਨੀਲਾ ਹੋਵੇ, ਦਬਾਓ" },
+  tapWait: { en: "Wait…", hi: "रुकिए…", pa: "ਰੁਕੋ…" },
+  tapNow: { en: "TAP", hi: "दबाएँ", pa: "ਦਬਾਓ" },
+  tapTooSoon: { en: "Too soon — wait for blue", hi: "बहुत जल्दी — नीले का इंतज़ार करें", pa: "ਬਹੁਤ ਜਲਦੀ — ਨੀਲੇ ਦੀ ਉਡੀਕ ਕਰੋ" },
+  trial: { en: "Tap", hi: "टैप", pa: "ਟੈਪ" },
+
+  handTitle: { en: "Tap as fast as you can", hi: "जितनी तेज़ी से हो सके दबाएँ", pa: "ਜਿੰਨੀ ਤੇਜ਼ੀ ਨਾਲ ਹੋ ਸਕੇ ਦਬਾਓ" },
+  handLeft: { en: "Use your LEFT hand", hi: "बाएँ हाथ का उपयोग करें", pa: "ਖੱਬਾ ਹੱਥ ਵਰਤੋ" },
+  handRight: { en: "Now your RIGHT hand", hi: "अब दायाँ हाथ", pa: "ਹੁਣ ਸੱਜਾ ਹੱਥ" },
+
+  moodTitle: { en: "Two quick questions", hi: "दो छोटे सवाल", pa: "ਦੋ ਛੋਟੇ ਸਵਾਲ" },
+  phq1: {
+    en: "Over the last two weeks, how often have you had little interest or pleasure in doing things?",
+    hi: "पिछले दो हफ़्तों में, कितनी बार किसी काम में मन नहीं लगा?",
+    pa: "ਪਿਛਲੇ ਦੋ ਹਫ਼ਤਿਆਂ ਵਿੱਚ, ਕਿੰਨੀ ਵਾਰ ਕਿਸੇ ਕੰਮ ਵਿੱਚ ਮਨ ਨਹੀਂ ਲੱਗਾ?",
+  },
+  phq2: {
+    en: "And how often have you felt down, low or hopeless?",
+    hi: "और कितनी बार उदास या निराश महसूस किया?",
+    pa: "ਅਤੇ ਕਿੰਨੀ ਵਾਰ ਉਦਾਸ ਜਾਂ ਨਿਰਾਸ਼ ਮਹਿਸੂਸ ਕੀਤਾ?",
+  },
+  phqNever: { en: "Not at all", hi: "बिल्कुल नहीं", pa: "ਬਿਲਕੁਲ ਨਹੀਂ" },
+  phqSome: { en: "Some days", hi: "कुछ दिन", pa: "ਕੁਝ ਦਿਨ" },
+  phqMost: { en: "Most days", hi: "ज़्यादातर दिन", pa: "ਜ਼ਿਆਦਾਤਰ ਦਿਨ" },
+  phqEvery: { en: "Nearly every day", hi: "लगभग हर दिन", pa: "ਲਗਭਗ ਹਰ ਦਿਨ" },
+
+  medsTitle: { en: "Did you take today's medicines?", hi: "क्या आपने आज की दवाइयाँ लीं?", pa: "ਕੀ ਤੁਸੀਂ ਅੱਜ ਦੀਆਂ ਦਵਾਈਆਂ ਲਈਆਂ?" },
+  yes: { en: "Yes", hi: "हाँ", pa: "ਹਾਂ" },
+  no: { en: "No", hi: "नहीं", pa: "ਨਹੀਂ" },
+  notYet: { en: "Not yet", hi: "अभी नहीं", pa: "ਹਾਲੇ ਨਹੀਂ" },
+
+  uploading: { en: "Saving…", hi: "सहेजा जा रहा है…", pa: "ਸੰਭਾਲਿਆ ਜਾ ਰਿਹਾ ਹੈ…" },
+  allDone: { en: "All done ✓", hi: "हो गया ✓", pa: "ਹੋ ਗਿਆ ✓" },
   allDoneBody: {
-    en: "Thank you. Your check-in has been recorded.",
-    hi: "धन्यवाद। आपकी जाँच दर्ज हो गई है।",
+    en: "Thank you. Today's check-in has been recorded.",
+    hi: "धन्यवाद। आज की जाँच दर्ज हो गई है।",
+    pa: "ਧੰਨਵਾਦ। ਅੱਜ ਦੀ ਜਾਂਚ ਦਰਜ ਹੋ ਗਈ ਹੈ।",
   },
-  doneAgain: { en: "Finish", hi: "समाप्त" },
+  finish: { en: "Finish", hi: "समाप्त", pa: "ਸਮਾਪਤ" },
+
+  retake: { en: "Let's try that again", hi: "इसे फिर से करते हैं", pa: "ਇਸਨੂੰ ਦੁਬਾਰਾ ਕਰਦੇ ਹਾਂ" },
+  qualityTooNoisy: { en: "It was a bit noisy. Somewhere quieter?", hi: "थोड़ा शोर था। कहीं शांत जगह?", pa: "ਥੋੜ੍ਹਾ ਰੌਲਾ ਸੀ। ਕਿਤੇ ਸ਼ਾਂਤ ਥਾਂ?" },
+  qualityNoSpeech: { en: "We could not hear you. A little louder?", hi: "हम आपको सुन नहीं पाए। थोड़ा तेज़?", pa: "ਅਸੀਂ ਤੁਹਾਨੂੰ ਸੁਣ ਨਹੀਂ ਸਕੇ। ਥੋੜ੍ਹਾ ਉੱਚਾ?" },
+  qualityNoFace: { en: "We could not see your face clearly.", hi: "हम आपका चेहरा साफ़ नहीं देख पाए।", pa: "ਅਸੀਂ ਤੁਹਾਡਾ ਚਿਹਰਾ ਸਾਫ਼ ਨਹੀਂ ਦੇਖ ਸਕੇ।" },
+  qualityTooLoud: { en: "That was very loud. A little softer?", hi: "बहुत तेज़ था। थोड़ा धीरे?", pa: "ਬਹੁਤ ਉੱਚਾ ਸੀ। ਥੋੜ੍ਹਾ ਹੌਲੀ?" },
 
   permissionDenied: {
-    en: "We could not access your microphone or camera. Please allow it in your browser and try again.",
-    hi: "हम आपका माइक्रोफ़ोन या कैमरा नहीं खोल पाए। कृपया ब्राउज़र में अनुमति दें और फिर कोशिश करें।",
+    en: "We could not use the microphone or camera. Please allow it and try again.",
+    hi: "हम माइक्रोफ़ोन या कैमरा नहीं खोल पाए। कृपया अनुमति दें और फिर कोशिश करें।",
+    pa: "ਅਸੀਂ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਜਾਂ ਕੈਮਰਾ ਨਹੀਂ ਖੋਲ੍ਹ ਸਕੇ। ਕਿਰਪਾ ਕਰਕੇ ਇਜਾਜ਼ਤ ਦਿਓ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
   unsupportedBrowser: {
-    en: "This browser cannot record audio or video. Please use Chrome or Safari.",
+    en: "This browser cannot record. Please use Chrome or Safari.",
     hi: "यह ब्राउज़र रिकॉर्ड नहीं कर सकता। कृपया Chrome या Safari का उपयोग करें।",
+    pa: "ਇਹ ਬ੍ਰਾਊਜ਼ਰ ਰਿਕਾਰਡ ਨਹੀਂ ਕਰ ਸਕਦਾ। ਕਿਰਪਾ ਕਰਕੇ Chrome ਜਾਂ Safari ਵਰਤੋ।",
   },
-  skipStep: { en: "Skip this step", hi: "यह चरण छोड़ें" },
+  skipStep: { en: "Skip this step", hi: "यह चरण छोड़ें", pa: "ਇਹ ਪੜਾਅ ਛੱਡੋ" },
+
+  // --- safety ---
+  emergency: { en: "Emergency", hi: "आपातकाल", pa: "ਐਮਰਜੈਂਸੀ" },
+  emergencyCall: { en: "Call 108 now", hi: "अभी 108 पर कॉल करें", pa: "ਹੁਣੇ 108 'ਤੇ ਕਾਲ ਕਰੋ" },
+  reportSymptom: { en: "Something is wrong right now", hi: "अभी कुछ गड़बड़ है", pa: "ਹੁਣੇ ਕੁਝ ਗੜਬੜ ਹੈ" },
+  acuteTitle: { en: "What are you seeing?", hi: "आप क्या देख रहे हैं?", pa: "ਤੁਸੀਂ ਕੀ ਦੇਖ ਰਹੇ ਹੋ?" },
+  acuteHint: {
+    en: "Select anything that started suddenly. This goes straight to emergency guidance — it is not scored or delayed.",
+    hi: "जो कुछ अचानक शुरू हुआ हो उसे चुनें। यह सीधे आपातकालीन सलाह पर जाता है — इसकी गणना नहीं होती।",
+    pa: "ਜੋ ਕੁਝ ਅਚਾਨਕ ਸ਼ੁਰੂ ਹੋਇਆ ਹੋਵੇ ਉਹ ਚੁਣੋ। ਇਹ ਸਿੱਧਾ ਐਮਰਜੈਂਸੀ ਸਲਾਹ 'ਤੇ ਜਾਂਦਾ ਹੈ।",
+  },
+  acuteSubmit: { en: "Get help now", hi: "अभी मदद लें", pa: "ਹੁਣੇ ਮਦਦ ਲਵੋ" },
 
   // --- dashboard ---
-  status: { en: "Status", hi: "स्थिति" },
-  todaySummary: { en: "Today's summary", hi: "आज का सार" },
-  bandStable: { en: "Stable", hi: "स्थिर" },
-  bandWatch: { en: "Watch", hi: "निगरानी" },
-  bandAlert: { en: "Alert", hi: "अलर्ट" },
-  voiceTrend: { en: "Voice", hi: "आवाज़" },
-  faceTrend: { en: "Face", hi: "चेहरा" },
-  reactionTrend: { en: "Reaction", hi: "प्रतिक्रिया" },
-  deviationAxis: { en: "Deviation from baseline", hi: "आधार से विचलन" },
-  alertLine: { en: "Alert threshold", hi: "अलर्ट सीमा" },
-  normalBand: { en: "Normal range", hi: "सामान्य दायरा" },
-  history: { en: "History", hi: "इतिहास" },
-  alertLog: { en: "Alerts", hi: "अलर्ट" },
-  noAlerts: { en: "No alerts. That is good news.", hi: "कोई अलर्ट नहीं। यह अच्छी ख़बर है।" },
-  noData: { en: "No check-ins yet.", hi: "अभी कोई जाँच नहीं।" },
-  whatsappSent: { en: "WhatsApp sent", hi: "व्हाट्सएप भेजा गया" },
-  date: { en: "Date", hi: "तारीख़" },
-  score: { en: "Score", hi: "स्कोर" },
-  explanation: { en: "Explanation", hi: "व्याख्या" },
-  baselineProgress: { en: "Baseline", hi: "आधार" },
-  daysRecorded: { en: "days recorded", hi: "दिन दर्ज" },
+  status: { en: "Status", hi: "स्थिति", pa: "ਸਥਿਤੀ" },
+  bandStable: { en: "As usual", hi: "रोज़ जैसा", pa: "ਰੋਜ਼ ਵਾਂਗ" },
+  bandWatch: { en: "Worth watching", hi: "ध्यान देने योग्य", pa: "ਧਿਆਨ ਦੇਣ ਯੋਗ" },
+  bandAlert: { en: "Please check on them", hi: "उनका हाल देखें", pa: "ਉਹਨਾਂ ਦਾ ਹਾਲ ਦੇਖੋ" },
+  confidence: { en: "Confidence", hi: "विश्वास", pa: "ਭਰੋਸਾ" },
+  becauseOf: { en: "Bear in mind", hi: "ध्यान रखें", pa: "ਧਿਆਨ ਰੱਖੋ" },
+  domainTrends: { en: "What we measure", hi: "हम क्या मापते हैं", pa: "ਅਸੀਂ ਕੀ ਮਾਪਦੇ ਹਾਂ" },
+  deviationAxis: { en: "Difference from their usual", hi: "उनके सामान्य से अंतर", pa: "ਉਹਨਾਂ ਦੇ ਆਮ ਤੋਂ ਫ਼ਰਕ" },
+  alertLine: { en: "Alert threshold", hi: "अलर्ट सीमा", pa: "ਅਲਰਟ ਸੀਮਾ" },
+  normalBand: { en: "Their usual range", hi: "उनका सामान्य दायरा", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਦਾਇਰਾ" },
+  history: { en: "History", hi: "इतिहास", pa: "ਇਤਿਹਾਸ" },
+  alertLog: { en: "Alerts", hi: "अलर्ट", pa: "ਅਲਰਟ" },
+  noAlerts: { en: "No alerts so far.", hi: "अब तक कोई अलर्ट नहीं।", pa: "ਹੁਣ ਤੱਕ ਕੋਈ ਅਲਰਟ ਨਹੀਂ।" },
+  noData: { en: "No check-ins yet.", hi: "अभी कोई जाँच नहीं।", pa: "ਹਾਲੇ ਕੋਈ ਜਾਂਚ ਨਹੀਂ।" },
+  date: { en: "Date", hi: "तारीख़", pa: "ਤਾਰੀਖ਼" },
+  explanation: { en: "What we saw", hi: "हमने क्या देखा", pa: "ਅਸੀਂ ਕੀ ਦੇਖਿਆ" },
+  baselineProgress: { en: "Learning their normal", hi: "उनका सामान्य स्तर सीख रहे हैं", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਪੱਧਰ ਸਿੱਖ ਰਹੇ ਹਾਂ" },
+  sessionsRecorded: { en: "sessions recorded", hi: "जाँच दर्ज", pa: "ਜਾਂਚਾਂ ਦਰਜ" },
   baselineNote: {
-    en: "NeuroTrace is still learning this patient's normal. Scoring starts once the baseline is complete.",
-    hi: "न्यूरोट्रेस अभी इस मरीज़ का सामान्य स्तर सीख रहा है। आधार पूरा होने पर स्कोरिंग शुरू होगी।",
+    en: "Comparison starts once we have enough sessions to know what is usual for them.",
+    hi: "जब उनके सामान्य स्तर के लिए पर्याप्त जाँच हो जाएँगी, तब तुलना शुरू होगी।",
+    pa: "ਜਦੋਂ ਉਹਨਾਂ ਦੇ ਆਮ ਪੱਧਰ ਲਈ ਕਾਫ਼ੀ ਜਾਂਚਾਂ ਹੋ ਜਾਣਗੀਆਂ, ਤਾਂ ਤੁਲਨਾ ਸ਼ੁਰੂ ਹੋਵੇਗੀ।",
   },
-  readOnly: { en: "Read-only view", hi: "केवल पढ़ने के लिए" },
+  adherence: { en: "Medicines taken", hi: "दवाइयाँ ली गईं", pa: "ਦਵਾਈਆਂ ਲਈਆਂ" },
+  dayStreak: { en: "day streak", hi: "दिन लगातार", pa: "ਦਿਨ ਲਗਾਤਾਰ" },
+  readOnly: { en: "Read-only view", hi: "केवल पढ़ने के लिए", pa: "ਸਿਰਫ਼ ਪੜ੍ਹਨ ਲਈ" },
+
+  // --- clinician ---
+  clinicTitle: { en: "Patients", hi: "मरीज़", pa: "ਮਰੀਜ਼" },
+  clinicSubtitle: {
+    en: "Ranked by sustained deviation from each patient's own baseline.",
+    hi: "हर मरीज़ के अपने आधार से लगातार विचलन के अनुसार क्रमित।",
+    pa: "ਹਰ ਮਰੀਜ਼ ਦੇ ਆਪਣੇ ਆਧਾਰ ਤੋਂ ਲਗਾਤਾਰ ਵਿਚਲਨ ਅਨੁਸਾਰ ਕ੍ਰਮਬੱਧ।",
+  },
+  acknowledge: { en: "Acknowledge", hi: "स्वीकार करें", pa: "ਸਵੀਕਾਰ ਕਰੋ" },
+  lastSession: { en: "Last session", hi: "पिछली जाँच", pa: "ਪਿਛਲੀ ਜਾਂਚ" },
+  domains: { en: "Domains", hi: "क्षेत्र", pa: "ਖੇਤਰ" },
 } as const;
 
 export type StringKey = keyof typeof STRINGS;
+
+/** Domain codes as the caregiver should read them. */
+export const DOMAIN_LABELS: Record<string, Record<Lang, string>> = {
+  cranial_nerves: { en: "Face", hi: "चेहरा", pa: "ਚਿਹਰਾ" },
+  speech_language: { en: "Speech", hi: "बोली", pa: "ਬੋਲੀ" },
+  motor: { en: "Hands and arms", hi: "हाथ और बाँहें", pa: "ਹੱਥ ਅਤੇ ਬਾਂਹਾਂ" },
+  coordination_gait: { en: "Balance", hi: "संतुलन", pa: "ਸੰਤੁਲਨ" },
+  cognition: { en: "Attention", hi: "ध्यान", pa: "ਧਿਆਨ" },
+  mood_fatigue_function: { en: "Mood and energy", hi: "मनोदशा और ऊर्जा", pa: "ਮਨੋਦਸ਼ਾ ਅਤੇ ਊਰਜਾ" },
+  vitals_prevention: { en: "Heart and medicines", hi: "दिल और दवाइयाँ", pa: "ਦਿਲ ਅਤੇ ਦਵਾਈਆਂ" },
+};
 
 interface I18nValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   t: (key: StringKey) => string;
-  toggle: () => void;
+  domain: (code: string) => string;
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
-
 const LANG_KEY = "neurotrace.lang";
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -150,8 +257,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({
       lang,
       setLang,
-      toggle: () => setLang(lang === "en" ? "hi" : "en"),
       t: (key: StringKey) => STRINGS[key][lang],
+      domain: (code: string) => DOMAIN_LABELS[code]?.[lang] ?? code.replace(/_/g, " "),
     }),
     [lang, setLang],
   );
@@ -164,3 +271,6 @@ export function useI18n() {
   if (!ctx) throw new Error("useI18n must be used inside <I18nProvider>");
   return ctx;
 }
+
+export const LANGS: Lang[] = ["en", "hi", "pa"];
+export const LANG_NAMES: Record<Lang, string> = { en: "EN", hi: "हिं", pa: "ਪੰ" };

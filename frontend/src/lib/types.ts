@@ -1,12 +1,17 @@
 export type Role = "patient" | "caregiver" | "clinician";
 export type Band = "STABLE" | "WATCH" | "ALERT";
-export type Modality = "voice" | "face" | "reaction";
+export type Lang = "en" | "hi" | "pa";
+export type SessionType = "daily" | "weekly" | "monthly";
+export type BaselineState = "not_started" | "collecting" | "locked";
+export type StrokeSide = "left" | "right" | "bilateral" | "unknown";
+export type Instrument = "PHQ2" | "PHQ9" | "EAT10" | "FSS" | "BARTHEL";
 
 export interface User {
   id: string;
   email: string;
   role: Role;
   full_name: string | null;
+  lang: string;
   created_at: string;
 }
 
@@ -25,65 +30,123 @@ export interface AuthResponse {
 export interface Patient {
   id: string;
   caregiver_id: string;
+  clinician_id: string | null;
   user_id: string | null;
   name: string;
   age: number | null;
   sex: string | null;
-  language: string;
-  baseline_ready: boolean;
+  stroke_side: StrokeSide;
+  stroke_date: string | null;
+  enrolment_date: string;
+  languages: string[];
+  preferred_hour: number | null;
+  education_band: string | null;
+  baseline_state: BaselineState;
   created_at: string;
 }
 
-export interface ReactionPayload {
-  latencies_ms: number[];
-  misses: number;
-  false_starts: number;
+/** One exam module, as described by GET /sessions/battery/{schedule}. */
+export interface BatteryModule {
+  code: string;
+  name: string;
+  domain: string;
+  tasks: string[];
+  seconds: number;
+  nihss_item: number | null;
+  instructions: { en: string; hi: string };
 }
 
-export interface FeatureExtractionResult {
-  sample_id: string;
-  modality: Modality;
-  valid: boolean;
-  n_features: number;
-  features: Record<string, number>;
+export interface Battery {
+  schedule: SessionType;
+  total_seconds: number;
+  modules: BatteryModule[];
 }
 
-export interface CheckinResult {
-  sample_id: string;
+export interface ExamSession {
+  id: string;
   patient_id: string;
-  stability_score: number;
+  ts: string;
+  type: SessionType;
+  quality_score: number;
+  identity_verified: boolean;
+  off_window: boolean;
+  completed: boolean;
+  offline_captured: boolean;
+}
+
+export interface ModuleResult {
+  id: string;
+  session_id: string;
+  module_code: string;
+  domain: string;
+  features_json: Record<string, number>;
+  quality_flag: boolean;
+  created_at: string;
+}
+
+export interface FastItem {
+  letter: string;
+  label: string;
+  detail: string;
+}
+
+export interface FastCard {
+  title: string;
+  items: FastItem[];
+  emergency_numbers: { label: string; number: string }[];
+  limitation_notice: string;
+}
+
+export interface Confounders {
+  active: string[];
+  confidence: number;
+  labels_en: string[];
+  labels_hi: string[];
+}
+
+export interface FinalizeResult {
+  session_id: string;
+  patient_id: string;
   band: Band;
   reason: string;
-  baseline_day: boolean;
-  baseline_ready: boolean;
-  deviations: Record<Modality, number>;
-  modalities_flagged: Modality[];
-  valid_modalities: Record<Modality, boolean>;
-  top_drivers: [string, number][];
+  gate1_passed: boolean;
+  gate2_passed: boolean;
+  persistent_domains: string[];
+  domain_deviations: Record<string, number>;
+  drivers: [string, number][];
+  confounders: Confounders;
+  confidence: number;
+  improving: boolean;
+  sustained_sessions: number;
+  baseline_phase: boolean;
+  baseline_state: BaselineState;
   explanation_en: string;
   explanation_hi: string;
+  explanation_source: "slm" | "template";
+  guardrail_violations: string[];
+  clinician_line: string;
   alert_id: string | null;
+  fast: FastCard;
 }
 
 export interface TrendPoint {
   date: string;
-  sample_id: string;
-  voice_dev: number;
-  face_dev: number;
-  reaction_dev: number;
-  stability_score: number;
+  session_id: string;
   band: Band;
-  baseline_day: boolean;
+  domain_devs: Record<string, number>;
+  confidence: number;
+  baseline_phase: boolean;
 }
 
 export interface HistoryRow {
   date: string;
   band: Band;
-  stability_score: number;
   reason: string | null;
   explanation_en: string | null;
   explanation_hi: string | null;
-  baseline_day: boolean;
+  confidence: number;
+  baseline_phase: boolean;
+  confounders: string[];
 }
 
 export interface Alert {
@@ -91,50 +154,96 @@ export interface Alert {
   patient_id: string;
   score_id: string;
   band: Band;
-  explanation: string;
+  drivers_json: [string, number][] | null;
+  confounders_json: Confounders | null;
+  explanation_en: string;
   explanation_hi: string | null;
-  whatsapp_sent: boolean;
+  clinician_line: string | null;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
   created_at: string;
 }
 
 export interface Score {
   id: string;
   patient_id: string;
-  sample_id: string;
-  voice_dev: number;
-  face_dev: number;
-  reaction_dev: number;
-  stability_score: number;
+  session_id: string;
+  domain_devs_json: Record<string, number>;
   band: Band;
+  gate1_passed: boolean;
+  gate2_passed: boolean;
+  persistent_domains: string[] | null;
+  drivers_json: [string, number][] | null;
+  confounders_json: Confounders | null;
+  confidence: number;
+  improving: boolean;
   reason: string | null;
-  modalities_flagged: string[] | null;
+  baseline_phase: boolean;
   explanation_en: string | null;
   explanation_hi: string | null;
-  baseline_day: boolean;
+  explanation_source: string;
   created_at: string;
+}
+
+export interface BaselineProgress {
+  state: BaselineState;
+  modules_locked: number;
+  modules_total: number;
+  min_sessions: number;
+  required_sessions: number;
+  window_min_days: number;
+  window_max_days: number;
+}
+
+export interface QuestionnaireRead {
+  id: string;
+  patient_id: string;
+  instrument: Instrument;
+  score: number;
+  flags_json: Record<string, unknown> | null;
+  ts: string;
 }
 
 export interface Dashboard {
   patient: Patient;
-  baseline_ready: boolean;
-  baseline_days_recorded: number;
-  baseline_days_required: number;
+  baseline: BaselineProgress;
   latest: Score | null;
-  latest_explanation_en: string | null;
-  latest_explanation_hi: string | null;
   trends: TrendPoint[];
   history: HistoryRow[];
   alerts: Alert[];
+  adherence_streak: number;
+  adherence_rate_30d: number;
+  latest_questionnaires: QuestionnaireRead[];
   dev_threshold: number;
-  band_thresholds: Record<string, number>;
+  fast: FastCard;
 }
 
-export interface DailySample {
-  id: string;
+export interface ClinicPatientRow {
   patient_id: string;
-  ts: string;
-  audio_path: string | null;
-  video_path: string | null;
-  reaction_json: ReactionPayload | null;
-  status: "processing" | "done";
+  name: string;
+  age: number | null;
+  band: Band | null;
+  sustained_domains: string[];
+  confidence: number;
+  last_session: string | null;
+  unacknowledged_alerts: number;
+  baseline_state: BaselineState;
 }
+
+export interface AcuteResponse {
+  escalate: boolean;
+  scoring_bypassed: boolean;
+  reported: string[];
+  reported_labels: string[];
+  message: string;
+  fast: FastCard;
+  emergency_number: string;
+}
+
+export interface AcuteSymptom {
+  code: string;
+  label: string;
+}
+
+/** Features extracted on-device and POSTed. Raw media never leaves the phone. */
+export type ModuleFeatures = Record<string, number>;

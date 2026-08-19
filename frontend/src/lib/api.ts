@@ -1,19 +1,31 @@
 /**
  * API client.
  *
+ * Note what is absent: there is no upload method for audio, video or image data. The
+ * device extracts features locally and posts numbers. That is not a convention we follow
+ * carefully — it is enforced by the server, which has no endpoint that accepts media.
+ *
  * Holds the token pair in localStorage and transparently retries a 401 once after
- * refreshing. Concurrent 401s share a single in-flight refresh so a page that fires four
- * requests at once does not burn four refresh tokens.
+ * refreshing. Concurrent 401s share a single in-flight refresh so a dashboard that fires
+ * four requests at once does not burn four refresh tokens.
  */
 import type {
+  AcuteResponse,
+  AcuteSymptom,
   AuthResponse,
-  CheckinResult,
-  DailySample,
+  Battery,
+  ClinicPatientRow,
   Dashboard,
-  FeatureExtractionResult,
+  ExamSession,
+  FastCard,
+  FinalizeResult,
+  Instrument,
+  Lang,
+  ModuleFeatures,
+  ModuleResult,
   Patient,
-  ReactionPayload,
   Role,
+  SessionType,
   TokenPair,
 } from "./types";
 
@@ -86,7 +98,6 @@ async function refreshTokens(): Promise<TokenPair | null> {
         return null;
       }
       const next = (await res.json()) as TokenPair;
-      // /auth/refresh returns a fresh pair; keep the new refresh token too
       setTokens(next);
       return next;
     } catch {
@@ -105,7 +116,6 @@ async function errorMessage(res: Response): Promise<string> {
     const detail = body?.detail;
     if (typeof detail === "string") return detail;
     if (Array.isArray(detail) && detail.length) {
-      // FastAPI validation errors
       return detail.map((d: { msg?: string }) => d.msg ?? "invalid input").join("; ");
     }
   } catch {
@@ -117,13 +127,12 @@ async function errorMessage(res: Response): Promise<string> {
 interface RequestOptions {
   method?: string;
   json?: unknown;
-  body?: BodyInit;
   auth?: boolean;
   retry?: boolean;
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", json, body, auth = true, retry = true } = opts;
+  const { method = "GET", json, auth = true, retry = true } = opts;
   const headers: Record<string, string> = {};
 
   if (json !== undefined) headers["content-type"] = "application/json";
@@ -137,7 +146,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      body: json !== undefined ? JSON.stringify(json) : body,
+      body: json !== undefined ? JSON.stringify(json) : undefined,
     });
   } catch {
     throw new ApiError(0, "Cannot reach the NeuroTrace server. Check your connection.");
@@ -160,70 +169,106 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 export const api = {
   health: () => request<{ status: string; database: string }>("/health", { auth: false }),
 
-  register: (payload: { email: string; password: string; role: Role; full_name?: string }) =>
-    request<AuthResponse>("/auth/register", { method: "POST", json: payload, auth: false }),
+  // --- auth ---
+  register: (payload: {
+    email: string;
+    password: string;
+    role: Role;
+    full_name?: string;
+    lang?: string;
+  }) => request<AuthResponse>("/auth/register", { method: "POST", json: payload, auth: false }),
 
   login: (payload: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", json: payload, auth: false }),
 
   me: () => request<AuthResponse["user"]>("/auth/me"),
 
+  // --- patients ---
   listPatients: () => request<Patient[]>("/patients"),
-
   getPatient: (id: string) => request<Patient>(`/patients/${id}`),
-
   createPatient: (payload: {
     name: string;
+    stroke_date: string;
     age?: number | null;
     sex?: string | null;
-    language?: string;
+    stroke_side?: string;
+    languages?: string[];
+    preferred_hour?: number | null;
+    education_band?: string | null;
     user_id?: string | null;
   }) => request<Patient>("/patients", { method: "POST", json: payload }),
 
-  updatePatient: (id: string, payload: Partial<Pick<Patient, "name" | "age" | "sex" | "language">>) =>
-    request<Patient>(`/patients/${id}`, { method: "PATCH", json: payload }),
+  // --- sessions ---
+  battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
 
-  deletePatient: (id: string) =>
-    request<{ detail: string }>(`/patients/${id}`, { method: "DELETE" }),
+  startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean }) =>
+    request<ExamSession>(`/sessions/${patientId}/start`, { method: "POST", json: payload }),
 
-  currentCheckin: (patientId: string) =>
-    request<DailySample | null>(`/checkin/${patientId}/current`),
-
-  uploadAudio: (patientId: string, blob: Blob, filename = "checkin.wav") => {
-    const form = new FormData();
-    form.append("file", blob, filename);
-    return request<FeatureExtractionResult>(`/checkin/${patientId}/audio`, {
+  /** Features only. There is deliberately no media variant of this call. */
+  submitModule: (
+    sessionId: string,
+    code: string,
+    features: ModuleFeatures,
+    quality: { quality_flag?: boolean; quality_detail?: unknown } = {},
+  ) =>
+    request<ModuleResult>(`/sessions/${sessionId}/module/${code}`, {
       method: "POST",
-      body: form,
-    });
-  },
-
-  uploadVideo: (patientId: string, blob: Blob, filename = "checkin.webm") => {
-    const form = new FormData();
-    form.append("file", blob, filename);
-    return request<FeatureExtractionResult>(`/checkin/${patientId}/video`, {
-      method: "POST",
-      body: form,
-    });
-  },
-
-  uploadReaction: (patientId: string, payload: ReactionPayload) =>
-    request<FeatureExtractionResult>(`/checkin/${patientId}/reaction`, {
-      method: "POST",
-      json: payload,
+      json: { features, extracted_on_device: true, ...quality },
     }),
 
-  finalize: (patientId: string) =>
-    request<CheckinResult>(`/checkin/${patientId}/finalize`, { method: "POST" }),
+  finalizeSession: (sessionId: string) =>
+    request<FinalizeResult>(`/sessions/${sessionId}/finalize`, { method: "POST" }),
 
+  currentSession: (patientId: string) =>
+    request<ExamSession | null>(`/sessions/${patientId}/current`),
+
+  // --- domain F/G ---
+  submitQuestionnaire: (patientId: string, instrument: Instrument, responses: number[] | Record<string, number>, sessionId?: string) =>
+    request(`/questionnaire/${patientId}`, {
+      method: "POST",
+      json: { instrument, responses, session_id: sessionId ?? null },
+    }),
+
+  submitVitals: (patientId: string, payload: { bp_sys?: number; bp_dia?: number; ppg_features?: unknown }) =>
+    request(`/vitals/${patientId}`, { method: "POST", json: payload }),
+
+  submitAdherence: (patientId: string, taken: boolean) =>
+    request(`/adherence/${patientId}`, { method: "POST", json: { taken } }),
+
+  // --- safety (unauthenticated where it must be) ---
+  fastCard: (lang: Lang = "en") =>
+    request<FastCard>(`/safety/fast?lang=${lang}`, { auth: false }),
+
+  acuteSymptoms: (lang: Lang = "en") =>
+    request<{ symptoms: AcuteSymptom[] }>(`/safety/symptoms?lang=${lang}`, { auth: false }),
+
+  reportAcute: (patientId: string, symptoms: string[], note: string | undefined, lang: Lang) =>
+    request<AcuteResponse>(`/safety/acute/${patientId}`, {
+      method: "POST",
+      json: { symptoms, note, lang },
+    }),
+
+  // --- dashboards ---
   dashboard: (patientId: string, days = 30) =>
     request<Dashboard>(`/dashboard/${patientId}?days=${days}`),
 
+  clinicPatients: () =>
+    request<{ patients: ClinicPatientRow[] }>("/clinic/patients"),
+
+  acknowledgeAlert: (alertId: string) =>
+    request<{ detail: string }>(`/clinic/alerts/${alertId}/acknowledge`, { method: "POST" }),
+
+  report: (patientId: string) => request<Record<string, unknown>>(`/report/${patientId}`),
+
+  // --- demo ---
   seedDemo: () =>
-    request<{ email: string; password: string; patient_id: string; detail: string }>("/demo/seed", {
-      method: "POST",
-      auth: false,
-    }),
+    request<{
+      email: string;
+      password: string;
+      patient_id: string;
+      bands: string[];
+      detail: string;
+    }>("/demo/seed", { method: "POST", auth: false }),
 };
 
 export { BASE as API_BASE };
