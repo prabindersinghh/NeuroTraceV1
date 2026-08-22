@@ -82,7 +82,46 @@ async def run_migrations_online() -> None:
             f"migration left {len(rows)} dangling foreign-key row(s): {rows[:5]}")
 
 
+def run_migrations_sync_sqlite() -> None:
+    """The SQLite path runs on the STDLIB driver, synchronously, on purpose.
+
+    The async path hung the first Railway deploy: aiosqlite services every connection from
+    a worker thread, and a thread still alive at interpreter shutdown stops the process
+    exiting. `alembic upgrade head` printed its last migration and then simply never
+    returned, so the `&&` in the start command never reached uvicorn and the deploy died
+    at the healthcheck with nothing in the log — no traceback, no exit, no uvicorn banner.
+    Locally (Windows dev) the same code exits by timing luck, which is why no test ever
+    caught it.
+
+    Migrations gain nothing from async — one connection, sequential DDL — so the sqlite
+    branch uses the built-in sqlite3 driver: no threads, deterministic exit. Postgres
+    stays on the async engine because asyncpg is the only Postgres driver installed.
+
+    Foreign-key enforcement stays OFF during the migration for the reason documented on
+    run_migrations_online(): batch mode drops parent tables, and enforcement ON turns
+    that into a cascade that empties the database (migration 0005 did exactly that once).
+    """
+    from sqlalchemy import create_engine
+
+    url = _url().replace("sqlite+aiosqlite://", "sqlite://", 1)
+    engine = create_engine(url, future=True)
+    with engine.connect() as connection:
+        _do_migrations(connection)
+    engine.dispose()
+
+    checker = create_engine(url, future=True)
+    with checker.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        rows = list(connection.exec_driver_sql("PRAGMA foreign_key_check"))
+    checker.dispose()
+    if rows:
+        raise RuntimeError(
+            f"migration left {len(rows)} dangling foreign-key row(s): {rows[:5]}")
+
+
 if context.is_offline_mode():
     run_migrations_offline()
+elif _url().startswith("sqlite"):
+    run_migrations_sync_sqlite()
 else:
     asyncio.run(run_migrations_online())
