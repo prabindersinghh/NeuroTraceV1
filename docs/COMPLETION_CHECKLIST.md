@@ -1,0 +1,68 @@
+# COMPLETION CHECKLIST — FINAL_PRODUCT_SPEC v4 Part 7
+
+Honest status. `LIVE` means verified against the running system; `TEST` means verified only
+by the suite; `PENDING` means not done, with the reason.
+
+**The distinction is the point.** A green suite is not a running product, and this project
+has already had two cases where a passing test told us nothing (a vacuous `tsc` invocation
+that checked no files, and a stale `.pyc` that made an invariant fail for the wrong reason).
+
+---
+
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Daily 12-min session runs end to end on a phone, offline | **TEST** | Protocol built and tested (21 steps, 11m35s); `TaskShell` + `StepSvv` build clean. Not yet run on a physical handset |
+| 2 | All physical modules daily; Unterberger/tandem-walk ASHA-only | **TEST** | `test_session_plan.py`, INV-12 |
+| 3 | Fatigue instrumentation records elapsed time per task | **TEST** | 4 columns, migration 0008, applied to the dev DB |
+| 4 | Pause/resume works, does not invalidate a session | **TEST** | `paused_before_task` recorded; UI pause always visible |
+| 5 | Onboarding complete, scope disclosure unskippable | **TEST** | `Onboarding.tsx` — each of 5 limits ticked individually |
+| 6 | Every task: demo, spoken instruction, framing guide, quality check | **TEST** | `TaskShell` enforces DEMO→INSTRUCT→POSITION→COUNTDOWN→PERFORM→QUALITY→CONFIRM |
+| 7 | Fall-risk gate blocks the balance block | **TEST** | `FallRiskGate.tsx`, non-dismissible, skip is first-class |
+| 8 | Blue/white design across patient, caregiver, clinician | **LIVE** | Part 4 palette in `index.css`; `npm run build` exit 0 |
+| 9 | CCG trace renders and compares against baseline | **TEST** | `CcgTrace.tsx` renders; **baseline side-by-side NOT built** — see gaps |
+| 10 | Caregiver dashboard complete | **LIVE** | Exercised over HTTP against the seeded demo |
+| 11 | Clinician dashboard: audit log + PDF export | **PARTIAL** | Roster, typed cards, drift lane, audit table live. **PDF export not built** |
+| 12 | ASHA interface complete | **TEST** | `AshaHome.tsx` — offline queue, idempotent sync, task-level due lists |
+| 13 | Awaaz D1–D5 complete | **TEST** | D1 board/emergency/gate; D2 listener; D4 harvest; D5 convergence + frozen adapter |
+| 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
+| 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
+| 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |
+| 17 | Deployed on Railway + Neon; demo reproduces on public URL | **PENDING** | Needs your accounts. Runbook + `verify_deploy.sh` ready |
+| 18 | EN / HI / PA throughout | **TEST** | All new surfaces trilingual |
+| 19 | All invariants pinned; suite green by exit code | **LIVE** | 12 invariants; `pytest` **exit 0** — 793 collected / 792 passed / 0 failed / 1 skipped (optional denylist) |
+| 20 | Privacy invariant passing; nothing pushed | **LIVE** | INV-11 green; 22 blobs purged; `preflight_push.sh` 7/7 |
+| 21 | Living docs current | **LIVE** | 12 docs + 5 model cards |
+
+---
+
+## Known gaps, stated plainly
+
+**PDF export (item 11).** Not built. A clinician-facing PDF is a real deliverable and I
+prioritised the deploy runbook and the privacy audit above it. The report endpoint that
+would feed it (`/report/{patient_id}`) exists and returns structured data.
+
+**CCG baseline comparison (item 9).** The trace renders with metrics and the partial-capture
+caveat, but not side-by-side against the patient's own earlier trace. The API returns one
+session; comparison needs a second fetch and a two-panel layout.
+
+**Demo videos (item 6).** `TaskShell` accepts and displays `demoSrc`, and the flow is built
+around it, but no clips have been recorded. Recording them needs a person to film.
+
+**Nothing has run on a physical phone.** Camera framing, pose scaling at 1.5 m, and the
+handset-tilt path in SVV are all verified in a desktop browser only. This is the largest
+untested surface in the product.
+
+**Deploy (item 17) is the single largest risk** and remains blocked on account creation.
+Everything that could be prepared without credentials is done, including a verifier that
+checks the deployed engine reproduces the *identical* band sequence rather than merely
+returning 200.
+
+---
+
+## For you to do
+
+1. **Deploy** — `docs/DEPLOY.md`, ~30 min. Then `./scripts/verify_deploy.sh <url>`.
+2. **Open `/hooks` once** (or restart) so the INV-10 registry guard loads — `.claude/` did
+   not exist when this session started, so the settings watcher has not picked it up.
+3. **Dataset requests** — `docs/DATASET_REQUESTS.md`. Send UASpeech first; it needs an
+   institutional signature and runs 1–3 weeks.

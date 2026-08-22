@@ -16,7 +16,25 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-_TEST_DB_FILE = BACKEND_DIR / "tests" / ".pytest_neurotrace.sqlite3"
+# Per-PROCESS test database.
+#
+# Every pytest process gets its own SQLite file, keyed on PID. Two concurrent runs — a
+# background full suite and a foreground single-file run, or the registry-guard hook firing
+# while a suite is already going — previously shared one file, and the `engine` fixture
+# drops and recreates the schema on every test. The result is "no such table: users" in
+# whichever process loses the race.
+#
+# That has happened three times in this project. Each time it looked like a real failure
+# and cost an investigation; once it was misdiagnosed as a conftest fixture bug. It also
+# makes the INV-10 registry hook actively harmful, because a guard that emits spurious
+# failures is a guard somebody switches off.
+#
+# `pytest-xdist` workers additionally get their own suffix, so this stays correct if the
+# suite is ever parallelised.
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
+_TEST_DB_FILE = (
+    BACKEND_DIR / "tests" / f".pytest_neurotrace.{os.getpid()}{_WORKER}.sqlite3"
+)
 
 # Must be set before app.config is imported for the first time.
 os.environ.setdefault(

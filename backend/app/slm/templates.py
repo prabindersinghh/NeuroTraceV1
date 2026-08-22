@@ -139,6 +139,28 @@ _OPENING = {
         "hi": "आज उनका हाल ज़रूर देखें और उनके डॉक्टर से संपर्क करने पर विचार करें।",
         "pa": "ਅੱਜ ਉਹਨਾਂ ਦਾ ਹਾਲ ਜ਼ਰੂਰ ਦੇਖੋ ਅਤੇ ਉਹਨਾਂ ਦੇ ਡਾਕਟਰ ਨਾਲ ਸੰਪਰਕ ਕਰਨ ਬਾਰੇ ਸੋਚੋ।",
     },
+    # Symmetric progressive change across face, movement and voice. We say what we can
+    # defend - that it does not look one-sided - and point at the right next step, rather
+    # than either naming a condition we cannot diagnose or staying silent about something
+    # real and progressive.
+    "PATTERN_ATYPICAL": {
+        "en": ("Changes seen are not consistent with a focal (one-sided) deficit. "
+               "Please discuss other neurological causes with your doctor."),
+        "hi": ("जो बदलाव दिखे हैं वे किसी एक तरफ़ के (फ़ोकल) असर जैसे नहीं लगते। "
+               "कृपया अन्य न्यूरोलॉजिकल कारणों पर अपने डॉक्टर से चर्चा करें।"),
+        "pa": ("ਜੋ ਤਬਦੀਲੀਆਂ ਦਿਖੀਆਂ ਹਨ ਉਹ ਕਿਸੇ ਇੱਕ ਪਾਸੇ ਦੇ (ਫ਼ੋਕਲ) ਅਸਰ ਵਰਗੀਆਂ ਨਹੀਂ ਲੱਗਦੀਆਂ। "
+               "ਕਿਰਪਾ ਕਰਕੇ ਹੋਰ ਨਿਊਰੋਲਾਜੀਕਲ ਕਾਰਨਾਂ ਬਾਰੇ ਆਪਣੇ ਡਾਕਟਰ ਨਾਲ ਗੱਲ ਕਰੋ।"),
+    },
+}
+
+_ATYPICAL_DETAIL = {
+    "en": ("Face, movement and voice have all changed together, and evenly on both sides. "
+           "This system looks for one-sided changes, so this pattern is outside what it "
+           "can interpret."),
+    "hi": ("चेहरा, चाल और आवाज़ तीनों एक साथ और दोनों तरफ़ बराबर बदले हैं। यह सिस्टम एक तरफ़ के "
+           "बदलाव देखता है, इसलिए यह पैटर्न इसकी समझ से बाहर है।"),
+    "pa": ("ਚਿਹਰਾ, ਚਾਲ ਅਤੇ ਆਵਾਜ਼ ਤਿੰਨੇ ਇਕੱਠੇ ਅਤੇ ਦੋਵੇਂ ਪਾਸੇ ਬਰਾਬਰ ਬਦਲੇ ਹਨ। ਇਹ ਸਿਸਟਮ ਇੱਕ ਪਾਸੇ ਦੀਆਂ "
+           "ਤਬਦੀਲੀਆਂ ਦੇਖਦਾ ਹੈ, ਇਸ ਲਈ ਇਹ ਪੈਟਰਨ ਇਸਦੀ ਸਮਝ ਤੋਂ ਬਾਹਰ ਹੈ।"),
 }
 
 _SUSTAINED = {
@@ -170,6 +192,40 @@ _CONFOUNDER_LEAD = {
     "hi": "ध्यान रखें: ",
     "pa": "ਧਿਆਨ ਰੱਖੋ: ",
 }
+
+#: Domain names in caregiver language. The split between motor_speech and language has to
+#: survive into what the family reads: "speech sounded less clear" and "finding words was
+#: harder" are different observations that lead to different conversations with a doctor.
+DOMAIN_PHRASES: dict[str, tuple[str, str, str]] = {
+    "cranial_nerves": ("face and eye movement", "चेहरे और आँखों की हरकत",
+                       "ਚਿਹਰੇ ਅਤੇ ਅੱਖਾਂ ਦੀ ਹਰਕਤ"),
+    "motor_speech": ("how clear their speech sounded", "उनकी बोली कितनी साफ़ रही",
+                     "ਉਹਨਾਂ ਦੀ ਬੋਲੀ ਕਿੰਨੀ ਸਾਫ਼ ਰਹੀ"),
+    "language": ("finding and understanding words", "शब्द ढूँढ़ना और समझना",
+                 "ਸ਼ਬਦ ਲੱਭਣਾ ਅਤੇ ਸਮਝਣਾ"),
+    "motor": ("hand and arm movement", "हाथ और बाँह की हरकत", "ਹੱਥ ਅਤੇ ਬਾਂਹ ਦੀ ਹਰਕਤ"),
+    "coordination_gait": ("balance and walking", "संतुलन और चलना", "ਸੰਤੁਲਨ ਅਤੇ ਤੁਰਨਾ"),
+    "posterior_vestibular": ("steadiness and eye movement", "स्थिरता और आँखों की हरकत",
+                             "ਸਥਿਰਤਾ ਅਤੇ ਅੱਖਾਂ ਦੀ ਹਰਕਤ"),
+    "cognition": ("attention and memory", "ध्यान और याददाश्त", "ਧਿਆਨ ਅਤੇ ਯਾਦਦਾਸ਼ਤ"),
+    "mood_fatigue_function": ("mood and energy", "मन और ऊर्जा", "ਮਨ ਅਤੇ ਊਰਜਾ"),
+    "vitals_prevention": ("blood pressure and medication", "ब्लड प्रेशर और दवा",
+                          "ਬਲੱਡ ਪ੍ਰੈਸ਼ਰ ਅਤੇ ਦਵਾਈ"),
+}
+
+
+#: DRIVER_PHRASES carries the bad-direction at index 0, so _LANG_INDEX is offset by one.
+#: DOMAIN_PHRASES has no direction, so it needs its own straight (en, hi, pa) index.
+_DOMAIN_LANG_INDEX = {"en": 0, "hi": 1, "pa": 2}
+
+
+def domain_phrase(domain: str, lang: str = "en") -> str:
+    """Caregiver-facing name for a domain, falling back to the raw key."""
+    entry = DOMAIN_PHRASES.get(domain)
+    if entry is None:
+        return domain.replace("_", " ")
+    return entry[_DOMAIN_LANG_INDEX.get(lang, 0)]
+
 
 _JOIN = {"en": " and ", "hi": " और ", "pa": " ਅਤੇ "}
 # Devanagari and Gurmukhi end a sentence with a danda, not a full stop.
@@ -203,13 +259,15 @@ def render_template(
     parts = [_OPENING[band][lang]]
 
     phrases = [p for p in (phrase_for(f, lang) for f, _ in (drivers or [])) if p]
-    if phrases and band != "STABLE":
+    if phrases and band not in ("STABLE", "PATTERN_ATYPICAL"):
         joined = phrases[0] if len(phrases) == 1 else \
             ", ".join(phrases[:-1]) + _JOIN[lang] + phrases[-1]
         lead = {"en": "What changed: ", "hi": "क्या बदला: ", "pa": "ਕੀ ਬਦਲਿਆ: "}[lang]
         parts.append(f"{lead}{joined}{_STOP[lang]}")
 
-    if improving:
+    if band == "PATTERN_ATYPICAL":
+        parts.append(_ATYPICAL_DETAIL[lang])
+    elif improving:
         parts.append(_IMPROVING[lang])
     elif band == "ALERT":
         parts.append(_SUSTAINED[lang] if sustained else _UNSUSTAINED[lang])
@@ -228,14 +286,29 @@ def render_template(
 
 
 def render_clinician_line(band: str, domains: list[str], sessions: int,
-                          confounders: list[str] | None = None) -> str:
+                          confounders: list[str] | None = None,
+                          lateralised: list[str] | None = None) -> str:
     """One line for the clinician view. Never a bare number — always the comparison."""
     if band == "STABLE":
         return f"Within this patient's own baseline across {sessions} recent session(s)."
+    if band == "PATTERN_ATYPICAL":
+        line = (
+            f"Symmetric progressive deviation across {', '.join(domains) or 'multiple domains'} "
+            f"over {sessions} consecutive sessions, with NO lateralised finding on any "
+            f"session. Pattern is not focal; consider non-vascular causes including "
+            f"parkinsonian syndromes. No stroke-monitoring alert raised."
+        )
+        if confounders:
+            line += f" Confounders active: {', '.join(confounders)}."
+        return line
     domain_text = ", ".join(domains) if domains else "one domain"
     line = (f"{len(domains) or 1} domain(s) ({domain_text}) deviating beyond RCI across "
             f"{sessions} consecutive sessions, measured against this patient's own "
             f"median/MAD baseline.")
+    if lateralised:
+        line += f" Lateralised (one-sided) in: {', '.join(lateralised)}."
+    elif band == "ALERT":
+        line += " NOTE: no lateralised finding."
     if confounders:
         line += f" Confounders active: {', '.join(confounders)}."
     return line

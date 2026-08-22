@@ -52,7 +52,44 @@ adherence(id, patient_id, taken bool, ts)
 audit_log(id, actor_id, action, patient_id, ts, meta_json)
 
 ## 4. EXAM MODULES — implement each as a self-contained module
-Each module = { id, domain, tasks[], extract(raw)->features, scoringKeys[], schedule }
+Each module = { id, domain, tasks[], extract(raw)->features, scoringKeys[],
+                LATERAL_KEYS[], gatesAlerts, schedule }
+
+LATERAL_KEYS — REQUIRED, added v2.1. The subset of a module's features that express
+LEFT-RIGHT ASYMMETRY rather than overall level. This is the discriminator between a focal
+lesion and a diffuse process:
+  · a stroke damages one hemisphere -> one-sided deficit -> asymmetry features move
+  · Parkinson's / vascular parkinsonism -> symmetric -> only absolute levels move
+Modules with no left/right axis (M4 speech, M10 attention, M11 memory) declare an empty
+tuple and can NEVER establish laterality. See §6 Gate 3.
+
+  M1  lateral: mouth_corner_symmetry, corner_drop, nasolabial_ratio,
+               forehead_movement_symmetry, ear_asymmetry, eye_closure_asymmetry,
+               blink_asymmetry
+      NOT lateral: eye_aperture_L/R, landmark_tremor (masked facies moves these bilaterally)
+  M2  lateral: tongue_deviation_abs
+  M6  lateral: drift_asymmetry, pronation_asymmetry
+  M7  lateral: tap_asymmetry_ratio, tap_cv_asymmetry
+      NOT lateral: tap_rate_L, tap_rate_R, tap_rate_mean (bradykinesia slows both hands)
+  M12 lateral: omission_asymmetry, bisection_deviation_abs
+  M4, M10, M11, M13-M20: no laterality.
+
+  POSTERIOR CIRCULATION (added v2.2) - M3 and M9 rewritten, promoted to WEEKLY core:
+  M3  app/exam/vestibular.py::extract_oculomotor
+      saccade_latency_{left,right,up,down}, saccade_velocity_*, saccade_precision_*,
+      pursuit_gain, pursuit_gain_{left,right}
+      lateral: pursuit_gain_asymmetry, saccade_latency_asymmetry,
+               saccade_velocity_asymmetry
+  M9  app/exam/vestibular.py::extract_craniocorpography
+      {test}_sway_path_cm, {test}_sway_area_cm2, {test}_lateral_cm,
+      {test}_sway_velocity_cm_s, {test}_angular_deviation_deg, romberg_quotient
+      tests: romberg_eyes_open, romberg_eyes_closed, tandem_stance, tandem_walk,
+             unterberger
+      lateral: unterberger_angular_deviation_abs_deg, unterberger_lateral_abs_cm,
+               tandem_walk_angular_deviation_abs_deg, tandem_walk_lateral_abs_cm
+      Scale: normalised pose coords are converted to cm using head width as the ruler,
+      because the phone's distance varies between sessions and raw units are not
+      comparable week to week.
 
 DOMAIN A · CRANIAL NERVES
   M1 facial_motor        tasks: smile, FOREHEAD RAISE, tight eye closure, cheek puff
@@ -141,7 +178,42 @@ DOMAIN G · VITALS & SECONDARY PREVENTION
   CUSUM: S_t = max(0, S_{t-1} + (d_m - k)), k=0.5, alarm at h=4.0.
   GATE 1 persistence: d_m > threshold on >=2 consecutive valid sessions.
   GATE 2 cross-modality: >=2 INDEPENDENT domains (A-G) both pass Gate 1.
-  BANDS: STABLE (logged only) · WATCH (one domain, clinician-visible) · ALERT (both gates).
+  GATE 3 laterality (REQUIRED, added v2.1): >=1 persistent domain must show a ONE-SIDED
+    change, sustained across the whole persistence window.
+      lateral_d_m = mean(|robust_z|) over that module's LATERAL_KEYS only, clipped at 6.
+      A module is lateralised when lateral_d_m > LATERAL_THRESHOLD (2.0).
+      is_lateralised(module) = computed AND gateable AND has_lateral_keys AND lateralised.
+    posterior_vestibular DOES carry laterality: Unterberger angular deviation names the
+    lesioned side, and pursuit/saccade metrics are direction-dependent. The EYE is the
+    primary source: in the reference patient the Unterberger angular deviation was NORMAL
+    and the lateralised finding was M3 saccade velocity asymmetry ~0.37 (GAP_ANALYSIS D-2).
+    A posterior-circulation patient can therefore reach ALERT on balance and eye movement
+    alone, with no limb or facial sign.
+  Speech may CORROBORATE a lateralised finding. Speech plus a symmetric domain must
+    NEVER satisfy the alert condition.
+    Laterality is required across the whole window, not just today: a single session's
+    asymmetry can come from head tilt or an awkward grip on the phone.
+
+  WHY GATE 3 EXISTS. Parkinson's disease produces bradykinesia, hypophonia/monotone speech
+  and masked facies with reduced blink SIMULTANEOUSLY. PD is common in the 55-75 band, and
+  post-stroke patients can develop vascular parkinsonism. Under Gates 1+2 alone a PD patient
+  trips face, motor and voice together and generates the system's HIGHEST-CONFIDENCE ALERT
+  for a condition it does not monitor and cannot help with. Stroke is lateralised;
+  Parkinson's is symmetric. That anatomical fact is the discriminator.
+
+  BANDS: STABLE (logged only)
+       · WATCH (one domain, or two domains with no lateralised finding; clinician-visible)
+       · ALERT (all three gates)
+       · PATTERN_ATYPICAL (symmetric progressive change across the parkinsonian triad)
+
+  PATTERN_ATYPICAL — detect_symmetric_pattern(window, persistent). Emitted when ALL of:
+    · all three of {cranial_nerves, motor, speech_language} persistently deviating
+    · NO lateralised finding on ANY session in the window
+    · the triad's mean deviation is not shrinking (progressive, not a resolving dip)
+  Message, verbatim: "Changes seen are not consistent with a focal (one-sided) deficit.
+  Please discuss other neurological causes with your doctor."
+  Checked BEFORE any alert is emitted. Writes NO alert row. Surfaced on the clinician
+  dashboard as a distinct card type, not as a deviation alert.
   CONFOUNDERS attached to every score: recent_illness, poor_sleep, medication_change,
     phq_change, off_window_time, low_quality_capture, identity_uncertain.
     Any active confounder downgrades confidence and is printed on the alert.
@@ -186,4 +258,20 @@ DOMAIN G · VITALS & SECONDARY PREVENTION
   · Confounder annotation appears on alert.
   · SLM guardrail: band match + forbidden-token absence + fallback path.
   · Safety: acute report bypasses scoring; no wellness-assertion strings anywhere.
-  · Full 21-day simulation: 14 baseline + 4 stable (0 alerts) + 3 decline (1 alert).
+  · Full 21-day simulation: baseline + stable (0 alerts) + decline (exactly 1 alert).
+  · LATERALITY (added v2.1):
+      - symmetric change raises d_m but NOT lateral_d_m
+      - a module with no LATERAL_KEYS is never lateralised, however deviant
+      - two domains WITH a lateralised finding -> ALERT
+      - two domains WITHOUT one -> WATCH, not ALERT
+      - speech + symmetric face -> Gate 2 does not satisfy the alert condition
+      - speech + lateralised face -> ALERT (speech may corroborate)
+      - laterality present only on today's session -> Gate 3 fails
+  · PD PATTERN (added v2.1):
+      - simulated PD: symmetric bilateral decline across face, motor and voice for 5
+        sessions -> NO ALERT, band == PATTERN_ATYPICAL, zero alert rows
+      - simulated stroke: lateralised decline, same magnitudes -> ALERT fires normally
+      - any lateralised finding rules the pattern out
+      - a resolving symmetric dip is not the pattern
+  · ENROLMENT EXCLUSION (added v2.1): pd_diagnosis=true or other_movement_disorder=true
+      -> enrolment blocked, both at the engine and over HTTP.

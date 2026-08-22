@@ -4,40 +4,46 @@
 
 @layer base {
   :root {
-    /* clean clinical: navy + blue, high contrast */
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    /* FINAL_PRODUCT_SPEC v4 Part 4 — minimal, clinical, calm. Blue and white.
+       Nothing decorative. Status colours appear ONLY in status contexts. */
+    --background: 0 0% 100%;           /* Surface  #FFFFFF */
+    --foreground: 213 37% 13%;         /* Ink      #16212E */
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 213 37% 13%;
 
-    --primary: 221 70% 30%;            /* navy */
-    --primary-foreground: 210 40% 98%;
+    --primary: 213 70% 39%;            /* Primary blue #1E5AA8 */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 20%;
+    --secondary: 212 55% 96%;          /* Light blue #EEF4FB */
+    --secondary-foreground: 213 37% 13%;
 
-    --muted: 214 32% 94%;
-    --muted-foreground: 215 16% 42%;
+    --muted: 212 55% 96%;
+    --muted-foreground: 210 14% 42%;   /* Muted #5C6B7A */
 
-    --accent: 213 94% 45%;             /* action blue */
+    --accent: 212 64% 50%;             /* Accent blue #2E77D0 */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 45%;
+    --destructive: 4 55% 51%;          /* Alert #C8453A */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 25% 86%;
-    --input: 214 25% 86%;
-    --ring: 213 94% 45%;
+    --border: 209 27% 90%;             /* Line #DDE5EC */
+    --input: 209 27% 90%;
+    --ring: 212 64% 50%;
 
-    --stable: 152 60% 32%;
-    --stable-soft: 152 55% 94%;
-    --watch: 35 92% 42%;
-    --watch-soft: 40 90% 94%;
-    --alert: 0 72% 45%;
-    --alert-soft: 0 80% 96%;
+    /* Status. Stable is the ACCENT blue, not green: a green "all clear" invites a family
+       to stop looking, and this product explicitly cannot rule out an acute event. */
+    --stable: 212 64% 50%;             /* #2E77D0 */
+    --stable-soft: 212 55% 96%;
+    --watch: 35 79% 57%;               /* #E8A33D */
+    --watch-soft: 38 80% 95%;
+    --alert: 4 55% 51%;                /* #C8453A */
+    --alert-soft: 4 70% 96%;
+    --atypical: 253 38% 59%;           /* #7A6BC4 — PATTERN_ATYPICAL */
+    --atypical-soft: 253 50% 96%;
 
-    --radius: 0.75rem;
+    /* 8px radius, 1px borders. No shadows, no gradients, no glassmorphism. */
+    --radius: 0.5rem;
   }
 
   * {

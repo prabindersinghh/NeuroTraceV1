@@ -58,6 +58,14 @@ CONFOUNDERS: dict[str, tuple[str, str, float]] = {
         "व्यक्तिगत आधार अभी न्यूनतम लंबाई के करीब है",
         0.20,
     ),
+    # A capture that ran only part of a module. The alternative to saying so is producing a
+    # number from three tasks that looks exactly like a number from five, which is how a
+    # weaker measurement gets read as a stronger one.
+    "partial_capture": (
+        "some parts of the balance check need someone to be there, so they were skipped",
+        "संतुलन जाँच के कुछ हिस्सों के लिए किसी का साथ ज़रूरी है, इसलिए वे छोड़े गए",
+        0.15,
+    ),
 }
 
 ILLNESS_LOOKBACK_DAYS = 7
@@ -80,6 +88,8 @@ class ConfounderContext:
     phq_current: int | None = None
     phq_baseline: int | None = None
     quality_floor: float = 0.6
+    #: True when a module ran only the subset of its tasks this patient's setup allows.
+    partial_capture: bool = False
 
 
 @dataclass(slots=True)
@@ -121,6 +131,8 @@ def detect_confounders(ctx: ConfounderContext) -> ConfounderReport:
 
     if ctx.baseline_n_sessions < ctx.baseline_lock_at + 3:
         active.append("baseline_short")
+    if ctx.partial_capture:
+        active.append("partial_capture")
 
     confidence = 1.0
     for code in active:

@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from .models import Band, BaselineState, Instrument, Role, SessionType, StrokeSide
+from .models import (
+    Band, BaselineState, DeploymentTier, Instrument, Role, SessionType, StrokeSide,
+    WearableMetric,
+)
 
 ORM = ConfigDict(from_attributes=True)
 Lang = Field(default="en", pattern="^(en|hi|pa)$")
@@ -60,6 +64,9 @@ class PatientBase(BaseModel):
     languages: list[str] = Field(default_factory=lambda: ["en"])
     preferred_hour: float | None = Field(default=None, ge=0, le=23.99)
     education_band: str | None = Field(default=None, max_length=24)
+    # PRD §3 exclusions - see Patient.pd_diagnosis for why these block enrolment.
+    pd_diagnosis: bool = False
+    other_movement_disorder: bool = False
 
 
 class PatientCreate(PatientBase):
@@ -138,8 +145,17 @@ class SessionFinalizeResponse(BaseModel):
     reason: str
     gate1_passed: bool
     gate2_passed: bool
+    gate3_passed: bool = False
     persistent_domains: list[str]
+    lateralised_domains: list[str] = Field(default_factory=list)
+    symmetric_pattern: bool = False
     domain_deviations: dict[str, float]
+    lateral_deviations: dict[str, float] = Field(default_factory=dict)
+    #: Deviation from the FROZEN reference baseline — cumulative distance from the normal
+    #: this patient established, which an adaptive baseline cannot see.
+    cumulative_drift: float = 0.0
+    cumulative_drift_by_domain: dict[str, float] = Field(default_factory=dict)
+    drift_flagged: bool = False
     drivers: list[list]
     confounders: dict
     confidence: float
@@ -198,7 +214,10 @@ class ScoreRead(BaseModel):
     band: Band
     gate1_passed: bool
     gate2_passed: bool
+    gate3_passed: bool
     persistent_domains: list | None
+    lateralised_domains: list | None
+    symmetric_pattern: bool
     drivers_json: list | None
     confounders_json: dict | None
     confidence: float
@@ -298,6 +317,12 @@ class TrendPoint(BaseModel):
     domain_devs: dict[str, float]
     confidence: float
     baseline_phase: bool
+    #: The long-term lane. `domain_devs` is measured against the adaptive baseline and
+    #: answers "is today unlike recently"; this is measured against the frozen reference
+    #: and answers "how far from their established normal are they now". Plotted separately
+    #: because a flat band line above a rising drift line is the whole point.
+    cumulative_drift: float = 0.0
+    drift_flagged: bool = False
 
 
 class HistoryRow(BaseModel):
@@ -342,10 +367,27 @@ class ClinicPatientRow(BaseModel):
     age: int | None
     band: Band | None
     sustained_domains: list[str]
+    #: Which of those domains showed a genuinely ONE-SIDED change. An alert with an empty
+    #: list here would be a focal claim with no focal evidence behind it.
+    lateralised_domains: list[str] = Field(default_factory=list)
     confidence: float
     last_session: datetime | None
     unacknowledged_alerts: int
     baseline_state: BaselineState
+    #: How this row should render. TRD §6 requires the atypical pattern to be a DISTINCT
+    #: card, not a deviation alert - it is a prompt to think about a different diagnosis,
+    #: and dressing it up as a stroke finding would defeat the point of detecting it.
+    #:   "deviation"        - a focal finding: ALERT or WATCH
+    #:   "atypical_pattern" - symmetric progressive change; consider non-vascular causes
+    #:   "routine"          - stable, or still building a baseline
+    #: Long-term distance from the normal established at baseline lock, measured against
+    #: the FROZEN reference. Displayed as its own trend lane, because it answers a
+    #: different question from the day-to-day band and can move while that stays quiet.
+    cumulative_drift: float = 0.0
+    drift_flagged: bool = False
+    card_type: Literal["deviation", "atypical_pattern", "routine", "cumulative_drift"] = "routine"
+    #: One line of context for the atypical card. None for every other card type.
+    card_note: str | None = None
 
 
 class ClinicListResponse(BaseModel):
@@ -373,3 +415,185 @@ class HealthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     detail: str
+
+
+# --------------------------------------------------------------------------- wearables
+class WearableReading(BaseModel):
+    metric: WearableMetric
+    value: float
+    unit: str | None = Field(default=None, max_length=24)
+    ts: datetime
+
+
+class WearableBatch(BaseModel):
+    """A watch syncs when it can, not when a reading happens, so ingestion is batched."""
+
+    source: str = Field(max_length=64)
+    device_id: str | None = Field(default=None, max_length=128)
+    readings: list[WearableReading] = Field(min_length=1, max_length=5000)
+
+
+class WearableSummary(BaseModel):
+    stored: int
+    skipped_too_old: int
+    source: str
+    #: Restated on every response so an integrator cannot miss where the claim sits.
+    claim_notice: str
+
+
+class FallReport(BaseModel):
+    source: str = Field(max_length=64)
+    ts: datetime
+    device_id: str | None = Field(default=None, max_length=128)
+    #: The DEVICE's confidence, passed through unchanged. Never our estimate.
+    device_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    dismissed_by_patient: bool = False
+
+
+class FallEventRead(BaseModel):
+    id: uuid.UUID
+    patient_id: uuid.UUID
+    ts: datetime
+    source: str
+    dismissed_by_patient: bool
+    #: Always True. A fall never enters the deviation engine — see routers/wearable.py.
+    scoring_bypassed: bool
+    caregiver_notified: bool
+    acknowledged: bool = False
+    message: str
+    claim_notice: str
+
+
+# --------------------------------------------------------------------------- ASHA
+class AshaHousehold(BaseModel):
+    patient_id: uuid.UUID
+    name: str
+    age: int | None
+    village: str | None = None
+    deployment_tier: DeploymentTier
+    last_session: datetime | None
+    last_visit: datetime | None
+    #: Modules this visit should cover that the patient's own phone cannot fully run.
+    due_modules: list[str] = Field(default_factory=list)
+    #: Which TASKS within each of those, so a worker repeats nothing the family already
+    #: did. M9 in particular is now partly phone-runnable, so "do M9" would be wrong.
+    due_tasks: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class AshaHouseholdList(BaseModel):
+    households: list[AshaHousehold]
+    total: int
+
+
+class AshaSessionSubmit(BaseModel):
+    """One patient's assessment from an ASHA visit.
+
+    `client_visit_id` is the worker's device-side id. An ASHA worker is offline for most of
+    a round and uploads when they find signal, so a retried upload must update the same
+    visit rather than create a second one.
+    """
+
+    patient_id: uuid.UUID
+    client_visit_id: str = Field(max_length=64)
+    ts: datetime
+    device_id: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=512)
+    #: module_code -> extracted features, exactly as the daily path posts them.
+    modules: dict[str, dict[str, float]] = Field(default_factory=dict)
+
+
+class AshaSessionResult(BaseModel):
+    visit_id: uuid.UUID
+    patient_id: uuid.UUID
+    session_id: uuid.UUID | None
+    modules_stored: list[str]
+    modules_rejected: list[str]
+    created: bool
+    detail: str
+
+
+# --------------------------------------------------------------------------- Awaaz
+class AwaazProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    patient_id: uuid.UUID
+    speech_profile: str
+    auto_speak_enabled: bool
+    auto_speak_threshold: float
+    voice_status: str
+    endpoint_silence_seconds: float
+
+
+class AwaazProfileUpdate(BaseModel):
+    speech_profile: str | None = None
+    auto_speak_enabled: bool | None = None
+    auto_speak_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    #: Capped server-side at 4s. Default VAD cuts dysarthric speakers off mid-sentence.
+    endpoint_silence_seconds: float | None = Field(default=None, ge=0.5, le=4.0)
+
+
+class AwaazCardRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    text: str
+    lang: str
+    icon: str | None
+    category: str
+    slot: int
+    use_count: int
+    is_emergency: bool
+
+
+class AwaazCardCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+    lang: str | None = Field(default=None, max_length=8)
+    icon: str | None = Field(default=None, max_length=32)
+    category: str = Field(default="general", max_length=32)
+    slot: int = 0
+
+
+class AwaazBoard(BaseModel):
+    patient_id: uuid.UUID
+    profile: AwaazProfileRead
+    cards: list[AwaazCardRead]
+
+
+class AwaazSpeakRequest(BaseModel):
+    """A tapped card, or recognised free speech.
+
+    A card is always spoken — the patient chose those exact words. Free speech goes through
+    the auto-speak gate.
+    """
+
+    card_id: uuid.UUID | None = None
+    text: str | None = Field(default=None, max_length=500)
+    candidates: list[str] = Field(default_factory=list, max_length=8)
+    lang: str = Field(default="en", max_length=8)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class AwaazSpeakResult(BaseModel):
+    patient_id: uuid.UUID
+    #: None on the confirmation path — nothing has been decided yet, so nothing is returned
+    #: as though it had been.
+    text: str | None
+    lang: str
+    mode: str
+    speak_now: bool
+    candidates: list[str]
+    reason: str
+    requires_confirmation: bool
+
+
+class AwaazEmergencyResult(BaseModel):
+    patient_id: uuid.UUID
+    spoken_text: str
+    lang: str
+    location: dict | None
+    caregiver_notified: bool
+    #: Always True — the audio is pre-rendered and cached on the device.
+    works_offline: bool
+    #: Always False. A person in crisis is the least intelligible they will ever be.
+    used_speech_recognition: bool
+    message: str

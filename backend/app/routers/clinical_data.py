@@ -6,6 +6,7 @@ Thursday. Where they *do* belong to a session, `session_id` links them.
 """
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -166,4 +167,61 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
             "sessions. This is a monitoring aid and does not constitute a diagnosis."
         ),
         "fast": fast_card("en"),
+    }
+
+
+@router.get("/trace/{patient_id}")
+async def movement_trace(patient: AuthorisedPatient, db: Session,
+                         session_id: uuid.UUID | None = None) -> dict:
+    """The craniocorpography movement trace — latest session, or a named one.
+
+    This is the output a vestibular specialist reads first. A clinical CCG apparatus films
+    the patient stepping with their eyes closed and plots how the head travelled; the
+    numbers come second. Returning the same shape means the finding arrives in a format the
+    clinician already trusts, rather than as four unfamiliar quantities from a phone.
+    """
+    from sqlalchemy import select
+
+    from ..exam.registry import MODULES
+    from ..models import ExamSession, ModuleResult
+
+    stmt = (
+        select(ModuleResult, ExamSession.ts)
+        .join(ExamSession, ModuleResult.session_id == ExamSession.id)
+        .where(ExamSession.patient_id == patient.id, ModuleResult.module_code == "M9")
+        .order_by(ExamSession.ts.desc())
+    )
+    if session_id is not None:
+        stmt = stmt.where(ModuleResult.session_id == session_id)
+    row = (await db.execute(stmt.limit(1))).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "No balance capture recorded for this patient yet")
+
+    result, ts = row
+    features = dict(result.features_json or {})
+    trace = dict(result.trace_json or {})
+    captured = float(features.get("tests_captured") or 0.0)
+    total = len(MODULES["M9"].tasks)
+
+    return {
+        "patient_id": str(patient.id),
+        "session_id": str(result.session_id),
+        "date": ts.isoformat(),
+        "units": "cm",
+        "traces": trace.get("traces", {}),
+        "metrics": {
+            k: round(float(v), 2) for k, v in features.items()
+            if k.endswith(("_cm", "_cm2", "_deg", "_cm_s")) or k == "romberg_quotient"
+        },
+        "tests_captured": captured,
+        "tests_total": total,
+        # Stated on the payload so a partial capture can never be read as a complete one.
+        "complete": captured >= total,
+        "laterality_available": bool(features.get("laterality_available")),
+        "note": (
+            None if captured >= total else
+            "Partial capture: the walking and stepping tests need someone present, so they "
+            "were not recorded. Sway is measured; the direction of deviation is not."
+        ),
     }

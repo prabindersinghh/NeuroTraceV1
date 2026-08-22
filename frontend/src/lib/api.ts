@@ -12,14 +12,19 @@
 import type {
   AcuteResponse,
   AcuteSymptom,
+  AshaHousehold,
+  AshaSessionResult,
   AuthResponse,
   Battery,
   ClinicPatientRow,
+  FallEvent,
+  WearableReading,
   Dashboard,
   ExamSession,
   FastCard,
   FinalizeResult,
   Instrument,
+  QuestionnaireResult,
   Lang,
   ModuleFeatures,
   ModuleResult,
@@ -196,7 +201,40 @@ export const api = {
     preferred_hour?: number | null;
     education_band?: string | null;
     user_id?: string | null;
+    // PRD §3 exclusions. Either being true blocks enrolment server-side: a movement
+    // disorder changes face, movement and voice together, which is the same combination
+    // the alert gate reads as deterioration.
+    pd_diagnosis?: boolean;
+    other_movement_disorder?: boolean;
   }) => request<Patient>("/patients", { method: "POST", json: payload }),
+
+
+  // --- wearables (TIER_2+) ---
+  wearableSeries: (patientId: string, metric?: string, days = 30) =>
+    request<WearableReading[]>(
+      `/wearable/${patientId}?days=${days}` + (metric ? `&metric=${metric}` : "")),
+  falls: (patientId: string, unacknowledgedOnly = false) =>
+    request<FallEvent[]>(
+      `/wearable/${patientId}/falls?unacknowledged_only=${unacknowledgedOnly}`),
+  acknowledgeFall: (fallId: string) =>
+    request<{ detail: string }>(`/wearable/fall/${fallId}/acknowledge`, { method: "POST" }),
+
+  // --- ASHA worker ---
+  ashaHouseholds: () =>
+    request<{ households: AshaHousehold[]; total: number }>("/asha/households"),
+  ashaSubmit: (payload: {
+    patient_id: string;
+    client_visit_id: string;
+    ts: string;
+    device_id?: string | null;
+    notes?: string | null;
+    modules: Record<string, Record<string, number>>;
+  }) => request<AshaSessionResult>("/asha/session", { method: "POST", json: payload }),
+
+  // --- craniocorpography trace ---
+  movementTrace: (patientId: string, sessionId?: string) =>
+    request<import("../components/CcgTrace").CcgTraceData>(
+      `/trace/${patientId}` + (sessionId ? `?session_id=${sessionId}` : "")),
 
   // --- sessions ---
   battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
@@ -224,7 +262,7 @@ export const api = {
 
   // --- domain F/G ---
   submitQuestionnaire: (patientId: string, instrument: Instrument, responses: number[] | Record<string, number>, sessionId?: string) =>
-    request(`/questionnaire/${patientId}`, {
+    request<QuestionnaireResult>(`/questionnaire/${patientId}`, {
       method: "POST",
       json: { instrument, responses, session_id: sessionId ?? null },
     }),

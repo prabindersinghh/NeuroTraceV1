@@ -96,11 +96,53 @@ def choose_threshold(y: np.ndarray, oof: np.ndarray) -> float:
     return best_threshold
 
 
+def _run_synthetic(args) -> None:
+    """Exercise the pipeline before the dataset is downloaded.
+
+    PhysioNet AF is openly available, so this path exists for a fresh clone rather than for
+    an access wait. The figures are generated and marked as such.
+    """
+    rng = np.random.default_rng(SEED)
+    n = 300
+    y = np.array([1] * 90 + [0] * 210)
+    prob = np.clip(0.5 + np.where(y == 1, 1, -1) * rng.normal(0.20, 0.17, n), 0.001, 0.999)
+
+    scores = binary_metrics(y.tolist(), prob.tolist(), threshold=0.5)
+    metrics = Metrics(
+        model="rhythm_irregularity_clf",
+        dataset="SYNTHETIC FIXTURES (no PhysioNet data present)",
+        n_total=n, n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
+        n_groups=n, split="synthetic, one record per subject",
+        threshold=0.5, features=list(FEATURES),
+        limitations=[
+            "SYNTHETIC RUN. No PhysioNet data was present, so these figures are generated "
+            "and mean nothing. They demonstrate that the pipeline executes end to end.",
+            "The challenge data is single-lead ECG. We derive intervals from a PPG, which "
+            "is noisier and far more motion-sensitive, so field performance will be lower.",
+            "Atrial fibrillation is an ECG diagnosis. This model informs an advisory to "
+            "obtain an ECG and never asserts the diagnosis.",
+        ],
+        **scores,
+    )
+    print(metrics.summary())
+    print()
+    print("wrote", metrics.save(args.out / "rhythm_irregularity_clf.metrics.json"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Calibrate rhythm_irregularity_clf")
-    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--data", type=Path, default=None,
+                        help="root of the PhysioNet 2017 training set")
+    parser.add_argument("--synthetic", action="store_true",
+                        help="run on generated fixtures before the dataset is downloaded")
     parser.add_argument("--out", type=Path, default=MODELS_DIR)
     args = parser.parse_args()
+
+    if args.synthetic or args.data is None or not args.data.exists():
+        print("PhysioNet AF 2017 not present - running on synthetic fixtures.")
+        print("Download it with: ./scripts/download_datasets.sh physionet")
+        _run_synthetic(args)
+        return
 
     reference = load_reference(args.data)
     rows, labels, groups = [], [], []

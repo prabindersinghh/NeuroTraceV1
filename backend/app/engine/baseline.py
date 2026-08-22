@@ -117,13 +117,36 @@ class Baseline:
 
 
 # --------------------------------------------------------------------------- enrolment
-def check_enrolment(stroke_date: datetime | None, now: datetime) -> None:
-    """PRD §3: acute and subacute patients are explicitly out of scope.
+def check_enrolment(
+    stroke_date: datetime | None,
+    now: datetime,
+    *,
+    pd_diagnosis: bool = False,
+    other_movement_disorder: bool = False,
+) -> None:
+    """PRD §3 inclusion and exclusion criteria, enforced in one place.
 
-    Our logic detects change over days. An acute stroke evolves in seconds. Enrolling an
-    acute patient would be both clinically useless and actively dangerous, because the
-    product would appear to be watching for something it structurally cannot see.
+    Two independent reasons to refuse:
+
+    **Too recent.** Our logic detects change over days; an acute stroke evolves in seconds.
+    Enrolling an acute patient would be clinically useless and actively dangerous, because
+    the product would appear to be watching for something it structurally cannot see.
+
+    **A comorbid movement disorder.** Parkinson's disease degrades face, movement and voice
+    symmetrically and simultaneously — the exact combination the alert gate reads as
+    deterioration. The engine's laterality requirement (Gate 3) stops that producing a false
+    stroke alert, but this system has been validated only for post-stroke monitoring without
+    such comorbidities. Refusing enrolment is the honest position; silently monitoring
+    someone whose baseline is itself progressively moving is not.
     """
+    if pd_diagnosis or other_movement_disorder:
+        raise EnrolmentError(
+            "NeuroTrace is validated only for post-stroke monitoring in patients without a "
+            "comorbid movement disorder. Parkinson's disease and related conditions change "
+            "face, movement and voice together, which this system cannot separate from the "
+            "changes it is designed to detect. Please continue under your neurologist's "
+            "direct care instead."
+        )
     if stroke_date is None:
         raise EnrolmentError("stroke date is required to confirm >= 3 months post-stroke")
     days = (as_utc(now) - as_utc(stroke_date)).days

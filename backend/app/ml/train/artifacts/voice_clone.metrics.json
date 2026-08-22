@@ -1,0 +1,70 @@
+{
+  "model": "voice_clone",
+  "synthetic": true,
+  "spec": {
+    "patient_id": "synthetic-patient",
+    "lang": "pa",
+    "backend": "indic_tts_finetune",
+    "clip_seconds": 120.0,
+    "provenance": "family wedding video",
+    "seed": 42,
+    "prerender_phrases": [
+      "I need help",
+      "Water",
+      "Toilet",
+      "I am in pain",
+      "I am fine"
+    ]
+  },
+  "backend": {
+    "name": "indic_tts_finetune",
+    "model": "ai4bharat/indic-tts",
+    "languages": [
+      "hi",
+      "pa",
+      "en"
+    ],
+    "note": "Punjabi support is the reason this exists. Needs a fine-tune rather than zero-shot, so it wants the full two minutes."
+  },
+  "backends_considered": {
+    "xtts_v2": {
+      "model": "coqui/XTTS-v2",
+      "languages": [
+        "en",
+        "hi"
+      ],
+      "note": "Strong zero-shot cloning. Punjabi is not supported and Hindi carries an audible English prosody."
+    },
+    "indic_tts_finetune": {
+      "model": "ai4bharat/indic-tts",
+      "languages": [
+        "hi",
+        "pa",
+        "en"
+      ],
+      "note": "Punjabi support is the reason this exists. Needs a fine-tune rather than zero-shot, so it wants the full two minutes."
+    },
+    "sarvam": {
+      "model": "sarvam-ai/bulbul",
+      "languages": [
+        "hi",
+        "pa",
+        "en"
+      ],
+      "note": "Best Indic prosody of the three in informal listening. Hosted API, so using it means the clip leaves our infrastructure \u2014 a decision that needs consent language of its own before it can ship."
+    }
+  },
+  "safeguards": [
+    "Consent is recorded against the sample (VoiceSample.consent_by).",
+    "Source audio is destroyed after training; the deletion is timestamped (VoiceSample.audio_deleted_at).",
+    "A clone is permanently deletable on request - no archived copy.",
+    "Emergency phrases are pre-rendered and cached, so the board speaks with no network and never waits on synthesis."
+  ],
+  "limitations": [
+    "SYNTHETIC RUN. No voice sample was present; this exercises the pipeline and produces no voice.",
+    "This is impersonation technology. A cloned voice can say anything and the family cannot distinguish it from the real thing - that is the design goal, and it is why consent and deletion are enforced rather than encouraged.",
+    "XTTS-v2 does not support Punjabi, which most of our patients speak at home. Punjabi routes to an Indic fine-tune that needs the full clip.",
+    "A pre-stroke recording is not always available, and families without one correlate with families with less money. The product must work identically without a clone, and it does - the board falls back to a stock voice.",
+    "Quality is judged by informal listening, not by a published MOS. We have not run a listening study and should not imply that we have."
+  ]
+}

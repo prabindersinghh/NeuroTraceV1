@@ -32,6 +32,14 @@ _BAND_INSTRUCTION = {
     "STABLE": "Today matched their usual pattern. Say so calmly, without claiming they are well.",
     "WATCH": "Something looked slightly different. Say it is worth watching, and that you will keep monitoring.",
     "ALERT": "Several things changed together over more than one day. Ask them to check on the person today and to consider contacting their doctor.",
+    # Without its own entry this fell through to STABLE - producing calm reassurance for a
+    # progressive finding, which is the opposite of what the reader needs.
+    "PATTERN_ATYPICAL": (
+        "Face, movement and voice have all changed together and evenly on both sides. "
+        "Say the changes do not look one-sided, that this system watches for one-sided "
+        "changes, and that they should discuss other causes with their doctor. Do not "
+        "reassure them that nothing has changed, and do not mention stroke."
+    ),
 }
 
 _LANG_NAME = {"en": "English", "hi": "Hindi", "pa": "Punjabi"}

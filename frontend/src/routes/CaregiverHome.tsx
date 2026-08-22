@@ -140,6 +140,10 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   const [strokeSide, setStrokeSide] = useState("unknown");
   const [language, setLanguage] = useState<Lang>("en");
   const [hour, setHour] = useState("9");
+  // PRD §3 exclusion. Asked at enrolment because the answer decides eligibility, and
+  // because a caregiver who finds out later has already been given readings we cannot
+  // stand behind.
+  const [movementDisorder, setMovementDisorder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -161,6 +165,7 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
         stroke_side: strokeSide,
         languages: [language, "en"].filter((v, i, a) => a.indexOf(v) === i),
         preferred_hour: hour ? Number(hour) : null,
+        other_movement_disorder: movementDisorder,
       });
       onCreated();
     } catch (err) {
@@ -184,6 +189,25 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
           <div className="flex flex-col gap-1.5 sm:col-span-2">
             <Label htmlFor="p-name">{t("patientName")}</Label>
             <Input id="p-name" required value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          {/* The scope limit, stated before enrolment rather than discovered after it. */}
+          <div className="sm:col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-3
+                          dark:border-amber-800 dark:bg-amber-950/40">
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0"
+                checked={movementDisorder}
+                onChange={(e) => setMovementDisorder(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">{t("movementDisorderQ")}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("movementDisorderWhy")}
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="flex flex-col gap-1.5">

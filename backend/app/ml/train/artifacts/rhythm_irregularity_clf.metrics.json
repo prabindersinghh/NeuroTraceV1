@@ -1,0 +1,39 @@
+{
+  "model": "rhythm_irregularity_clf",
+  "dataset": "SYNTHETIC FIXTURES (no PhysioNet data present)",
+  "n_total": 300,
+  "n_positive": 90,
+  "n_negative": 210,
+  "n_groups": 300,
+  "split": "synthetic, one record per subject",
+  "roc_auc": 0.9725396825396825,
+  "sensitivity": 0.9333333333333333,
+  "specificity": 0.8714285714285714,
+  "precision": 0.7567567567567568,
+  "accuracy": 0.89,
+  "threshold": 0.5,
+  "confusion": {
+    "tp": 84,
+    "fp": 27,
+    "tn": 183,
+    "fn": 6
+  },
+  "features": [
+    "rr_irregularity_index",
+    "rmssd",
+    "pnn50",
+    "sdnn",
+    "poincare_sd1",
+    "poincare_sd2",
+    "poincare_ratio",
+    "mean_hr"
+  ],
+  "limitations": [
+    "SYNTHETIC RUN. No PhysioNet data was present, so these figures are generated and mean nothing. They demonstrate that the pipeline executes end to end.",
+    "The challenge data is single-lead ECG. We derive intervals from a PPG, which is noisier and far more motion-sensitive, so field performance will be lower.",
+    "Atrial fibrillation is an ECG diagnosis. This model informs an advisory to obtain an ECG and never asserts the diagnosis."
+  ],
+  "seed": 42,
+  "trained_at": "2026-08-21T20:48:44+00:00",
+  "python": "3.11.0"
+}

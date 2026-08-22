@@ -1,0 +1,197 @@
+# PROGRESS
+
+Current state of NeuroTrace. A stranger should be able to continue from this file alone.
+
+**Last updated:** 2026-08-22 · FINAL_PRODUCT_SPEC_v4 built; see
+[COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for line-by-line status
+(verified-live vs verified-in-tests vs pending).
+
+---
+
+## CLINICAL_AMENDMENT_v3 — ALREADY IMPLEMENTED. DO NOT RE-EXECUTE.
+
+Verified against the running code on 2026-08-22, amendment by amendment:
+
+| | Amendment | Status |
+|---|---|---|
+| A | Widen scope to posterior circulation | ✅ PRD out-of-scope list updated |
+| B | New `posterior_vestibular` domain, lateralisable | ✅ in `DOMAINS`, not in `NON_LATERALISABLE_DOMAINS` |
+| C | M9 balance promoted to core | ✅ weekly, `posterior_vestibular` |
+| D | M3 ocular promoted to core | ✅ weekly, `posterior_vestibular`, runs on `phone` |
+| E | Symptom-burden instruments | ✅ `DHI` in `SCORERS`, `score_vertigo_log` present |
+| F | `docs/CLINICAL_REFERENCE.md` | ✅ present, rebuilt from source images |
+| G | Posterior test fixture | ✅ `test_posterior_circulation.py`, 31 tests |
+
+| H | E3 audiometry self-report | ✅ built 2026-08-22, `score_hearing_change` |
+
+**CLINICAL_AMENDMENT_v3 is complete.** E3 was the last open item and is now closed.
+
+---
+
+## What the product is
+
+A daily neurological check-in for stroke survivors. The patient's phone runs a short battery
+of tasks, extracts features **on the device**, and posts numbers. A deterministic engine
+compares each session to that patient's own baseline and reports one of four bands with a
+plain-language explanation in English, Hindi or Punjabi. A caregiver sees a band and what
+changed. A clinician sees a ranked roster. An ASHA worker sees a household list.
+
+It watches for change over days. **It cannot detect an acute stroke**, and says so on every
+screen.
+
+---
+
+## The daily session
+
+21 steps, ~11m35s, five blocks: cognitive → ocular → **standing** → motor → close, with a
+fall-risk gate before the standing block. `backend/app/exam/session_plan.py`.
+
+Ordering is fixed on purpose: constant task position lets each personal baseline absorb its
+own fatigue offset. Two things break that after lock — an intensity change and a pause — and
+**both bias toward masking decline**, so both are recorded per result rather than prevented.
+
+Intensities: FULL (21) · STANDARD (18) · LIGHT (core + one rotating physical block) ·
+RESEARCH (FULL + supervised balance). Stepping **down** is auto-offered after repeated
+abandonment; stepping **up** never happens automatically.
+
+---
+
+## Built and verified
+
+### Engine — done
+- Personal baseline: median/MAD over a 12-session lock window, robust z, RCI, CUSUM.
+- **Three gates.** Persistence → cross-modality → **laterality**. Every ALERT needs a
+  one-sided finding.
+- **`PATTERN_ATYPICAL`** band for symmetric progressive change across face/motor/voice —
+  the parkinsonian pattern, reported rather than alerted on.
+- **Frozen reference baseline.** Snapshot at lock, never updated; every session scored
+  against both it and the adaptive baseline. Catches a slow decline the adaptive yardstick
+  absorbs.
+- **Nine domains**, including `motor_speech` / `language` split and `posterior_vestibular`.
+- Confounder detection (off-window, poor sleep, short baseline, quality) with confidence.
+
+### Exam modules — 21 (2 rewritten, 1 new)
+- M1 facial, M4 dysarthria, M7 fine motor, M10 attention, M13 mood, M19 medication (daily).
+- **M3 oculomotor** — rewritten: saccade latency/velocity/precision per direction, pursuit
+  gain and asymmetry. Weekly, phone.
+- **M9 craniocorpography** — rewritten: Romberg (eyes open/closed), tandem stance, tandem
+  walk, Unterberger. Outputs sway path (cm), sway area, angular deviation (°), lateral
+  displacement, plus a clinical-format movement trace. Weekly, and routed to an ASHA visit
+  because it needs floor space and a carer standing close.
+- **M21 SVV (Sense of upright)** — NEW. Static + dynamic clockwise/anti-clockwise, six
+  trials each. Reproduces all three of the reference patient's printed averages exactly,
+  including the drift slope that averaging destroys. Monthly, `posterior_vestibular`,
+  carries laterality.
+- Instruments: PHQ-2/9, EAT-10, FSS, Barthel, **DHI**, **vertigo attack log**,
+  **hearing change self-report** (amendment v3 E3).
+
+### Safety — done
+- FAST card, unauthenticated, in three languages.
+- Acute symptom report → bypasses the engine entirely.
+- **Fall events** → bypass the engine entirely, immediate caregiver notification.
+- Enrolment refuses < 3 months post-stroke, Parkinson's, other movement disorders.
+
+### Platform — done
+- Roles: patient / caregiver / clinician / **asha_worker**, enforced server-side.
+- **Deployment tiers** gating module availability by hardware.
+- **Wearable ingestion** with the claim boundary enforced in every response.
+- **ASHA visit sync**, idempotent on `client_visit_id` for offline rounds.
+- Clinician roster with typed cards: `deviation`, `atypical_pattern`, `cumulative_drift`,
+  `routine`.
+
+### On-device capture — verified in a real browser
+`npm run verify:ondevice` loads FaceMesh from locally staged assets, runs inference on
+generated frames, and prints landmark-derived features. Confirmed 6/6 faces detected, 478
+landmarks, and that the asymmetry features rise with a simulated droop (`corner_drop`
+0.0016 → 0.0267).
+
+---
+
+## Verified live vs verified in tests
+
+**Verified against the running system:**
+- Backend boots; login, dashboard, session run, finalize, safety bypass, clinician roster
+  all exercised over HTTP against a seeded demo patient.
+- **Full engine re-verified live after every change above** (2026-08-22): the 21-day demo
+  still produces `SSSSSSSSSSSSSSSSSSWAA`, final band ALERT, all three gates passing,
+  lateralised in `cranial_nerves` + `motor`. The persistent-domain list now reads
+  `motor_speech` rather than `speech_language`, which is how we know the domain split is
+  live in the running engine and not just in the registry. `cumulative_drift` computed
+  (6.0) and correctly NOT flagged — the adaptive comparison is elevated too, so this is a
+  visible decline rather than a masked one.
+- Migrations 0003–0006 applied to a real database with row counts compared before and
+  after each one. Zero rows lost; foreign-key integrity clean.
+- MediaPipe capture in headless Edge/Chrome.
+
+**Verified only in tests:**
+- Wearable ingestion, fall bypass, ASHA sync — exercised via the ASGI test client, not a
+  deployed instance.
+- Posterior-circulation modules — synthetic captures only; no real patient video has been
+  processed.
+- Frozen-reference drift over 60 days — simulated decline.
+
+---
+
+### Awaaz — D1 through D5
+- **D1** phrase board, emergency mode, auto-speak gate (INV-9).
+- **D2** listener mode: expiring revocable link, display name only, context-aware coaching
+  in three languages.
+- **D4** passive learning: card taps give free labelled pairs; caregiver evening queue is
+  worst-first and capped at 12.
+- **D5** convergence: conversational features route into M4/M5; prompted-only features
+  (DDK, sustained phonation) are deliberately *not* inferred from free speech. Frozen
+  day-30 adapter catches decline the live adapter hides.
+
+### Frontend
+`CcgTrace` (clinical CCG layout), `DhiForm`, `VertigoLog`, `WearableLanes`, `AshaHome`
+(offline-first, idempotent sync), `StepSvv` (rotating-field SVV capture with abort).
+`npm run typecheck` = `tsc -b`; `npm run build` verified exit 0.
+
+---
+
+## Pending
+
+*(Awaaz D2–D5 and the ASHA / wearable / CCG / DHI / vertigo frontend surfaces were listed
+here and are now built — see the sections above. Left as a note because a Pending list that
+never shrinks is a list nobody reads.)*
+
+- **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
+  but does not train a voice.
+- **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
+  per model, and the model cards are generated from the artifact metrics so they cannot
+  quietly claim otherwise. Three datasets need a human to request access.
+- **Clinician PDF export** — not built. The data endpoint it would render exists.
+- **CCG baseline side-by-side** — the trace renders; comparison against the patient's own
+  earlier trace does not.
+- **Task demo videos** — `TaskShell` displays them and the flow is built around them, but
+  no clips have been recorded. Needs a person to film.
+- **Nothing has run on a physical phone.** Camera framing, pose scaling at 1.5 m and the
+  handset-tilt SVV path are desktop-browser only. This is the largest untested surface in
+  the product.
+- No deployment to Railway or Neon yet; everything runs locally on SQLite. `docs/DEPLOY.md`
+  is the runbook — provisioning needs your accounts.
+- **Migrations have never been executed against Postgres**, only rendered. The first Neon
+  branch deploy is the real test; see DEPLOY.md step 3.
+- Dataset requests not yet sent — `docs/DATASET_REQUESTS.md` has the exact emails and forms.
+- Real-device validation of M3/M9 against the clinical values in `CLINICAL_REFERENCE.md`.
+
+---
+
+## Known risks
+
+1. **One reference patient is not a validation set.** The calibration targets are a sanity
+   bound, nothing more.
+2. **M9 needs a carer to film and stand close.** The patient is being deliberately made
+   unsteady with their eyes shut. If that supervision does not happen, the module is a fall
+   risk, not a measurement.
+3. **The frozen reference assumes the baseline window was itself representative.** A patient
+   already declining during baseline collection has a compromised reference.
+4. **On TIER_1, balance cannot establish a side.** M9's low-motion subset runs on a
+   caregiver-filmed phone and measures how unsteady someone is, but every one of its
+   laterality features lives in the deferred walking and stepping tests. M3 oculomotor
+   carries laterality for those patients. If M3 capture quality turns out to be poor in the
+   field, phone-only patients lose posterior laterality entirely — that is the risk to watch.
+5. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
+   to three frames, so peak velocity is an average that understates the true peak. Recorded
+   and flagged (`velocity_confidence` 0.00 at 30 fps) rather than corrected. Latency is
+   usable for trending; velocity is not comparable to published normative values.

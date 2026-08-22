@@ -93,15 +93,26 @@ def make_rng(seed: int = 42) -> np.random.Generator:
 
 
 def synthetic_module(rng: np.random.Generator, module_code: str,
-                     drift: float = 0.0) -> dict[str, float]:
+                     drift: float = 0.0, *, lateralised: bool = True) -> dict[str, float]:
     """One module's features for one session.
 
     `drift` 0 = a normal day for this patient; 2.5 = clearly and consistently worse.
     Each feature moves in the direction its module declares clinically worse, so the
     engine's IMPROVING logic can be exercised by passing a negative drift.
+
+    `lateralised` selects which *kind* of decline to simulate, and the distinction is the
+    whole point of Gate 3:
+
+      True   a focal lesion. The asymmetry features move — one mouth corner drops, one hand
+             slows relative to the other.
+      False  a diffuse process such as Parkinson's. Overall level degrades on both sides
+             equally, so absolute measures worsen while the left/right ratios stay put.
+
+    Simulating the second case is how the PD test proves the gate holds.
     """
     module = MODULES[module_code]
     bad = module.bad_direction
+    lateral = set(module.lateral_keys)
     out: dict[str, float] = {"valid": 1.0}
 
     for key in module.scoring_keys:
@@ -109,26 +120,32 @@ def synthetic_module(rng: np.random.Generator, module_code: str,
         if base is None:
             continue
         noise = rng.normal(0.0, abs(base) * DAY_NOISE)
+        # A symmetric process leaves the asymmetry indices at baseline: both sides moved
+        # together, so the ratio between them did not.
+        key_drift = 0.0 if (key in lateral and not lateralised) else drift
         sign = -1.0 if bad.get(key) == "down" else 1.0
-        out[key] = float(base + noise + sign * drift * abs(base) * DRIFT_GAIN)
+        out[key] = float(base + noise + sign * key_drift * abs(base) * DRIFT_GAIN)
     return out
 
 
 def synthetic_session(rng: np.random.Generator, module_codes: list[str],
                       drift: float = 0.0,
-                      drift_modules: list[str] | None = None) -> dict[str, dict]:
+                      drift_modules: list[str] | None = None,
+                      *, lateralised: bool = True) -> dict[str, dict]:
     """A whole session's modules.
 
     `drift_modules` limits the decline to specific modules — used to prove that a single
-    deviating domain produces WATCH and never ALERT, which is the behaviour Gate 2 exists
-    to guarantee.
+    deviating domain produces WATCH and never ALERT, which is what Gate 2 guarantees.
+
+    `lateralised=False` simulates a diffuse, symmetric process (the parkinsonian pattern),
+    which must never produce a stroke-monitoring ALERT however many domains it moves.
     """
     out: dict[str, dict] = {}
     for code in module_codes:
         module_drift = drift
         if drift_modules is not None and code not in drift_modules:
             module_drift = 0.0
-        out[code] = synthetic_module(rng, code, module_drift)
+        out[code] = synthetic_module(rng, code, module_drift, lateralised=lateralised)
     return out
 
 

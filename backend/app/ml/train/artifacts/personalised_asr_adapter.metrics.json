@@ -1,0 +1,43 @@
+{
+  "model": "personalised_asr_adapter",
+  "synthetic": true,
+  "spec": {
+    "patient_id": "synthetic-patient",
+    "base_model": "distil-whisper/distil-small.en",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "target_modules": [
+      "q_proj",
+      "v_proj"
+    ],
+    "seed": 42,
+    "n_pairs": 200,
+    "epochs": 4,
+    "learning_rate": 0.0001,
+    "decode": {
+      "lm_weight": 0.15,
+      "beam_size": 8,
+      "output": "ctc_phoneme",
+      "word_insertion_penalty": 0.0
+    }
+  },
+  "reference_adapter_day": 30,
+  "drift": {
+    "patient_id": "synthetic-patient",
+    "day": 90,
+    "wer_live": 0.18266666666666664,
+    "wer_frozen": 0.29733333333333334,
+    "wer_frozen_at_reference": 0.17083333333333336,
+    "n_utterances": 200,
+    "drift": 0.1265,
+    "masked_by_adaptation": true
+  },
+  "limitations": [
+    "SYNTHETIC RUN. No harvested audio was present, so the figures below are generated and mean nothing clinically. They demonstrate the pipeline only.",
+    "Trained on one patient's own speech. It is not a general model and must never be evaluated as one.",
+    "The frozen-adapter drift metric assumes the day-30 recordings were representative. A patient already deteriorating at day 30 has a compromised reference, exactly as with the frozen baseline in the monitoring engine.",
+    "Decoding uses a deliberately low language-model weight (0.15). Transcripts will read as less fluent than a general ASR system's, which is the intended trade: fluent-and-wrong is the failure mode this exists to avoid.",
+    "Word error rate on a phrase-board vocabulary is not word error rate on open conversation, and the two must not be compared."
+  ]
+}

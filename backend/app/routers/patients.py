@@ -35,7 +35,12 @@ async def create_patient(payload: PatientCreate, caregiver: Caregiver,
     if stroke_date.tzinfo is None:
         stroke_date = stroke_date.replace(tzinfo=timezone.utc)
     try:
-        check_enrolment(stroke_date, datetime.now(timezone.utc))
+        check_enrolment(
+            stroke_date,
+            datetime.now(timezone.utc),
+            pd_diagnosis=payload.pd_diagnosis,
+            other_movement_disorder=payload.other_movement_disorder,
+        )
     except EnrolmentError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
@@ -65,6 +70,8 @@ async def create_patient(payload: PatientCreate, caregiver: Caregiver,
         languages=payload.languages or ["en"],
         preferred_hour=payload.preferred_hour,
         education_band=payload.education_band,
+        pd_diagnosis=payload.pd_diagnosis,
+        other_movement_disorder=payload.other_movement_disorder,
     )
     db.add(patient)
     await db.flush()

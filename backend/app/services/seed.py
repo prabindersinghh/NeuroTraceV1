@@ -11,6 +11,7 @@ produces an ALERT, and it takes two consecutive sessions to get there.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -37,7 +38,14 @@ logger = logging.getLogger("neurotrace.seed")
 DEMO_CAREGIVER_EMAIL = "demo@neurotrace.app"
 DEMO_CLINICIAN_EMAIL = "clinician@neurotrace.app"
 DEMO_PATIENT_EMAIL = "ramesh@neurotrace.app"
-DEMO_PASSWORD = "neurotrace-demo"
+#: Credentials for the seeded demo accounts.
+#:
+#: Overridable from the environment, and it must be overridden on any deployed instance.
+#: This value ships in a public repository, so on a host where DEMO_MODE is true it is a
+#: publicly known password — harmless against seeded fixture data, not harmless the moment
+#: a real patient is enrolled on the same instance. `DEMO_MODE=false` is the real control;
+#: this is the second line of defence.
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "neurotrace-demo")
 DEMO_PATIENT_NAME = "Ramesh"
 
 # The domains that decline in the story. Speech and motor are independent, which is what

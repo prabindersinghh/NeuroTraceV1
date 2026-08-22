@@ -32,6 +32,18 @@ EXPLICITLY OUT OF SCOPE — must be stated in onboarding and in-app
   ✗ Posterior circulation strokes (~20-25% of ischemic)
   ✗ Hemorrhagic stroke (11-35% of Indian strokes)
   ✗ TIA, silent infarcts, pure motor / pure sensory lacunar strokes
+  ✓ POSTERIOR-CIRCULATION and CEREBELLAR ischemic stroke survivors (added v2.2).
+    20-25% of ischemic strokes, misdiagnosed 2-3x more often than anterior, served by
+    nobody. Their deficits are vertigo, imbalance and oculomotor dysfunction - NOT the
+    FAST picture. The index case (docs/CLINICAL_REFERENCE.md) had an MRI-confirmed left
+    cerebellar infarct with entirely NORMAL finger-nose, heel-knee-shin,
+    dysdiadochokinesia and joint-position: our M8 module would have found nothing.
+
+  ✗ Patients with Parkinson's disease or another movement disorder (added v2.1).
+    These degrade face, movement and voice symmetrically and simultaneously - the same
+    combination our alert logic reads as deterioration - and they progress on their own
+    course, so the personal baseline itself is moving. Enrolment is refused with an
+    explanation, and this limit is stated in onboarding.
 
 ## 4. USERS
   PATIENT      55-75, post-stroke, low digital literacy, possibly aphasic.
@@ -54,13 +66,26 @@ EXPLICITLY OUT OF SCOPE — must be stated in onboarding and in-app
 
 ## 6. FUNCTIONAL REQUIREMENTS
 FR1  Auth with roles patient | caregiver | clinician; caregiver creates patient profile.
+FR1b Enrolment records pd_diagnosis and other_movement_disorder and BLOCKS enrolment if
+     either is true, with a message explaining the validated scope.
 FR2  Guided daily exam session (~90s) with audio-delivered instructions, EN/HI/PA.
 FR3  All feature extraction runs on-device; raw media deleted after extraction.
 FR4  Personal baseline: 14-21 days, >=3 sessions/week, first 3 sessions discarded,
      fixed time-of-day window, median+MAD statistics, per-module.
 FR5  Change detection: Reliable Change Index + CUSUM + recovery-trajectory fit.
-FR6  Two alert gates: persistence (>=2 consecutive sessions) AND cross-modality
-     (>=2 independent domains). Confounder annotation on every alert.
+FR5b Posterior-circulation core modules (added v2.2): M3 oculomotor (saccade latency,
+     velocity, precision per direction; pursuit gain and asymmetry) and M9
+     craniocorpography (Romberg eyes open/closed, tandem stance, tandem walk,
+     Unterberger; sway path in cm, sway area, angular deviation in degrees, lateral
+     displacement, plus a clinical-format movement trace). Both WEEKLY, both in the new
+     `posterior_vestibular` domain, which CARRIES LATERALITY.
+FR5c Instruments (added v2.2): Dizziness Handicap Inventory (25 items, three subscales,
+     0-100, bands 16-34 mild / 36-52 moderate / 54+ severe), monthly; and a vertigo
+     attack log, caregiver-loggable at any time.
+FR6  Three alert gates: persistence (>=2 consecutive sessions) AND cross-modality
+     (>=2 independent domains) AND laterality (>=1 domain showing a one-sided change).
+     Symmetric progressive change across face/motor/voice emits PATTERN_ATYPICAL instead
+     of an alert. Confounder annotation on every score.
 FR7  Identity verification (face + voice embedding match) to prevent proxy testing.
 FR8  Capture-quality gating: bad captures are rejected and re-prompted, never scored.
 FR9  On-device SLM generates plain-language explanation in Hindi/Punjabi/English.

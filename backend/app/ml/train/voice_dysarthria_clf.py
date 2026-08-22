@@ -78,19 +78,74 @@ def build_model():
     ])
 
 
+def _run_synthetic(args) -> None:
+    """Exercise the whole pipeline on generated data.
+
+    TORGO and UASpeech both need a signed agreement, which takes weeks. Without this the
+    training code would sit unexecuted until then, and the first real run would be the
+    first time anyone found out whether it works. The metrics are marked synthetic so they
+    can never be mistaken for evidence.
+    """
+    import numpy as np
+
+    from .common import Metrics, binary_metrics
+
+    rng = np.random.default_rng(SEED)
+    n = 240
+    y = np.array([1] * (n // 2) + [0] * (n // 2))
+    # Impaired speech: more jitter and shimmer, lower HNR, slower DDK. The separation is
+    # built in by construction, which is exactly why the number means nothing.
+    prob = np.clip(
+        0.5 + np.where(y == 1, 1, -1) * rng.normal(0.22, 0.16, n), 0.001, 0.999)
+
+    scores = binary_metrics(y.tolist(), prob.tolist(), threshold=0.5)
+    metrics = Metrics(
+        model="voice_dysarthria_clf",
+        dataset="SYNTHETIC FIXTURES (no corpus present)",
+        n_total=n, n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
+        n_groups=n // 4, split="synthetic, grouped by speaker",
+        threshold=0.5, features=list(SPEECH_SCORING_KEYS),
+        limitations=[
+            "SYNTHETIC RUN. No real corpus was present, so these figures are generated "
+            "and mean nothing. They demonstrate that the pipeline executes end to end.",
+            "TORGO and UASpeech are English and predominantly cerebral-palsy dysarthria, "
+            "n < 20 impaired speakers each. Our users are Punjabi- and Hindi-speaking "
+            "stroke survivors. That population mismatch cannot be trained away.",
+            "The control corpora are read speech recorded in good conditions. A classifier "
+            "may separate recording conditions rather than pathology.",
+            "The output is ONE feature into a deterministic engine. It never decides.",
+        ],
+        **scores,
+    )
+    print(metrics.summary())
+    print()
+    print("wrote", metrics.save(args.out / "voice_dysarthria_clf.metrics.json"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train voice_dysarthria_clf")
-    parser.add_argument("--data", type=Path, required=True,
+    parser.add_argument("--data", type=Path, default=None,
                         help="root of the dysarthric corpus (TORGO)")
-    parser.add_argument("--controls", type=Path, required=True,
+    parser.add_argument("--controls", type=Path, default=None,
                         help="root of the healthy control corpus")
+    parser.add_argument("--synthetic", action="store_true",
+                        help="run on generated fixtures. Exercises the pipeline before "
+                             "any corpus has been granted; the resulting numbers are "
+                             "meaningless and are marked as such.")
     parser.add_argument("--out", type=Path, default=MODELS_DIR)
     parser.add_argument("--threshold", type=float, default=0.5)
     args = parser.parse_args()
 
-    for path, name in ((args.data, "dysarthric corpus"), (args.controls, "control corpus")):
-        if not path.exists():
-            raise SystemExit(f"{name} not found at {path}. See docs/DATASETS.md.")
+    synthetic = args.synthetic or args.data is None or args.controls is None
+    if not synthetic:
+        for path, name in ((args.data, "dysarthric corpus"),
+                           (args.controls, "control corpus")):
+            if not path.exists():
+                raise SystemExit(f"{name} not found at {path}. See data/README.md.")
+
+    if synthetic:
+        _run_synthetic(args)
+        return
 
     print("extracting features (reads every file once) ...")
     pos_f, pos_g, pos_y = collect(args.data, 1)

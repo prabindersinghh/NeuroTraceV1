@@ -37,6 +37,11 @@ _BAND_CONTRADICTIONS = {
     "STABLE": ("contact their doctor", "check on them today", "call the doctor",
                "seek medical", "urgent", "immediately"),
     "ALERT": ("as usual", "same as always", "no change", "unchanged", "usual pattern"),
+    # Two ways to get this band wrong: reassure the reader that nothing is happening
+    # (something is, and it is progressing), or imply a stroke finding (there is none -
+    # that is precisely what the symmetry told us).
+    "PATTERN_ATYPICAL": ("as usual", "same as always", "no change", "unchanged",
+                         "usual pattern", "stroke"),
 }
 
 _DIGIT = re.compile(r"\d")

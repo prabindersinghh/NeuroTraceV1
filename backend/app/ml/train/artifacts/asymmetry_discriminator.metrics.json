@@ -29,6 +29,6 @@
     "The ratio is unsigned. Which side is weak is a property of the patient's existing lesion and is already known at enrolment."
   ],
   "seed": 42,
-  "trained_at": "2026-08-18T21:38:46+00:00",
+  "trained_at": "2026-08-21T20:45:23+00:00",
   "python": "3.11.0"
 }

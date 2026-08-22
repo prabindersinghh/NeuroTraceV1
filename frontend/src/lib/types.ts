@@ -4,7 +4,23 @@ export type Lang = "en" | "hi" | "pa";
 export type SessionType = "daily" | "weekly" | "monthly";
 export type BaselineState = "not_started" | "collecting" | "locked";
 export type StrokeSide = "left" | "right" | "bilateral" | "unknown";
-export type Instrument = "PHQ2" | "PHQ9" | "EAT10" | "FSS" | "BARTHEL";
+// DHI added with the posterior-circulation scope widening: for a patient whose deficits
+// are vertigo and imbalance rather than weakness, it is the closest thing to a functional
+// outcome measure we have.
+export type Instrument = "PHQ2" | "PHQ9" | "EAT10" | "FSS" | "BARTHEL" | "DHI";
+
+/** What the questionnaire endpoint returns. Shape is common to every instrument. */
+export interface QuestionnaireResult {
+  instrument: Instrument;
+  total: number;
+  band: string;
+  escalate: boolean;
+  note?: string | null;
+  /** DHI only: physical / emotional / functional subscores. */
+  physical?: number;
+  emotional?: number;
+  functional?: number;
+}
 
 export interface User {
   id: string;
@@ -247,3 +263,56 @@ export interface AcuteSymptom {
 
 /** Features extracted on-device and POSTed. Raw media never leaves the phone. */
 export type ModuleFeatures = Record<string, number>;
+
+// --- wearables -------------------------------------------------------------
+export type WearableMetric =
+  | "heart_rate" | "irregular_rhythm" | "sleep_quality" | "step_count"
+  | "spo2" | "blood_pressure_systolic" | "blood_pressure_diastolic";
+
+export interface WearableReading {
+  metric: WearableMetric;
+  value: number;
+  unit: string | null;
+  ts: string;
+  source: string;
+  device_id: string | null;
+}
+
+export interface FallEvent {
+  id: string;
+  patient_id: string;
+  ts: string;
+  source: string;
+  dismissed_by_patient: boolean;
+  /** Always true — a fall never enters the deviation engine. */
+  scoring_bypassed: boolean;
+  caregiver_notified: boolean;
+  acknowledged?: boolean;
+  message: string;
+  /** The device vendor owns the measurement; we own only the trend. */
+  claim_notice: string;
+}
+
+// --- ASHA ------------------------------------------------------------------
+export interface AshaHousehold {
+  patient_id: string;
+  name: string;
+  age: number | null;
+  village?: string | null;
+  deployment_tier: string;
+  last_session: string | null;
+  last_visit: string | null;
+  due_modules: string[];
+  /** Which TASKS within each module — a worker must not repeat what the family did. */
+  due_tasks: Record<string, string[]>;
+}
+
+export interface AshaSessionResult {
+  visit_id: string;
+  patient_id: string;
+  session_id: string | null;
+  modules_stored: string[];
+  modules_rejected: string[];
+  created: boolean;
+  detail: string;
+}

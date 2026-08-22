@@ -45,7 +45,7 @@ from app.engine.gates import (
     SessionDeviations,
     evaluate_gates,
 )
-from app.engine.deviation import ModuleDeviation
+from app.engine.deviation import LATERAL_THRESHOLD, ModuleDeviation
 
 DAY0 = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
 KEYS = ["a", "b"]
@@ -256,12 +256,22 @@ def test_deterioration_is_not_marked_improving():
 
 # --------------------------------------------------------------------------- gates
 def _session(devs: dict[str, float], valid: bool = True,
-             improving: set[str] | None = None) -> SessionDeviations:
+             improving: set[str] | None = None,
+             lateral: dict[str, float] | None = None) -> SessionDeviations:
+    """`lateral` gives a domain an asymmetry deviation — i.e. a ONE-SIDED change.
+
+    Gate 3 requires at least one, so a session built without it describes a symmetric
+    change and must not reach ALERT however many domains it moves. See test_laterality.py.
+    """
+    lateral = lateral or {}
     container = SessionDeviations(session_id="s", valid=valid)
     for i, (domain, value) in enumerate(devs.items()):
+        lat = lateral.get(domain, 0.0)
         container.modules[f"M{i}"] = ModuleDeviation(
             module_code=f"M{i}", domain=domain, mean_abs_z=value, computed=True,
             improving=domain in (improving or set()),
+            has_laterality=domain in lateral,
+            lateral_abs_z=lat, lateralised=lat > LATERAL_THRESHOLD,
         )
     return container
 
@@ -274,41 +284,55 @@ def test_no_history_is_stable():
 
 
 def test_quiet_sessions_are_stable():
-    result = evaluate_gates([_session({"motor": LOW, "speech_language": LOW})] * 3)
+    result = evaluate_gates([_session({"motor": LOW, "motor_speech": LOW})] * 3)
     assert result.band == BAND_STABLE
     assert result.persistent_domains == []
 
 
 def test_a_single_bad_session_is_watch_not_alert():
     """The whole point of Gate 1: one bad day never reaches the family."""
-    result = evaluate_gates([_session({"motor": HIGH, "speech_language": HIGH})])
+    result = evaluate_gates([_session({"motor": HIGH, "motor_speech": HIGH})])
     assert result.band == BAND_WATCH
     assert result.gate1_passed is False
 
 
 def test_one_domain_sustained_is_watch_not_alert():
     """Gate 2: a hoarse throat moves every speech feature, and that is not enough."""
-    result = evaluate_gates([_session({"speech_language": HIGH, "motor": LOW})] * 3)
+    result = evaluate_gates([_session({"motor_speech": HIGH, "motor": LOW})] * 3)
     assert result.band == BAND_WATCH
     assert result.gate1_passed is True
     assert result.gate2_passed is False
-    assert result.persistent_domains == ["speech_language"]
+    assert result.persistent_domains == ["motor_speech"]
     assert "no second domain" in result.reason
 
 
 def test_two_domains_sustained_is_alert():
-    result = evaluate_gates([_session({"speech_language": HIGH, "motor": HIGH})]
-                            * PERSISTENCE_SESSIONS)
+    """Speech corroborating a one-sided motor finding: the focal pattern we alert on."""
+    result = evaluate_gates(
+        [_session({"motor_speech": HIGH, "motor": HIGH}, lateral={"motor": HIGH})]
+        * PERSISTENCE_SESSIONS)
     assert result.band == BAND_ALERT
-    assert result.gate1_passed and result.gate2_passed
+    assert result.gate1_passed and result.gate2_passed and result.gate3_passed
     assert len(result.persistent_domains) >= MIN_DOMAINS
+
+
+def test_two_domains_sustained_without_laterality_is_not_an_alert():
+    """The same two domains, the same magnitudes, but symmetric — Gate 3 holds it at WATCH.
+
+    Speech has no left/right axis, so it can never supply the missing evidence.
+    """
+    result = evaluate_gates([_session({"motor_speech": HIGH, "motor": HIGH})]
+                            * PERSISTENCE_SESSIONS)
+    assert result.band == BAND_WATCH
+    assert result.gate1_passed and result.gate2_passed
+    assert result.gate3_passed is False
 
 
 def test_a_gap_in_the_run_breaks_persistence():
     result = evaluate_gates([
-        _session({"speech_language": HIGH, "motor": HIGH}),
-        _session({"speech_language": LOW, "motor": LOW}),
-        _session({"speech_language": HIGH, "motor": HIGH}),
+        _session({"motor_speech": HIGH, "motor": HIGH}),
+        _session({"motor_speech": LOW, "motor": LOW}),
+        _session({"motor_speech": HIGH, "motor": HIGH}),
     ])
     assert result.band == BAND_WATCH
     assert result.persistent_domains == []
@@ -317,8 +341,8 @@ def test_a_gap_in_the_run_breaks_persistence():
 def test_invalid_sessions_do_not_count_toward_persistence():
     """A rejected capture must neither manufacture nor mask a sustained deviation."""
     result = evaluate_gates([
-        _session({"speech_language": HIGH, "motor": HIGH}),
-        _session({"speech_language": HIGH, "motor": HIGH}, valid=False),
+        _session({"motor_speech": HIGH, "motor": HIGH}),
+        _session({"motor_speech": HIGH, "motor": HIGH}, valid=False),
     ])
     assert result.band == BAND_WATCH
 
@@ -326,8 +350,8 @@ def test_invalid_sessions_do_not_count_toward_persistence():
 def test_improvement_never_alerts_however_large_the_deviation():
     huge = DEV_THRESHOLD * 3
     result = evaluate_gates(
-        [_session({"speech_language": huge, "motor": huge},
-                  improving={"speech_language", "motor"})] * 4
+        [_session({"motor_speech": huge, "motor": huge},
+                  improving={"motor_speech", "motor"})] * 4
     )
     assert result.band == BAND_STABLE
     assert result.improving is True
@@ -335,13 +359,14 @@ def test_improvement_never_alerts_however_large_the_deviation():
 
 
 def test_the_sustained_run_length_is_reported_honestly():
-    result = evaluate_gates([_session({"speech_language": HIGH, "motor": HIGH})] * 5)
+    result = evaluate_gates(
+        [_session({"motor_speech": HIGH, "motor": HIGH}, lateral={"motor": HIGH})] * 5)
     assert result.band == BAND_ALERT
     assert result.sustained_sessions == 5
 
 
 def test_threshold_is_strict():
-    at = evaluate_gates([_session({"speech_language": DEV_THRESHOLD,
+    at = evaluate_gates([_session({"motor_speech": DEV_THRESHOLD,
                                    "motor": DEV_THRESHOLD})] * 3)
     assert at.persistent_domains == []
 

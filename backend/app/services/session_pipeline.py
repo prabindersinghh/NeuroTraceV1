@@ -35,6 +35,7 @@ from ..engine.deviation import compute_module_deviation
 from ..engine.gates import (
     BAND_ALERT,
     BAND_STABLE,
+    DEV_THRESHOLD,
     GateResult,
     SessionDeviations,
     evaluate_gates,
@@ -126,7 +127,31 @@ async def _upsert_baseline(session: AsyncSession, patient_id: uuid.UUID,
     row.window_end = built.window_end
     row.locked = built.locked
     row.reason = built.reason[:256]
+
+    # Snapshot ONCE, the first time this module's baseline locks, and never again. The
+    # adaptive values above keep moving; these do not. If this ever became an update the
+    # frozen reference would inherit the exact blind spot it exists to cover.
+    if row.locked and row.reference_locked_at is None:
+        row.reference_median_json = dict(built.median)
+        row.reference_mad_json = dict(built.mad)
+        row.reference_n_sessions = built.n_sessions
+        row.reference_locked_at = datetime.now(timezone.utc)
     return row
+
+
+def _reference_baseline(row: BaselineRow) -> EngineBaseline | None:
+    """The immutable snapshot as an engine baseline, or None before it exists."""
+    if row is None or row.reference_locked_at is None or not row.reference_median_json:
+        return None
+    return EngineBaseline(
+        module_code=row.module_code,
+        median=dict(row.reference_median_json),
+        mad=dict(row.reference_mad_json or {}),
+        trajectory={},          # deliberately empty: a frozen reference does not adapt
+        n_sessions=row.reference_n_sessions,
+        locked=True,
+        reason="frozen reference",
+    )
 
 
 async def _recent_sessions(session: AsyncSession, patient_id: uuid.UUID,
@@ -158,6 +183,8 @@ async def _recent_sessions(session: AsyncSession, patient_id: uuid.UUID,
                 mean_abs_z=row.mean_abs_z, max_abs_z=row.max_abs_z,
                 cusum=row.cusum_stat, cusum_alarm=row.cusum_alarm,
                 improving=row.improving, computed=True, gateable=row.gateable,
+                lateral_abs_z=row.lateral_abs_z, lateralised=row.lateralised,
+                has_laterality=row.lateral_abs_z > 0.0 or row.lateralised,
             )
         history.append(container)
     return history
@@ -195,6 +222,8 @@ async def compute_session(
         valid=exam.identity_verified and exam.quality_score >= QUALITY_FLOOR,
     )
     baseline_phase = False
+    #: Per-domain deviation measured against the FROZEN reference, not the adaptive baseline.
+    reference_dev: dict[str, float] = {}
     min_baseline_n = 10**6
 
     # --- per module: build or compare ---
@@ -217,7 +246,7 @@ async def compute_session(
                                       BaselineRow.module_code == module.code)
         )
 
-        if row is None or not row.locked:
+        if row is None or not row.locked:  # noqa: SIM102 - readability over nesting
             # Still collecting. Today feeds the baseline; it is not judged.
             observation = SessionObservation(
                 ts=exam_ts, features=features,
@@ -256,8 +285,28 @@ async def compute_session(
             bad_direction=dict(module.bad_direction),
             previous_cusum=float(previous_cusum),
             gates_alerts=module.gates_alerts,
+            lateral_keys=module.lateral_keys,
         )
         today.modules[module.code] = deviation
+
+        # --- second comparison, against the frozen reference ---
+        #
+        # Same features, same maths, different yardstick. The adaptive baseline answers
+        # "is today unlike recently"; this answers "how far is today from the normal we
+        # established". A slow decline keeps the first near zero and drives the second up.
+        reference = _reference_baseline(row)
+        if reference is not None:
+            drift = compute_module_deviation(
+                module.code, module.domain, features, reference,
+                list(module.scoring_keys),
+                days_since_window_start=0.0,   # a frozen reference has no trajectory
+                bad_direction=dict(module.bad_direction),
+                gates_alerts=module.gates_alerts,
+                lateral_keys=module.lateral_keys,
+            )
+            if drift.computed and drift.gateable:
+                reference_dev[module.domain] = max(
+                    reference_dev.get(module.domain, 0.0), drift.mean_abs_z)
 
     # --- gates ---
     history_sessions = await _recent_sessions(db, patient.id, exam)
@@ -272,6 +321,19 @@ async def compute_session(
     drivers = rank_drivers(today, k=3)
 
     # --- confounders ---
+    # Did any module run only part of its battery? A three-task balance capture produces a
+    # number that looks exactly like a five-task one, so the difference has to reach the
+    # confidence figure or it reaches nobody.
+    partial = False
+    for result in results:
+        feats = result.features_json or {}
+        module = MODULES.get(result.module_code)
+        if module is None or not module.task_devices:
+            continue
+        captured = float(feats.get("tests_captured") or 0.0)
+        if captured and captured < len(module.tasks):
+            partial = True
+
     ctx = ConfounderContext(
         session_ts=exam_ts,
         quality_score=exam.quality_score,
@@ -280,6 +342,7 @@ async def compute_session(
         baseline_n_sessions=min_baseline_n if min_baseline_n < 10**6 else 0,
         baseline_lock_at=LOCK_AT_N_SESSIONS,
         quality_floor=QUALITY_FLOOR,
+        partial_capture=partial,
     )
     confounders = detect_confounders(ctx)
 
@@ -299,7 +362,8 @@ async def compute_session(
     )
     clinician_line = render_clinician_line(
         band.value, gate.persistent_domains,
-        gate.sustained_sessions or len(history_sessions), confounders.active
+        gate.sustained_sessions or len(history_sessions), confounders.active,
+        lateralised=gate.lateralised_domains,
     )
 
     # --- persist (idempotent) ---
@@ -318,16 +382,36 @@ async def compute_session(
             cusum_stat=deviation.cusum, cusum_alarm=deviation.cusum_alarm,
             improving=deviation.improving,
             gateable=deviation.gateable,
+            lateral_abs_z=deviation.lateral_abs_z,
+            lateralised=deviation.lateralised,
             flagged=code in {m for m in today.modules
                              if today.modules[m].domain in gate.flagged_today},
         ))
 
+    # Cumulative drift from the established normal. Flagged when it clears the same RCI
+    # threshold a same-day deviation would have to clear, EVEN IF the adaptive comparison
+    # is quiet — that combination is the signature of a decline the rolling baseline has
+    # been absorbing, which is precisely what this exists to surface.
+    worst_drift = max(reference_dev.values(), default=0.0)
+    adaptive_worst = max(today.domain_deviation().values(), default=0.0)
+    drift_flagged = (
+        worst_drift > DEV_THRESHOLD
+        and adaptive_worst <= DEV_THRESHOLD
+        and not baseline_phase
+    )
+
     score = Score(
         patient_id=patient.id, session_id=session_id,
         domain_devs_json=today.domain_deviation(gateable_only=False),
+        cumulative_drift_json=dict(reference_dev),
+        cumulative_drift=float(worst_drift),
+        drift_flagged=bool(drift_flagged),
         band=band,
         gate1_passed=gate.gate1_passed, gate2_passed=gate.gate2_passed,
+        gate3_passed=gate.gate3_passed,
         persistent_domains=list(gate.persistent_domains),
+        lateralised_domains=list(gate.lateralised_domains),
+        symmetric_pattern=gate.symmetric_pattern,
         drivers_json=[list(d) for d in drivers],
         confounders_json=confounders.to_json(),
         confidence=confounders.confidence,
@@ -373,7 +457,14 @@ async def compute_session(
         "reason": gate.reason,
         "gate1_passed": gate.gate1_passed,
         "gate2_passed": gate.gate2_passed,
+        "gate3_passed": gate.gate3_passed,
         "persistent_domains": gate.persistent_domains,
+        "lateralised_domains": gate.lateralised_domains,
+        "symmetric_pattern": gate.symmetric_pattern,
+        "lateral_deviations": today.lateral_deviation(),
+        "cumulative_drift": float(worst_drift),
+        "cumulative_drift_by_domain": dict(reference_dev),
+        "drift_flagged": bool(drift_flagged),
         "domain_deviations": today.domain_deviation(gateable_only=False),
         "drivers": [list(d) for d in drivers],
         "confounders": confounders.to_json(),

@@ -27,6 +27,7 @@ from ..models import (
     Adherence,
     Alert,
     AuditLog,
+    Band,
     Baseline,
     ExamSession,
     Patient,
@@ -77,6 +78,8 @@ async def dashboard(
             date=ts, session_id=score.session_id, band=score.band,
             domain_devs=dict(score.domain_devs_json or {}),
             confidence=score.confidence, baseline_phase=score.baseline_phase,
+            cumulative_drift=float(score.cumulative_drift or 0.0),
+            drift_flagged=bool(score.drift_flagged),
         )
         for score, ts in rows
     ]
@@ -178,18 +181,55 @@ async def clinic_patients(clinician: Clinician, db: Session) -> ClinicListRespon
             .where(Alert.patient_id == patient.id, Alert.acknowledged_at.is_(None))
         ) or 0
 
+        band_value = latest.band.value if latest else None
+        symmetric = bool(latest.symmetric_pattern) if latest else False
+
+        # The atypical pattern gets its own card. It is not a deviation alert: nothing
+        # focal was found, and the useful action is a different diagnostic conversation
+        # rather than a stroke work-up.
+        if symmetric or band_value == Band.PATTERN_ATYPICAL.value:
+            card_type = "atypical_pattern"
+            card_note = ("Symmetric progressive change across face, movement and voice "
+                         "with no lateralised finding. Not a focal pattern - consider "
+                         "non-vascular causes including parkinsonian syndromes.")
+        elif band_value in (Band.ALERT.value, Band.WATCH.value):
+            card_type, card_note = "deviation", None
+        elif latest is not None and latest.drift_flagged:
+            # Day-to-day looks unremarkable, but they are a long way from the normal this
+            # patient established. That is the decline an adaptive baseline absorbs, and it
+            # is the one finding that would otherwise never reach anybody.
+            card_type = "cumulative_drift"
+            card_note = (
+                f"Day-to-day comparison is unremarkable, but cumulative drift from the "
+                f"baseline established at lock is {latest.cumulative_drift:.1f} MAD - "
+                f"beyond RCI. Slow decline that the adaptive baseline does not register."
+            )
+        else:
+            card_type, card_note = "routine", None
+
         out.append(ClinicPatientRow(
             patient_id=patient.id, name=patient.name, age=patient.age,
             band=latest.band if latest else None,
             sustained_domains=list(latest.persistent_domains or []) if latest else [],
+            lateralised_domains=list(latest.lateralised_domains or []) if latest else [],
             confidence=latest.confidence if latest else 1.0,
             last_session=last_ts,
             unacknowledged_alerts=int(unack),
             baseline_state=patient.baseline_state,
+            cumulative_drift=float(latest.cumulative_drift) if latest else 0.0,
+            drift_flagged=bool(latest.drift_flagged) if latest else False,
+            card_type=card_type,
+            card_note=card_note,
         ))
 
-    rank = {"ALERT": 0, "WATCH": 1, "STABLE": 2, None: 3}
+    # PATTERN_ATYPICAL ranks alongside WATCH. It is not an emergency, but it is a real and
+    # progressive finding - dropping it below STABLE would bury the one signal the engine
+    # deliberately refused to raise an alert about.
+    rank = {"ALERT": 0, "WATCH": 1, "PATTERN_ATYPICAL": 1, "STABLE": 2, None: 3}
     out.sort(key=lambda r: (rank.get(r.band.value if r.band else None, 3),
+                            # A drift flag lifts a patient above the quiet STABLE ones they
+                            # would otherwise be sorted among.
+                            0 if r.drift_flagged else 1,
                             -len(r.sustained_domains), -r.unacknowledged_alerts))
 
     db.add(AuditLog(actor_id=clinician.id, action="clinic.list"))

@@ -53,9 +53,20 @@ RNG = np.random.default_rng(42)
 
 
 # --------------------------------------------------------------------------- registry
-def test_all_twenty_modules_are_registered():
-    assert len(MODULES) == 20
-    assert sorted(MODULES) == sorted(f"M{i}" for i in range(1, 21))
+def test_the_module_codes_are_contiguous_with_no_gaps():
+    """M1..Mn with nothing missing.
+
+    Asserted as a contiguous range rather than a magic count, because the count changes
+    every time a clinical amendment adds a module (M21 SVV was the most recent) and a bare
+    `== 20` fails for the entirely uninteresting reason that the number moved. What actually
+    matters is that no code is skipped: a gap means a module was removed and its features
+    are still referenced somewhere, or one was added out of sequence.
+    """
+    codes = sorted(MODULES, key=lambda c: int(c[1:]))
+    numbers = [int(c[1:]) for c in codes]
+    assert numbers == list(range(1, len(MODULES) + 1)), (
+        f"module codes are not contiguous: {codes}")
+    assert len(MODULES) >= 21, "modules should never be silently removed"
 
 
 def test_every_module_declares_a_domain_and_a_schedule():

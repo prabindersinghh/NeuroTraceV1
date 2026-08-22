@@ -1,0 +1,45 @@
+{
+  "model": "voice_dysarthria_clf",
+  "dataset": "SYNTHETIC FIXTURES (no corpus present)",
+  "n_total": 240,
+  "n_positive": 120,
+  "n_negative": 120,
+  "n_groups": 60,
+  "split": "synthetic, grouped by speaker",
+  "roc_auc": 0.9872916666666667,
+  "sensitivity": 0.9416666666666667,
+  "specificity": 0.9416666666666667,
+  "precision": 0.9416666666666667,
+  "accuracy": 0.9416666666666667,
+  "threshold": 0.5,
+  "confusion": {
+    "tp": 113,
+    "fp": 7,
+    "tn": 113,
+    "fn": 7
+  },
+  "features": [
+    "jitter_local",
+    "shimmer_local",
+    "hnr",
+    "pause_ratio",
+    "n_pauses_per_sec",
+    "articulation_rate",
+    "f0_cv",
+    "f0_std",
+    "spec_centroid",
+    "mfcc1_mean",
+    "mfcc2_mean",
+    "mfcc3_mean",
+    "mfcc4_mean"
+  ],
+  "limitations": [
+    "SYNTHETIC RUN. No real corpus was present, so these figures are generated and mean nothing. They demonstrate that the pipeline executes end to end.",
+    "TORGO and UASpeech are English and predominantly cerebral-palsy dysarthria, n < 20 impaired speakers each. Our users are Punjabi- and Hindi-speaking stroke survivors. That population mismatch cannot be trained away.",
+    "The control corpora are read speech recorded in good conditions. A classifier may separate recording conditions rather than pathology.",
+    "The output is ONE feature into a deterministic engine. It never decides."
+  ],
+  "seed": 42,
+  "trained_at": "2026-08-21T20:48:14+00:00",
+  "python": "3.11.0"
+}

@@ -29,7 +29,7 @@ _verify/
 
 # ---- runtime artefacts ----
 backend/media/
-backend/tests/.pytest_neurotrace.sqlite3
+backend/tests/.pytest_neurotrace*.sqlite3*
 *.sqlite3
 *.sqlite3-journal
 *.db
@@ -48,3 +48,26 @@ Thumbs.db
 
 # ---- private strategy notes, never publish ----
 compass_artifact_*.md
+data/raw/
+
+# --- PRIVACY: real patient source material (never committed) ---
+#
+# The reference-patient photographs live in the working tree, NOT outside the repo as was
+# assumed. They are photographs of a real person's medical records. These rules are
+# defensive and deliberately broad: the cost of a false positive is a developer renaming an
+# asset, the cost of a false negative is publishing someone's medical records to GitHub.
+#
+# Enforced by tests/test_privacy.py, which fails the build if any of them becomes tracked.
+*stroke report*/
+*.jpeg
+*.jpg
+
+# Local-only list of real identifiers used by tests/test_privacy.py. Never committed.
+.privacy-denylist
+
+# Local database backups taken before each migration. They contain seeded demo data and
+# are binary snapshots of whatever the dev DB held at the time — never publish them.
+.backups/
+
+# Throwaway probes
+frontend/scratch/

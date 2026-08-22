@@ -1,0 +1,234 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>on-device capture verification</title>
+<canvas id="c" width="480" height="480"></canvas>
+<script type="module">
+  import {
+    assessFaceQuality,
+    extractFacialMotor,
+    frameFeatures,
+    loadFaceLandmarker,
+  } from "/src/lib/ondevice/face.ts";
+
+  /**
+   * Draw a face into a canvas.
+   *
+   * A photograph would mean committing a real person's likeness to the repo, so the frame
+   * is generated. `droop` pulls the left mouth corner down and flattens the left
+   * nasolabial fold — the deficit M1 exists to notice — which lets the same harness show
+   * that the features move in the right direction, not merely that they exist.
+   */
+  function drawFace(ctx, { droop = 0, browRaise = 0, eyeOpen = 1 } = {}) {
+    const W = ctx.canvas.width;
+    const H = ctx.canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const fw = W * 0.30;
+    const fh = H * 0.40;
+
+    ctx.fillStyle = "#20242c";
+    ctx.fillRect(0, 0, W, H);
+
+    // Head: a lit oval, darker at the edges, so there is real gradient structure to find.
+    const skin = ctx.createRadialGradient(cx - fw * 0.2, cy - fh * 0.3, fw * 0.1,
+                                          cx, cy, fh * 1.15);
+    skin.addColorStop(0, "#f2d2b3");
+    skin.addColorStop(0.55, "#dcb08c");
+    skin.addColorStop(1, "#9d7455");
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, fw, fh, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hair
+    ctx.fillStyle = "#241a14";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - fh * 0.72, fw * 1.02, fh * 0.42, 0, Math.PI, 0);
+    ctx.fill();
+
+    // Ears
+    ctx.fillStyle = "#d8a985";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(cx + s * fw * 0.99, cy + fh * 0.05, fw * 0.11, fh * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const eyeY = cy - fh * 0.16;
+    const eyeDX = fw * 0.42;
+    const eyeW = fw * 0.27;
+    const eyeH = fh * 0.10 * eyeOpen;
+
+    // Eye sockets give the shading BlazeFace keys on.
+    for (const s of [-1, 1]) {
+      const socket = ctx.createRadialGradient(cx + s * eyeDX, eyeY, 1,
+                                              cx + s * eyeDX, eyeY, eyeW * 1.5);
+      socket.addColorStop(0, "rgba(120,88,66,0.55)");
+      socket.addColorStop(1, "rgba(120,88,66,0)");
+      ctx.fillStyle = socket;
+      ctx.beginPath();
+      ctx.ellipse(cx + s * eyeDX, eyeY, eyeW * 1.5, eyeH * 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const s of [-1, 1]) {
+      const ex = cx + s * eyeDX;
+      ctx.fillStyle = "#fdfaf6";
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY, eyeW, Math.max(eyeH, 0.6), 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (eyeH > 1.5) {
+        ctx.fillStyle = "#4a3524";
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, Math.min(eyeW * 0.46, eyeH * 1.15), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#120c08";
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, Math.min(eyeW * 0.2, eyeH * 0.55), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Lash line
+      ctx.strokeStyle = "#2b1d13";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY, eyeW, Math.max(eyeH, 0.6), 0, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Brows — browRaise lifts both, as a forehead-raise task would.
+    ctx.strokeStyle = "#2c1e15";
+    ctx.lineWidth = fh * 0.045;
+    ctx.lineCap = "round";
+    for (const s of [-1, 1]) {
+      const bx = cx + s * eyeDX;
+      const by = eyeY - fh * (0.13 + 0.06 * browRaise);
+      ctx.beginPath();
+      ctx.moveTo(bx - eyeW * 1.05, by + fh * 0.022);
+      ctx.quadraticCurveTo(bx, by - fh * 0.045, bx + eyeW * 1.05, by + fh * 0.012);
+      ctx.stroke();
+    }
+
+    // Nose
+    const noseTip = cy + fh * 0.18;
+    ctx.strokeStyle = "rgba(150,108,80,0.75)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - fw * 0.04, cy - fh * 0.06);
+    ctx.lineTo(cx - fw * 0.11, noseTip);
+    ctx.quadraticCurveTo(cx, noseTip + fh * 0.045, cx + fw * 0.11, noseTip);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(110,78,56,0.85)";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(cx + s * fw * 0.08, noseTip + fh * 0.02, fw * 0.035, fh * 0.02, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Mouth. The left corner drops with `droop`.
+    const mY = cy + fh * 0.47;
+    const mW = fw * 0.52;
+    const lCorner = mY + droop * fh * 0.10;
+    const rCorner = mY;
+    ctx.strokeStyle = "#8d4a44";
+    ctx.lineWidth = fh * 0.028;
+    ctx.beginPath();
+    ctx.moveTo(cx - mW, lCorner);
+    ctx.quadraticCurveTo(cx, mY + fh * 0.075, cx + mW, rCorner);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(160,90,84,0.5)";
+    ctx.beginPath();
+    ctx.moveTo(cx - mW, lCorner);
+    ctx.quadraticCurveTo(cx, mY + fh * 0.115, cx + mW, rCorner);
+    ctx.quadraticCurveTo(cx, mY + fh * 0.02, cx - mW, lCorner);
+    ctx.fill();
+
+    // Nasolabial folds — the droop side flattens.
+    ctx.strokeStyle = "rgba(150,108,80,0.5)";
+    ctx.lineWidth = 2.5;
+    for (const s of [-1, 1]) {
+      const depth = s === -1 ? 1 - droop * 0.8 : 1;
+      if (depth <= 0.05) continue;
+      ctx.globalAlpha = depth;
+      ctx.beginPath();
+      ctx.moveTo(cx + s * fw * 0.17, noseTip);
+      ctx.quadraticCurveTo(cx + s * fw * 0.42, cy + fh * 0.30,
+                           cx + s * fw * 0.36, mY + fh * 0.06);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Chin + jaw shading
+    ctx.strokeStyle = "rgba(140,100,74,0.35)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + fh * 0.30, fw * 0.62, fh * 0.42, 0, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
+  }
+
+  window.__verifyOnDevice = async () => {
+    try {
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+      const t0 = performance.now();
+      const landmarker = await loadFaceLandmarker("/mediapipe");
+      const initMs = Math.round(performance.now() - t0);
+
+      let ts = 0;
+      const capture = (poses) => {
+        const got = [];
+        for (const pose of poses) {
+          drawFace(ctx, pose);
+          const out = landmarker.detectForVideo(canvas, (ts += 40));
+          if (out.faceLandmarks?.length) got.push(out.faceLandmarks[0]);
+        }
+        return got;
+      };
+
+      // Two captures of the same face: one symmetric, one with a growing left-sided droop.
+      // Detecting a face proves the runtime works; only the comparison proves the features
+      // carry the signal the engine reads.
+      const symmetricPoses = [0, 0, 0, 0, 0, 0].map((d, i) => ({
+        droop: d, browRaise: i * 0.07, eyeOpen: 1,
+      }));
+      const droopPoses = [0, 0.15, 0.35, 0.55, 0.7, 0.8].map((d, i) => ({
+        droop: d, browRaise: i * 0.07, eyeOpen: 1,
+      }));
+
+      const t1 = performance.now();
+      const symmetricFrames = capture(symmetricPoses);
+      const frames = capture(droopPoses);
+      const detectMs = Math.round(performance.now() - t1);
+      const poses = droopPoses;
+
+      if (!frames.length) {
+        return {
+          error: "no face detected in any frame",
+          initMs, detectMs, frames: poses.length, facesDetected: 0,
+        };
+      }
+
+      const quality = assessFaceQuality(frames, poses.length);
+      const asModule = (f) =>
+        extractFacialMotor({ smile: f, forehead_raise: f, eye_closure: f });
+      const moduleFeatures = asModule(frames);
+      const symmetricFeatures = symmetricFrames.length ? asModule(symmetricFrames) : null;
+
+      return {
+        assetBase: new URL("/mediapipe", location.origin).href,
+        initMs,
+        detectMs,
+        frames: poses.length,
+        facesDetected: frames.length,
+        landmarkCount: frames[0].length,
+        frameFeatures: frameFeatures(frames[frames.length - 1]),
+        moduleFeatures,
+        symmetricFeatures,
+        symmetricDetected: symmetricFrames.length,
+        quality: { usable: quality.ok, reason: quality.reason, rate: quality.detectionRate },
+      };
+    } catch (err) {
+      return { error: `${err?.name ?? "Error"}: ${err?.message ?? err}` };
+    }
+  };
+</script>

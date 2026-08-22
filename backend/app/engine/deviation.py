@@ -39,6 +39,11 @@ CUSUM_H = 4.0                # alarm threshold
 # stored — it is real information — but it is not allowed to drive the alert gate.
 MIN_FEATURES_TO_GATE = 3
 
+# A module counts as showing a ONE-SIDED change when the mean |z| across its asymmetry
+# features clears this. Deliberately the same threshold as DEV_THRESHOLD in gates.py: a
+# lateralised finding has to be as convincing as any other deviation, not a lower bar.
+LATERAL_THRESHOLD = 2.0
+
 
 @dataclass(slots=True)
 class FeatureDeviation:
@@ -60,6 +65,12 @@ class ModuleDeviation:
     max_abs_z: float = 0.0
     n_reliable: int = 0
     gateable: bool = True
+    #: mean |z| across this module's asymmetry features only. 0.0 when it has none.
+    lateral_abs_z: float = 0.0
+    #: True when the deviation is one-sided rather than a symmetric change in level.
+    lateralised: bool = False
+    #: True when the module has asymmetry features at all (speech does not).
+    has_laterality: bool = False
     features: list[FeatureDeviation] = field(default_factory=list)
     cusum: float = 0.0
     cusum_alarm: bool = False
@@ -81,6 +92,9 @@ class ModuleDeviation:
             "cusum_alarm": self.cusum_alarm,
             "improving": self.improving,
             "gateable": self.gateable,
+            "lateral_abs_z": self.lateral_abs_z,
+            "lateralised": self.lateralised,
+            "has_laterality": self.has_laterality,
             "computed": self.computed,
             "reason": self.reason,
             "features": {
@@ -130,6 +144,7 @@ def compute_module_deviation(
     bad_direction: dict[str, str] | None = None,
     previous_cusum: float = 0.0,
     gates_alerts: bool = True,
+    lateral_keys: Sequence[str] | None = None,
 ) -> ModuleDeviation:
     """Score one module for one session against its locked baseline.
 
@@ -144,7 +159,10 @@ def compute_module_deviation(
         return dev
 
     bad_direction = bad_direction or {}
+    lateral = set(lateral_keys or ())
+    dev.has_laterality = bool(lateral)
     z_values: list[float] = []
+    lateral_z: list[float] = []
     signed_improvement: list[float] = []
 
     for key in keys:
@@ -164,6 +182,8 @@ def compute_module_deviation(
                              robust_z=z, rci=rci, reliable=is_reliable)
         )
         z_values.append(abs(z))
+        if key in lateral:
+            lateral_z.append(abs(z))
         if is_reliable:
             dev.n_reliable += 1
 
@@ -183,6 +203,15 @@ def compute_module_deviation(
     dev.max_abs_z = float(np.max(clipped))
     dev.computed = True
     dev.gateable = gates_alerts and len(z_values) >= MIN_FEATURES_TO_GATE
+
+    # Laterality is computed from the asymmetry features alone. A symmetric loss of
+    # movement raises mean_abs_z without raising this, which is exactly how a diffuse
+    # process is told apart from a focal one.
+    if lateral_z:
+        clipped_lateral = np.clip(np.asarray(lateral_z), 0.0, DEVIATION_CLIP)
+        dev.lateral_abs_z = float(np.mean(clipped_lateral))
+        dev.lateralised = dev.lateral_abs_z > LATERAL_THRESHOLD
+
     dev.reason = "ok" if dev.gateable else "recorded but not gate-eligible"
 
     # CUSUM accumulates only the excess above the slack term.

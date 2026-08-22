@@ -33,6 +33,45 @@ class Role(str, enum.Enum):
     patient = "patient"
     caregiver = "caregiver"
     clinician = "clinician"
+    #: A community health worker (ASHA) who visits a fixed list of households, runs the
+    #: monthly deep assessment on a shared tablet, and syncs per patient. They see only
+    #: their own households, and only what a visit requires.
+    asha_worker = "asha_worker"
+
+
+class DeploymentTier(str, enum.Enum):
+    """What hardware this patient actually has.
+
+    The module set has to follow the hardware rather than the wish list. A 6-inch phone
+    held at arm's length cannot run a nine-point gaze task or a line-bisection test with
+    any validity — the target subtends too few degrees and the arm shakes. Offering those
+    modules anyway would produce numbers that look like measurements and are not, which is
+    worse than not offering them.
+    """
+
+    #: Phone only. Daily check-in. The base product, zero added hardware.
+    TIER_1_PHONE = "TIER_1_PHONE"
+    #: + Samsung Galaxy Watch: passive HR, rhythm notifications, sleep, steps, falls.
+    TIER_2_WATCH = "TIER_2_WATCH"
+    #: + a shared ASHA kit (tablet, BP cuff, pulse oximeter) serving ~50 households.
+    TIER_3_ASHA = "TIER_3_ASHA"
+
+
+class WearableMetric(str, enum.Enum):
+    """Vendor-device readings we LOG and TREND.
+
+    We never make a measurement claim about any of these. The device vendor holds the
+    regulatory claim for the measurement; we hold only the claim that we recorded what
+    their device reported and can show how it moved. See `app/slm/templates.py`.
+    """
+
+    heart_rate = "heart_rate"
+    irregular_rhythm = "irregular_rhythm"
+    sleep_quality = "sleep_quality"
+    step_count = "step_count"
+    spo2 = "spo2"
+    blood_pressure_systolic = "blood_pressure_systolic"
+    blood_pressure_diastolic = "blood_pressure_diastolic"
 
 
 class SessionType(str, enum.Enum):
@@ -45,6 +84,10 @@ class Band(str, enum.Enum):
     STABLE = "STABLE"
     WATCH = "WATCH"
     ALERT = "ALERT"
+    #: Symmetric, progressive change across face, motor and voice with no one-sided
+    #: finding. Not a focal deficit, so not a stroke-monitoring alert — reported as its
+    #: own thing so the family is told something true rather than nothing.
+    PATTERN_ATYPICAL = "PATTERN_ATYPICAL"
 
 
 class BaselineState(str, enum.Enum):
@@ -118,6 +161,31 @@ class Patient(Base):
     # The patient's chosen exam slot, as an hour of day. Sessions far from it are tagged.
     preferred_hour: Mapped[float | None] = mapped_column(sa.Float)
     education_band: Mapped[str | None] = mapped_column(sa.String(24))
+    # PRD §3 exclusions. A comorbid movement disorder produces symmetric decline across
+    # face, motor and voice simultaneously, which is the exact signature the alert gate
+    # reads as deterioration. The engine's laterality requirement makes that safe rather
+    # than catastrophic, but the system is validated only for post-stroke monitoring
+    # without these comorbidities, so enrolment is refused outright.
+    pd_diagnosis: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    other_movement_disorder: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    #: How much of the daily battery this patient runs: FULL / STANDARD / LIGHT / RESEARCH.
+    #:
+    #: This is NOT cosmetic. Each intensity changes which tasks run and therefore where in
+    #: the session a given task falls, and every module's baseline encodes its position on
+    #: the fatigue curve. A patient moved from FULL to STANDARD performs finger tapping
+    #: three tasks earlier — less fatigued, better score, reading as improvement. So a
+    #: change here is a confounder, recorded per result, not a silent setting.
+    intensity: Mapped[str] = mapped_column(
+        sa.String(16), default="FULL", nullable=False)
+
+    #: Which hardware tier this patient is on. Gates which modules are offered.
+    deployment_tier: Mapped[DeploymentTier] = mapped_column(
+        _enum(DeploymentTier, "deployment_tier_enum"),
+        default=DeploymentTier.TIER_1_PHONE, nullable=False)
+    #: The ASHA worker whose household list this patient is on (TIER_3 only).
+    asha_worker_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"), index=True)
     baseline_state: Mapped[BaselineState] = mapped_column(
         _enum(BaselineState, "baseline_state_enum"),
         default=BaselineState.not_started, nullable=False)
@@ -182,6 +250,31 @@ class ModuleResult(Base):
     # Numbers only. No media, ever.
     features_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False)
     quality_flag: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
+    # --- fatigue instrumentation (FINAL_PRODUCT_SPEC v4 Part 1) ---
+    #
+    # A twelve-minute battery tires an 82-year-old. Fixed ordering makes position a
+    # constant that each baseline absorbs; these columns exist because intensity changes
+    # and pauses BREAK that constant, both in the direction that masks decline.
+    #: 1-indexed position in the protocol.
+    session_position: Mapped[int | None] = mapped_column(sa.Integer)
+    #: Seconds from session start to this task starting.
+    elapsed_seconds_at_task_start: Mapped[float | None] = mapped_column(sa.Float)
+    #: The intensity this result was captured under.
+    intensity: Mapped[str | None] = mapped_column(sa.String(16))
+    #: True when the session was paused before this task — it was performed rested.
+    paused_before_task: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+
+    #: Optional derived TRACE for modules that produce one — currently only M9
+    #: craniocorpography, where the movement path is the clinical output a specialist
+    #: reads first.
+    #:
+    #: This is NOT media and does not weaken INV-1. What is stored is a list of head-centre
+    #: coordinates in centimetres, already reduced from the video on the device; the frames
+    #: themselves are discarded there as always. A CCG report is a picture of a path, and
+    #: without the path we would be handing a clinician four numbers and asking them to
+    #: trust a format they have never seen.
+    trace_json: Mapped[dict | None] = mapped_column(sa.JSON)
     quality_detail: Mapped[dict | None] = mapped_column(sa.JSON)
     extracted_on_device: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
@@ -211,6 +304,26 @@ class Baseline(Base):
     window_end: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     locked: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     reason: Mapped[str | None] = mapped_column(sa.String(256))
+
+    # --- the frozen reference (TRD §5) ---
+    #
+    # The adaptive baseline above follows the patient. That is correct for day-to-day
+    # comparison — it tracks genuine recovery and stops flagging a level the patient has
+    # legitimately settled at — but it has a failure mode that matters more than anything
+    # it fixes: a slow, real decline gets absorbed. Each day is close to the last, the
+    # rolling median walks down with the patient, and the z-score stays near zero the whole
+    # way. The engine tracks them to the floor and never says a word.
+    #
+    # So at lock we take a permanent snapshot and never touch it again. Every session is
+    # then scored twice: against the adaptive baseline for "is today different from
+    # recently", and against this for "how far are they from the normal we established".
+    # The second question is the one a slow decline cannot hide from.
+    reference_median_json: Mapped[dict | None] = mapped_column(sa.JSON)
+    reference_mad_json: Mapped[dict | None] = mapped_column(sa.JSON)
+    #: When the snapshot was taken. Its presence is what marks the reference as established.
+    reference_locked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    reference_n_sessions: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
         onupdate=utcnow, nullable=False)
@@ -236,6 +349,10 @@ class Deviation(Base):
     improving: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     # False when this module is recorded but not permitted to drive the alert gate.
     gateable: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
+    #: mean |z| across this module's asymmetry features only.
+    lateral_abs_z: Mapped[float] = mapped_column(sa.Float, default=0.0, nullable=False)
+    #: True when the change is one-sided rather than a symmetric change in level.
+    lateralised: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     flagged: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
 
@@ -252,7 +369,20 @@ class Score(Base):
     band: Mapped[Band] = mapped_column(_enum(Band, "band_enum"), nullable=False)
     gate1_passed: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     gate2_passed: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    #: Gate 3 — at least one persistent domain showed a one-sided change.
+    gate3_passed: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     persistent_domains: Mapped[list | None] = mapped_column(sa.JSON)
+    lateralised_domains: Mapped[list | None] = mapped_column(sa.JSON)
+    #: Symmetric progressive change across face, motor and voice — see gates.py.
+    symmetric_pattern: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    #: Deviation from the FROZEN reference baseline, per domain. Distinct from
+    #: domain_deviations, which is measured against the adaptive baseline.
+    cumulative_drift_json: Mapped[dict | None] = mapped_column(sa.JSON)
+    #: Worst per-domain cumulative drift, for trend display and ranking.
+    cumulative_drift: Mapped[float] = mapped_column(sa.Float, default=0.0, nullable=False)
+    #: True when drift from the established normal is beyond RCI even though the adaptive
+    #: comparison looks unremarkable — i.e. the slow decline the adaptive baseline absorbed.
+    drift_flagged: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     drivers_json: Mapped[list | None] = mapped_column(sa.JSON)
     confounders_json: Mapped[dict | None] = mapped_column(sa.JSON)
     confidence: Mapped[float] = mapped_column(sa.Float, default=1.0, nullable=False)
@@ -364,3 +494,207 @@ class AuditLog(Base):
         sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True)
     meta_json: Mapped[dict | None] = mapped_column(sa.JSON)
     ts: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), index=True, **_TS)
+
+
+# --------------------------------------------------------------------------- wearables
+class WearableData(Base):
+    """A reading a vendor device reported.
+
+    Deliberately a log, not a measurement. `value` is stored exactly as the device gave it,
+    with the device identified, so that anything derived from it can be traced back to the
+    thing that holds the regulatory claim for it. NeuroTrace claims only the trend.
+    """
+
+    __tablename__ = "wearable_data"
+    __table_args__ = (
+        sa.Index("ix_wearable_patient_metric_ts", "patient_id", "metric", "ts"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: Vendor/app that produced the reading, e.g. "samsung_health".
+    source: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    metric: Mapped[WearableMetric] = mapped_column(
+        _enum(WearableMetric, "wearable_metric_enum"), nullable=False)
+    value: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    unit: Mapped[str | None] = mapped_column(sa.String(24))
+    ts: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    #: Which physical device. Two watches on one patient must stay distinguishable.
+    device_id: Mapped[str | None] = mapped_column(sa.String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)
+
+
+class FallEvent(Base):
+    """A fall the watch reported.
+
+    Handled like the acute-symptom path and for the same reason: a fall is an event, not a
+    trend. Routing it through the deviation engine would mean a patient lies on the floor
+    while the system waits for a second corroborating domain across two sessions. It
+    bypasses scoring entirely and notifies the caregiver immediately.
+    """
+
+    __tablename__ = "fall_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    source: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    ts: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    device_id: Mapped[str | None] = mapped_column(sa.String(128))
+    #: Confidence the DEVICE reported, passed through unchanged. Not our estimate.
+    device_confidence: Mapped[float | None] = mapped_column(sa.Float)
+    #: True when the wearer cancelled the alert on the watch.
+    dismissed_by_patient: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    caregiver_notified_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)
+
+
+class AshaVisit(Base):
+    """One ASHA household visit, which may carry several patients' assessments.
+
+    Recorded separately from ExamSession because the visit is the unit that gets synced:
+    an ASHA worker is offline for most of a round and uploads when they get signal.
+    `client_visit_id` is the worker's device-side id, so a retried upload updates the same
+    visit instead of creating a duplicate.
+    """
+
+    __tablename__ = "asha_visits"
+    __table_args__ = (
+        sa.UniqueConstraint("asha_worker_id", "client_visit_id",
+                            name="uq_asha_visit_worker_client"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    asha_worker_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: Device-side identifier, for idempotent sync after an offline round.
+    client_visit_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    ts: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("sessions.id", ondelete="SET NULL"))
+    device_id: Mapped[str | None] = mapped_column(sa.String(128))
+    notes: Mapped[str | None] = mapped_column(sa.String(512))
+    synced_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)
+
+
+# --------------------------------------------------------------------------- Awaaz
+class AwaazProfile(Base):
+    """Per-patient communication settings.
+
+    `speech_profile` is the safety-critical field: it decides whether anything may ever be
+    spoken without the patient confirming it. See `app/awaaz/safety.py`.
+    """
+
+    __tablename__ = "awaaz_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), unique=True, nullable=False)
+    #: dysarthria_dominant | aphasia_dominant | mixed | unassessed. Defaults to unassessed,
+    #: which is treated as aphasia — safe by default rather than convenient by default.
+    speech_profile: Mapped[str] = mapped_column(
+        sa.String(32), default="unassessed", nullable=False)
+    #: Even for an eligible profile this must be turned on deliberately.
+    auto_speak_enabled: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    auto_speak_threshold: Mapped[float] = mapped_column(
+        sa.Float, default=0.85, nullable=False)
+    #: none | pending | ready | failed | deleted
+    voice_status: Mapped[str] = mapped_column(
+        sa.String(16), default="none", nullable=False)
+    #: Silence in seconds before an utterance is considered finished. Tunable up to 4s:
+    #: default VAD cutting dysarthric speakers off mid-sentence is the single biggest
+    #: cause of abandonment in this product category.
+    endpoint_silence_seconds: Mapped[float] = mapped_column(
+        sa.Float, default=2.5, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        onupdate=utcnow, nullable=False)
+
+
+class PhraseCard(Base):
+    """One tile on the patient's board. One tap speaks it."""
+
+    __tablename__ = "phrase_cards"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(sa.String(200), nullable=False)
+    lang: Mapped[str] = mapped_column(sa.String(8), default="en", nullable=False)
+    icon: Mapped[str | None] = mapped_column(sa.String(32))
+    category: Mapped[str] = mapped_column(sa.String(32), default="general", nullable=False)
+    slot: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+    #: Cards sort by use, so what matters surfaces without the patient hunting for it.
+    use_count: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+    #: Emergency cards are pre-rendered and cached, and never reordered away.
+    is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)
+
+
+class VoiceSample(Base):
+    """Metadata for a family-archive clip used to build the voice.
+
+    Deliberately metadata ONLY — duration, status, consent. The audio itself never enters
+    this database. See DECISIONS D-014 for why that upload is a documented exception to
+    INV-1 rather than a hole in it.
+    """
+
+    __tablename__ = "voice_samples"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: Where the caregiver said it came from, e.g. "wedding video".
+    provenance: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    #: uploaded | training | ready | failed | deleted
+    status: Mapped[str] = mapped_column(sa.String(16), default="uploaded", nullable=False)
+    consent_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    #: Recorded when the source audio is destroyed after training.
+    audio_deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)
+
+
+class UtteranceLog(Base):
+    """What was spoken, and whether the patient confirmed it first.
+
+    The `confirmed` column is the audit trail for INV-9: it must be possible to show, after
+    the fact, that nothing was ever spoken on an aphasic patient's behalf unconfirmed.
+    """
+
+    __tablename__ = "utterance_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(sa.String(500), nullable=False)
+    lang: Mapped[str] = mapped_column(sa.String(8), default="en", nullable=False)
+    card_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("phrase_cards.id", ondelete="SET NULL"))
+    #: auto | confirm
+    mode: Mapped[str] = mapped_column(sa.String(16), nullable=False)
+    #: True when the patient explicitly chose this before it was spoken.
+    confirmed: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(sa.Float)
+    is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    ts: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
+        nullable=False)

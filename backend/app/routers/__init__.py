@@ -1,4 +1,9 @@
 """HTTP routers — TRD §9."""
-from . import auth, clinical_data, dashboard, demo, patients, safety, sessions
+from . import (
+    asha, auth, awaaz, clinical_data, dashboard, demo, patients, safety, sessions, wearable,
+)
 
-__all__ = ["auth", "clinical_data", "dashboard", "demo", "patients", "safety", "sessions"]
+__all__ = [
+    "asha", "auth", "awaaz", "clinical_data", "dashboard", "demo", "patients", "safety",
+    "sessions", "wearable",
+]
