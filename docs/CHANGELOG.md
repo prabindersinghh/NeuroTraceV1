@@ -67,6 +67,28 @@ because prose continues in lowercase or a comma. Narrowing a safety check is exa
 that check needs tests of its own, so the distinction is now pinned by 11 parametrised cases
 covering both directions.
 
+### Merge with a collaborator's parallel fix
+`origin/main` had moved: another contributor had independently fixed the same MediaPipe
+bug (the script pointed at `@mediapipe/tasks-vision@0.10.22`, a version that was never
+published, so every fetch 404'd). Both fixes copy the wasm out of `node_modules`.
+
+Merged, not force-pushed — their commit stays in history. The file resolved to our version,
+and the difference is worth recording because it is the same hazard twice: theirs keeps a
+CDN fallback behind a hand-written `TASKS_VISION_VERSION = "1.0.1"` string. A hand-pinned
+version *is* what broke: it is a second source of truth that can disagree with the lockfile
+and only fails at runtime. Ours resolves the package with `require.resolve`, reads the
+installed version, and has no version literal to drift.
+
+Also kept from ours and absent from theirs: SHA-256 + byte-size verification of the model
+(a silently swapped landmarker moves every patient baseline), `NEUROTRACE_MODEL_PATH` /
+`_URL` for fully-offline or mirrored installs, size-difference re-copy so bumping the
+dependency actually restages, and an assertion that both the SIMD and non-SIMD builds are
+present — `FilesetResolver` picks between them at load time from what the browser reports,
+so a missing one breaks capture on exactly the low-end devices this product targets.
+
+Verified from a clean slate — `rm -rf public/mediapipe && node scripts/fetch-mediapipe.mjs`
+→ exit 0, 6 wasm files staged from `@mediapipe/tasks-vision@1.0.1`, model checksum matched.
+
 ### Verification
 Frontend `npm run build` exit 0. `preflight_push.sh` **7 passed, 0 failed**. Full backend
 suite result recorded below by exit code.
