@@ -14,7 +14,7 @@
  * a third party sees a request every time someone opens the camera.
  */
 import { createWriteStream } from "node:fs";
-import { access, mkdir } from "node:fs/promises";
+import { access, copyFile, mkdir, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -22,19 +22,21 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "public", "mediapipe");
+const LOCAL_WASM_DIR = join(ROOT, "node_modules", "@mediapipe", "tasks-vision", "wasm");
 
-// Pinned. An unpinned runtime would change the landmark output from under the baselines.
-const TASKS_VISION_VERSION = "0.10.22";
+// Pinned to match package.json dependencies
+const TASKS_VISION_VERSION = "1.0.1";
 const CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
 const MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-const FILES = [
-  [`${CDN}/vision_wasm_internal.js`, "wasm/vision_wasm_internal.js"],
-  [`${CDN}/vision_wasm_internal.wasm`, "wasm/vision_wasm_internal.wasm"],
-  [`${CDN}/vision_wasm_nosimd_internal.js`, "wasm/vision_wasm_nosimd_internal.js"],
-  [`${CDN}/vision_wasm_nosimd_internal.wasm`, "wasm/vision_wasm_nosimd_internal.wasm"],
-  [MODEL, "face_landmarker.task"],
+const WASM_FILES = [
+  "vision_wasm_internal.js",
+  "vision_wasm_internal.wasm",
+  "vision_wasm_nosimd_internal.js",
+  "vision_wasm_nosimd_internal.wasm",
+  "vision_wasm_module_internal.js",
+  "vision_wasm_module_internal.wasm",
 ];
 
 async function exists(path) {
@@ -46,10 +48,9 @@ async function exists(path) {
   }
 }
 
-async function download(url, relative) {
-  const target = join(OUT, relative);
+async function download(url, target) {
   if (await exists(target)) {
-    console.log(`  skip  ${relative} (already present)`);
+    console.log(`  skip  ${target.replace(ROOT + "/", "")} (already present)`);
     return;
   }
   await mkdir(dirname(target), { recursive: true });
@@ -58,11 +59,38 @@ async function download(url, relative) {
     throw new Error(`${res.status} ${res.statusText} for ${url}`);
   }
   await pipeline(Readable.fromWeb(res.body), createWriteStream(target));
-  console.log(`  got   ${relative}`);
+  console.log(`  got   ${target.replace(ROOT + "/", "")}`);
+}
+
+async function syncWasm() {
+  const wasmOut = join(OUT, "wasm");
+  await mkdir(wasmOut, { recursive: true });
+
+  const hasLocal = await exists(LOCAL_WASM_DIR);
+  if (hasLocal) {
+    console.log("Copying WASM runtime from local node_modules/@mediapipe/tasks-vision/wasm ...");
+    const files = await readdir(LOCAL_WASM_DIR);
+    for (const file of files) {
+      const src = join(LOCAL_WASM_DIR, file);
+      const dest = join(wasmOut, file);
+      if (!(await exists(dest))) {
+        await copyFile(src, dest);
+        console.log(`  copied wasm/${file}`);
+      } else {
+        console.log(`  skip   wasm/${file} (already present)`);
+      }
+    }
+  } else {
+    console.log(`Fetching WASM runtime from CDN (@mediapipe/tasks-vision@${TASKS_VISION_VERSION}) ...`);
+    for (const file of WASM_FILES) {
+      await download(`${CDN}/${file}`, join(wasmOut, file));
+    }
+  }
 }
 
 console.log("Fetching MediaPipe assets into public/mediapipe ...");
-for (const [url, relative] of FILES) {
-  await download(url, relative);
-}
+await syncWasm();
+console.log("Fetching FaceMesh model ...");
+await download(MODEL, join(OUT, "face_landmarker.task"));
 console.log("Done. These are gitignored and precached by the service worker.");
+
