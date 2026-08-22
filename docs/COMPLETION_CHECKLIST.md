@@ -16,12 +16,12 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 3 | Fatigue instrumentation records elapsed time per task | **TEST** | 4 columns, migration 0008, applied to the dev DB |
 | 4 | Pause/resume works, does not invalidate a session | **TEST** | `paused_before_task` recorded; UI pause always visible |
 | 5 | Onboarding complete, scope disclosure unskippable | **TEST** | `Onboarding.tsx` — each of 5 limits ticked individually |
-| 6 | Every task: demo, spoken instruction, framing guide, quality check | **TEST** | `TaskShell` enforces DEMO→INSTRUCT→POSITION→COUNTDOWN→PERFORM→QUALITY→CONFIRM |
+| 6 | Every task: demo, spoken instruction, framing guide, quality check | **PARTIAL** | `TaskShell` enforces the full sequence. Manifest + shot list generated from `PROTOCOL`; **no clips filmed** - needs a person |
 | 7 | Fall-risk gate blocks the balance block | **TEST** | `FallRiskGate.tsx`, non-dismissible, skip is first-class |
 | 8 | Blue/white design across patient, caregiver, clinician | **LIVE** | Part 4 palette in `index.css`; `npm run build` exit 0 |
-| 9 | CCG trace renders and compares against baseline | **TEST** | `CcgTrace.tsx` renders; **baseline side-by-side NOT built** — see gaps |
+| 9 | CCG trace renders and compares against baseline | **TEST** | `CcgComparison.tsx` - side-by-side against the earliest capture in the locked window; reachable from the clinician dashboard (`CcgTrace` was previously an orphan component) |
 | 10 | Caregiver dashboard complete | **LIVE** | Exercised over HTTP against the seeded demo |
-| 11 | Clinician dashboard: audit log + PDF export | **PARTIAL** | Roster, typed cards, drift lane, audit table live. **PDF export not built** |
+| 11 | Clinician dashboard: audit log + PDF export | **TEST** | Roster, typed cards, drift lane, audit table live. `/report/:patientId` print view added - browser Save-as-PDF, not server-rendered (D-032) |
 | 12 | ASHA interface complete | **TEST** | `AshaHome.tsx` — offline queue, idempotent sync, task-level due lists |
 | 13 | Awaaz D1–D5 complete | **TEST** | D1 board/emergency/gate; D2 listener; D4 harvest; D5 convergence + frozen adapter |
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
@@ -37,13 +37,11 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 
 ## Known gaps, stated plainly
 
-**PDF export (item 11).** Not built. A clinician-facing PDF is a real deliverable and I
-prioritised the deploy runbook and the privacy audit above it. The report endpoint that
-would feed it (`/report/{patient_id}`) exists and returns structured data.
+**PDF export (item 11).** Built as a print view, not a server-side generator - see D-032
+for why that is the right trade here and what it costs (no scheduled or headless export).
 
-**CCG baseline comparison (item 9).** The trace renders with metrics and the partial-capture
-caveat, but not side-by-side against the patient's own earlier trace. The API returns one
-session; comparison needs a second fetch and a two-panel layout.
+**CCG baseline comparison (item 9).** Built. Note it is unavailable until a balance
+baseline locks, by design (D-033).
 
 **Demo videos (item 6).** `TaskShell` accepts and displays `demoSrc`, and the flow is built
 around it, but no clips have been recorded. Recording them needs a person to film.

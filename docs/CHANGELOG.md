@@ -4,6 +4,75 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-22 (deploy + PENDING closeout) - Railway/Vercel, three gaps closed, one crash found
+
+### The Railway build failure was a one-field setting, and the log said so
+Railpack listed `scripts/`, `.gitignore` and four `.md` files - the repository **root**,
+where there is no `requirements.txt` and no `Dockerfile`. `backend/railway.json` and
+`backend/Dockerfile` are never read, because Railway reads build config from the *service*
+root. Root Directory `backend` was already step 2 of the runbook; the build failed at
+exactly the step the runbook warns about, so the runbook now carries the failing log
+verbatim - which is the form the reader will actually be searching for.
+
+### A green build that would have shipped a dead camera
+`frontend/public/mediapipe` is gitignored, and `npm run build` never fetched it. On Vercel,
+`npm ci && npm run build` would have **succeeded** and produced a `dist` with no wasm and no
+face model - the exam deploys and the camera never initialises. Fixed with a `prebuild`
+hook, verified on a clean slate: `rm -rf public/mediapipe dist && npm run build` -> exit 0,
+`face_landmarker.task` 3,758,596 bytes, 6 wasm files, model precached by the service worker.
+
+### The privacy rule was matching directories only
+`*stroke report*/` - with a trailing slash. So `real stroke report.zip`, an archive of all
+22 photographs, was ignored **only** by `*.zip`, a build-artifact rule. Narrow that rule to
+keep a release archive and somebody's hospital records become stageable, silently. Two
+independent privacy rules now cover it, and a new test asserts the **attribution**, not just
+the outcome: whatever rule catches source material must itself be about source material.
+Probed against the old rule - it fails, naming `.gitignore:43:*.zip`.
+
+### PATTERN_ATYPICAL crashed the caregiver dashboard
+The frontend `Band` union was still `STABLE | WATCH | ALERT`. `BAND_STYLE[band]` returned
+undefined and `style.ring` threw - **for exactly the patient the laterality gate was built
+to protect.** Found by widening the union, which then immediately surfaced the same
+omission in the clinician roster. Both fixed, both now fall back rather than index blindly,
+and the band gets its own violet token: it is not a louder WATCH, it is a different finding
+pointing at a different referral, and putting it on the stable->watch->alert scale would say
+otherwise. Caregiver wording is "Worth a doctor's appointment", not "Please check on them".
+
+`DOMAIN_COLOURS` still keyed `speech_language`, dead since the domain split, so
+`motor_speech`, `language` and `posterior_vestibular` all fell through to the same default
+blue - a two-domain cross-modality finding drew as one line.
+
+### The clinician report described a two-gate engine
+It returned `gate1` and `gate2` and a method note that never mentioned laterality,
+PATTERN_ATYPICAL or the frozen reference. In a clinician-facing document that is not a
+cosmetic gap. All three gates are now returned per session with `lateralised_domains`, and
+the method note states the full rule.
+
+### Three PENDING items closed
+- **Clinician report** (`/report/:patientId`) - print-optimised, browser Save-as-PDF.
+  Deliberately not server-rendered: a patient's full history assembled into a binary on a
+  shared host is three more places for it to linger. The endpoint still returns JSON, so
+  server-side rendering stays available if a clinic ever needs scheduled exports.
+- **CCG baseline comparison** - `?reference=true` returns the earliest capture inside the
+  **locked** window, not the earliest ever: a first-ever attempt is where the patient was
+  still working out the task, and comparing against it manufactures an improvement. 409
+  when no baseline is locked, rather than substituting something plausible. Deltas show
+  direction and magnitude, never green/red - a smaller sway area can mean bracing.
+- **Demo clips** - manifest generated from `PROTOCOL` so filenames cannot drift from the
+  protocol, plus a shot list. A missing file resolves to `undefined` and the task still
+  runs, so clips can arrive one at a time.
+
+`CcgTrace` had never been rendered on any page. It and the new comparison are now reachable
+from the clinician dashboard.
+
+### Field-test kit
+`/diagnostics` (no login) measures what a phone actually delivers rather than what its spec
+sheet claims - camera fps at 60 and 30 requested via `requestVideoFrameCallback`, worst
+frame gap, wasm SIMD, sensors, storage - and emits copyable JSON with no identifier in it.
+`docs/FIELD_TEST_PROTOCOL.md` is the protocol around it.
+
+---
+
 ## 2026-08-22 (spec v4) — the daily protocol, fatigue instrumentation, deploy readiness
 
 ### The 21-step protocol is now a data structure, not a convention

@@ -339,6 +339,46 @@ async def test_the_report_endpoint_states_its_method_and_limits(client):
     assert body["fast"]["items"]
 
 
+async def test_the_report_states_all_three_gates_not_just_two(client):
+    """A clinician reading gate1 and gate2 with laterality missing draws a wrong conclusion.
+
+    The report predates Gate 3 and carried only the first two gates and a method note that
+    described a two-gate engine. An ALERT requires all three, and the third is the one that
+    separates a stroke pattern from a symmetric progressive one — so its absence was not a
+    cosmetic gap in a clinician-facing document.
+    """
+    token, _ = await register(client)
+    patient = await make_patient(client, token)
+    body = (await client.get(f"/report/{patient['id']}", headers=auth(token))).json()
+
+    note = body["method_note"]
+    assert "laterality" in note.lower(), "method note does not mention the laterality gate"
+    assert "PATTERN_ATYPICAL" in note, "method note does not explain the symmetric band"
+    assert "frozen reference" in note.lower(), "method note omits the frozen reference"
+
+    # The per-session shape has to carry it too, not just the prose.
+    for row in body["sessions"]:
+        assert {"gate1", "gate2", "gate3"} <= row.keys()
+        assert "lateralised_domains" in row
+
+
+async def test_a_reference_trace_is_refused_before_the_baseline_locks(client):
+    """409, not a substituted earliest-ever capture.
+
+    Comparing today against a patient's first-ever attempt manufactures an improvement:
+    that attempt is where they were still working out what was being asked of them. If
+    there is no locked window there is nothing legitimate to compare against, and the
+    honest answer is to say so.
+    """
+    token, _ = await register(client)
+    patient = await make_patient(client, token)
+
+    res = await client.get(f"/trace/{patient['id']}?reference=true", headers=auth(token))
+    assert res.status_code in (404, 409), res.status_code
+    if res.status_code == 409:
+        assert "baseline" in res.json()["detail"].lower()
+
+
 # --------------------------------------------------------------------------- access control
 async def test_another_caregiver_cannot_reach_the_patient(client):
     token, _ = await register(client)

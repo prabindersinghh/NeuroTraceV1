@@ -31,6 +31,25 @@ this runbook.
 
 ---
 
+### Order, if you are doing Vercel first
+
+The three services depend on each other in one direction only, and neither dependency
+blocks you from starting:
+
+```
+Neon ──DATABASE_URL──► Railway ──VITE_API_URL──► Vercel
+                          ▲                         │
+                          └──── FRONTEND_ORIGIN ────┘
+```
+
+Deploying Vercel first is fine. It builds and serves without a backend — it will just fail
+every API call until `VITE_API_URL` points somewhere real. Because that value is baked in at
+**build** time, setting it later requires a **redeploy**, not a restart. So the shortest path
+is: Vercel now (get the URL) → Neon → Railway (set `FRONTEND_ORIGIN` to the Vercel URL) →
+redeploy Vercel with `VITE_API_URL`. Two Vercel deploys, no waiting.
+
+---
+
 ## 1 · Neon
 
 1. Create a project at **https://neon.tech**.
@@ -54,7 +73,29 @@ cannot risk it, Neon's paid tier disables suspend.
 ## 2 · Railway
 
 1. New project at **https://railway.app** → *Deploy from GitHub repo* → this repo.
-2. Set **Root Directory** to `backend`. Railway then finds `Dockerfile` and `railway.json`.
+2. **Set Root Directory to `backend` BEFORE the first deploy.**
+   *Service → Settings → Source → Root Directory → `backend`* → then *Redeploy*.
+
+   > **If you skipped this, the first build fails and the log looks like:**
+   > ```
+   > [railway] prepare railpack-v0.37.0
+   >     ├── scripts/
+   >     ├── .gitignore
+   >     ├── CLINICAL_AMENDMENT_v3.md
+   >     ├── FINAL_PRODUCT_SPEC_v4.md
+   >     ├── README.md
+   >     └── TASK_CLINICAL_SOURCE_REVIEW.md
+   > Failed to build an image.
+   > ```
+   > That list is the whole diagnosis: Railway is looking at the repository **root**, where
+   > there is no `requirements.txt` and no `Dockerfile`, so railpack cannot tell what this
+   > project is. `backend/Dockerfile` and `backend/railway.json` are never read, because
+   > Railway only reads build config from the service root. Nothing is wrong with the code
+   > — it is a one-field setting, and a redeploy after setting it is all that is needed.
+   >
+   > The `Dockerfile` does `COPY requirements.txt .`, so its build context **must** be
+   > `backend/`. Do not try to fix this by pointing a root-level config at
+   > `backend/Dockerfile` — the context would be the repo root and every `COPY` would miss.
 3. Set these variables. **Names only — never paste values into chat, tickets, or docs:**
 
 | Variable | What goes in it |
@@ -108,14 +149,43 @@ Exit 0 = every check passed.
 
 ## 6 · Frontend
 
+### Vercel (recommended)
+
+*New Project* → this repo → then **three settings, all of which matter**:
+
+| Setting | Value | Why |
+|---|---|---|
+| **Root Directory** | `frontend` | same trap as Railway — the repo root is not the app |
+| **Framework Preset** | Vite | `frontend/vercel.json` already pins build/output/install |
+| **Environment Variable** | `VITE_API_URL` = your Railway URL, no trailing slash | baked in at build time, so changing it later needs a **redeploy**, not a restart |
+
+Then set `FRONTEND_ORIGIN` on the **backend** to the Vercel URL and redeploy the backend, or
+CORS rejects every request and the app looks broken in a way the browser console explains
+and the UI does not.
+
+**The MediaPipe assets are fetched at build time, not committed.** `frontend/public/mediapipe`
+is gitignored, so a fresh clone has zero of those files. `npm run build` triggers `prebuild`
+→ `fetch-mediapipe.mjs`, which copies the wasm out of `node_modules` and downloads the
+FaceMesh model with a SHA-256 check.
+
+> This is worth understanding rather than trusting. Before the `prebuild` hook existed,
+> `npm ci && npm run build` on a clean checkout **succeeded** and produced a `dist` with no
+> wasm and no model — a green build and a dead camera on the deployed site. If you ever see
+> the exam load but the camera never initialise, check `dist/mediapipe/` first.
+
+Verified on a clean slate (`rm -rf public/mediapipe dist && npm run build`): exit 0,
+`dist/mediapipe/face_landmarker.task` 3,758,596 bytes, 6 wasm files, model precached by the
+service worker.
+
+### Manual / static host
+
 ```bash
 cd frontend
 npm ci
-npm run fetch:mediapipe        # stages wasm from node_modules + the FaceMesh model
-VITE_API_URL=https://<your-app>.up.railway.app npm run build
+VITE_API_URL=https://<your-app>.up.railway.app npm run build   # prebuild stages MediaPipe
 ```
 
-Deploy `frontend/dist` to Vercel or a Railway static service.
+Deploy `frontend/dist` to any static host.
 
 **HTTPS is mandatory** — `getUserMedia` (camera and microphone) is refused on plain HTTP by
 every modern browser, so the entire exam is dead without it. Both Railway and Vercel give

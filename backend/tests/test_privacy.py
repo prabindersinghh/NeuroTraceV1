@@ -339,3 +339,33 @@ def test_detector_catches_a_label_followed_by_a_value(line):
 def test_detector_ignores_a_label_used_in_prose(line):
     for m in IDENTIFIER_LABELS.finditer(line):
         assert not _carries_a_value(line[m.end():]), f"false positive on {line!r}"
+
+
+# ------------------------------------------------- the ignore rule must be the PRIVACY rule
+def test_source_material_is_ignored_by_a_privacy_rule_not_a_build_rule():
+    """Being ignored is not enough — it has to be ignored ON PURPOSE.
+
+    `real stroke report.zip` is an archive of all 22 photographs. For a while it was
+    ignored only by `*.zip`, a build-artifact rule, because the privacy rule was written
+    `*stroke report*/` — with a trailing slash, which matches directories only. Narrowing
+    `*.zip` (to keep a release archive, say) would have silently made somebody's hospital
+    records stageable, and nothing would have said so.
+
+    So this asserts the ATTRIBUTION, not just the outcome: whatever rule catches source
+    material must itself be about source material.
+    """
+    candidates = [p for p in REPO.iterdir() if "stroke report" in p.name.lower()]
+    if not candidates:
+        pytest.skip("no source material on this machine — nothing to attribute")
+
+    for path in candidates:
+        out = subprocess.run(
+            ["git", "check-ignore", "-v", "--", str(path)],
+            cwd=REPO, capture_output=True, text=True, check=False,
+        )
+        assert out.returncode == 0, f"{path.name} is NOT ignored at all"
+        rule = out.stdout.split("	")[0]          # "<file>:<line>:<pattern>"
+        assert "stroke report" in rule.lower(), (
+            f"{path.name} is ignored by {rule!r} — an incidental rule, not the privacy "
+            "rule. If that rule is ever narrowed, the photographs become stageable."
+        )

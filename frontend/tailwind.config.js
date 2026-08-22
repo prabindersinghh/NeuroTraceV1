@@ -21,6 +21,7 @@ export default {
         stable: { DEFAULT: "hsl(var(--stable))", soft: "hsl(var(--stable-soft))" },
         watch: { DEFAULT: "hsl(var(--watch))", soft: "hsl(var(--watch-soft))" },
         alert: { DEFAULT: "hsl(var(--alert))", soft: "hsl(var(--alert-soft))" },
+        atypical: { DEFAULT: "hsl(var(--atypical))", soft: "hsl(var(--atypical-soft))" },
       },
       borderRadius: {
         lg: "var(--radius)",

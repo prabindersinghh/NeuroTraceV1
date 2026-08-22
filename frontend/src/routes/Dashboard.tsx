@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { CcgComparison } from "@/components/CcgComparison";
 import { DomainChart } from "@/components/DomainChart";
 import { EmergencyButton } from "@/components/EmergencyButton";
 import { FastCard } from "@/components/FastCard";
@@ -34,11 +35,19 @@ const BAND_STYLE: Record<Band, { ring: string; bg: string; text: string }> = {
   STABLE: { ring: "border-stable/35", bg: "bg-stable-soft", text: "text-stable" },
   WATCH: { ring: "border-watch/40", bg: "bg-watch-soft", text: "text-watch" },
   ALERT: { ring: "border-alert/40", bg: "bg-alert-soft", text: "text-alert" },
+  PATTERN_ATYPICAL: {
+    ring: "border-atypical/40", bg: "bg-atypical-soft", text: "text-atypical",
+  },
 };
 
 const DOMAIN_COLOURS: Record<string, string> = {
   cranial_nerves: "hsl(262 60% 48%)",
-  speech_language: "hsl(221 70% 40%)",
+  // motor_speech and language were one `speech_language` key before the domain split.
+  // Leaving the dead key here meant three domains all fell through to the default blue,
+  // which made a two-domain cross-modality finding look like one line on the chart.
+  motor_speech: "hsl(221 70% 40%)",
+  language: "hsl(205 72% 46%)",
+  posterior_vestibular: "hsl(172 60% 32%)",
   motor: "hsl(190 75% 34%)",
   cognition: "hsl(28 80% 45%)",
   coordination_gait: "hsl(340 60% 45%)",
@@ -84,11 +93,19 @@ export function Dashboard() {
   }
 
   const band: Band = data.latest?.band ?? "STABLE";
-  const style = BAND_STYLE[band];
+  // Fall back rather than index blindly: a band added server-side before the frontend
+  // knows about it should degrade to a neutral card, not throw on `style.ring`.
+  const style = BAND_STYLE[band] ?? BAND_STYLE.STABLE;
   const explanation =
     lang === "en" ? data.latest?.explanation_en : data.latest?.explanation_hi;
   const bandLabel =
-    band === "STABLE" ? t("bandStable") : band === "WATCH" ? t("bandWatch") : t("bandAlert");
+    band === "STABLE"
+      ? t("bandStable")
+      : band === "WATCH"
+        ? t("bandWatch")
+        : band === "PATTERN_ATYPICAL"
+          ? t("bandAtypical")
+          : t("bandAlert");
   const readOnly = user?.role === "clinician";
   const confounders = data.latest?.confounders_json;
   const confounderLabels = lang === "en" ? confounders?.labels_en : confounders?.labels_hi;
@@ -229,8 +246,8 @@ export function Dashboard() {
                           <span
                             className={cn(
                               "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold",
-                              BAND_STYLE[row.band].bg,
-                              BAND_STYLE[row.band].text,
+                              (BAND_STYLE[row.band] ?? BAND_STYLE.STABLE).bg,
+                              (BAND_STYLE[row.band] ?? BAND_STYLE.STABLE).text,
                             )}
                           >
                             {row.baseline_phase ? "—" : row.band}
@@ -289,6 +306,29 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Balance trace. Rendered for clinicians only — a caregiver reading a sway plot
+          without a reference frame draws conclusions from ordinary day-to-day variation,
+          which is precisely what the band card exists to do for them instead. */}
+      {readOnly && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Balance trace</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CcgComparison patientId={patientId} />
+          </CardContent>
+        </Card>
+      )}
+
+      {readOnly && (
+        <Link
+          to={`/report/${patientId}`}
+          className={cn(buttonVariants({ variant: "outline" }), "mt-6 min-h-12 w-full")}
+        >
+          Open printable report
+        </Link>
+      )}
 
       {/* TRD §8: unconditional, on every dashboard. */}
       <FastCard card={data.fast} className="mt-6" />

@@ -175,6 +175,22 @@ calibration target we cannot reproduce is not a calibration target.
 `inspect.getsource` grepping produced a false INV-2 failure from a stale `.pyc`. An
 invariant that cries wolf gets disabled, which is worse than not having it.
 
+**D-033 · 2026-08-22 · The CCG reference is the earliest capture in the LOCKED window.**
+Not the earliest ever. A first-ever attempt is where the patient is still working out what
+is being asked of them, so comparing today against it manufactures an improvement that never
+happened. No locked baseline -> 409, not a substitute.
+
+**D-032 · 2026-08-22 · The clinician report is printed by the browser, not generated on the
+server.** Server-side rendering would assemble a patient's full history into a binary on a
+shared host, write it to a temp file, and hand it back through a download URL - three more
+places for it to linger on infrastructure we do not control. `/report/{id}` still returns
+JSON, so a server-side renderer remains possible if scheduled exports are ever needed.
+
+**D-031 · 2026-08-22 · PATTERN_ATYPICAL gets its own colour token, off the severity scale.**
+Putting it between WATCH and ALERT would say it is a worse WATCH. It is not; it is a
+different finding pointing at a different referral, and the caregiver wording ("Worth a
+doctor's appointment") has to match.
+
 **D-030 · 2026-08-22 · INV-11 flags a label only when a value follows it.**
 The guard fired on seven lines that were *prohibitions* — the rule naming the labels it
 forbids. Exempting those files was the wrong fix: a check that fires on the sentence

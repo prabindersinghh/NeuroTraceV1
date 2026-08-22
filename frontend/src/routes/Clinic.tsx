@@ -26,6 +26,7 @@ const BAND_STYLE: Record<Band, string> = {
   STABLE: "bg-stable-soft text-stable",
   WATCH: "bg-watch-soft text-watch",
   ALERT: "bg-alert-soft text-alert",
+  PATTERN_ATYPICAL: "bg-atypical-soft text-atypical",
 };
 
 export function Clinic() {

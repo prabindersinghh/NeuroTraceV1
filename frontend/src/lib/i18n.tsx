@@ -215,6 +215,15 @@ const STRINGS = {
   bandStable: { en: "As usual", hi: "रोज़ जैसा", pa: "ਰੋਜ਼ ਵਾਂਗ" },
   bandWatch: { en: "Worth watching", hi: "ध्यान देने योग्य", pa: "ਧਿਆਨ ਦੇਣ ਯੋਗ" },
   bandAlert: { en: "Please check on them", hi: "उनका हाल देखें", pa: "ਉਹਨਾਂ ਦਾ ਹਾਲ ਦੇਖੋ" },
+  // Not a louder ALERT. The change here is on both sides of the body, which is not the
+  // pattern a stroke makes — so the wording sends them to an appointment, not to a check
+  // on someone right now. Saying "please check on them" would be the wrong urgency AND
+  // point at the wrong condition.
+  bandAtypical: {
+    en: "Worth a doctor's appointment",
+    hi: "डॉक्टर से मिलने का समय लें",
+    pa: "ਡਾਕਟਰ ਨਾਲ ਮਿਲਣ ਦਾ ਸਮਾਂ ਲਵੋ",
+  },
   confidence: { en: "Confidence", hi: "विश्वास", pa: "ਭਰੋਸਾ" },
   becauseOf: { en: "Bear in mind", hi: "ध्यान रखें", pa: "ਧਿਆਨ ਰੱਖੋ" },
   domainTrends: { en: "What we measure", hi: "हम क्या मापते हैं", pa: "ਅਸੀਂ ਕੀ ਮਾਪਦੇ ਹਾਂ" },

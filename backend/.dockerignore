@@ -1,0 +1,16 @@
+# The build context is uploaded to the builder before the Dockerfile runs, so anything
+# excluded here never leaves this machine. The dev database is the reason this file exists:
+# it holds seeded demo data and has no business anywhere near a deployed image.
+neurotrace.sqlite3
+*.sqlite3
+*.sqlite3-journal
+media/
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tools/

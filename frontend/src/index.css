@@ -39,6 +39,11 @@
     --watch-soft: 38 80% 95%;
     --alert: 4 55% 51%;                /* #C8453A */
     --alert-soft: 4 70% 96%;
+    /* PATTERN_ATYPICAL. Deliberately not on the stable→watch→alert scale: it is not a
+       worse WATCH, it is a different finding that points at a different referral. Violet
+       reads as "other", where any warmer colour would read as "more urgent". */
+    --atypical: 268 45% 52%;           /* #7B54C0 */
+    --atypical-soft: 268 60% 97%;
     --atypical: 253 38% 59%;           /* #7A6BC4 — PATTERN_ATYPICAL */
     --atypical-soft: 253 50% 96%;
 

@@ -154,7 +154,13 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
         "sessions": [
             {"date": ts.isoformat(), "band": s.band.value, "reason": s.reason,
              "domain_deviations": s.domain_devs_json,
-             "gate1": s.gate1_passed, "gate2": s.gate2_passed,
+             # All THREE gates. Showing gate1 and gate2 while omitting laterality would
+             # let a clinician read an ALERT as though two gates produced it, when the
+             # laterality requirement is the one that separates a stroke pattern from a
+             # symmetric progressive one.
+             "gate1": s.gate1_passed, "gate2": s.gate2_passed, "gate3": s.gate3_passed,
+             "lateralised": s.lateralised,
+             "lateralised_domains": s.lateralised_domains or [],
              "confidence": s.confidence,
              "confounders": (s.confounders_json or {}).get("active", []),
              "clinician_note": s.reason}
@@ -162,9 +168,17 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
         ],
         "method_note": (
             "All deviations are computed against this patient's own median/MAD baseline "
-            "using a robust z-score and a Reliable Change Index. An ALERT requires two "
-            "independent domains to exceed threshold across two consecutive valid "
-            "sessions. This is a monitoring aid and does not constitute a diagnosis."
+            "using a robust z-score and a Reliable Change Index. An ALERT requires all "
+            "three gates: persistence (two consecutive valid sessions), cross-modality "
+            "(two independent domains above threshold), and laterality (at least one "
+            "persistent domain one-sided, sustained across the window). Change that is "
+            "persistent and cross-modal but SYMMETRIC is reported as PATTERN_ATYPICAL "
+            "rather than ALERT — that combination is characteristic of a progressive "
+            "movement disorder rather than a vascular event, and it warrants a different "
+            "referral. Every session is additionally scored against a frozen reference "
+            "baseline snapshot taken at lock, because the adaptive baseline extrapolates "
+            "the recovery trajectory forward and a slow decline can track it unseen. "
+            "This is a monitoring aid and does not constitute a diagnosis."
         ),
         "fast": fast_card("en"),
     }
@@ -172,8 +186,16 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
 
 @router.get("/trace/{patient_id}")
 async def movement_trace(patient: AuthorisedPatient, db: Session,
-                         session_id: uuid.UUID | None = None) -> dict:
-    """The craniocorpography movement trace — latest session, or a named one.
+                         session_id: uuid.UUID | None = None,
+                         reference: bool = False) -> dict:
+    """The craniocorpography movement trace — latest session, a named one, or the reference.
+
+    `reference=true` returns the EARLIEST capture inside the locked baseline window, which
+    is the trace the current one should be read against. Not simply the earliest capture
+    ever: a first-ever attempt is where the patient is still learning what is being asked
+    of them, and comparing today against somebody's first confused attempt manufactures an
+    improvement that did not happen. If no baseline is locked yet there is nothing
+    legitimate to compare against, and this says so rather than substituting a guess.
 
     This is the output a vestibular specialist reads first. A clinical CCG apparatus films
     the patient stepping with their eyes closed and plots how the head travelled; the
@@ -183,19 +205,40 @@ async def movement_trace(patient: AuthorisedPatient, db: Session,
     from sqlalchemy import select
 
     from ..exam.registry import MODULES
-    from ..models import ExamSession, ModuleResult
+    from ..models import Baseline, ExamSession, ModuleResult
 
     stmt = (
         select(ModuleResult, ExamSession.ts)
         .join(ExamSession, ModuleResult.session_id == ExamSession.id)
         .where(ExamSession.patient_id == patient.id, ModuleResult.module_code == "M9")
-        .order_by(ExamSession.ts.desc())
     )
+    if reference:
+        window = (await db.scalars(
+            select(Baseline).where(Baseline.patient_id == patient.id,
+                                   Baseline.module_code == "M9",
+                                   Baseline.locked.is_(True))
+        )).first()
+        if window is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "No locked balance baseline yet, so there is no reference trace to "
+                "compare against. Comparing against an unlocked window would compare "
+                "today against a moving target.",
+            )
+        if window.window_start is not None:
+            stmt = stmt.where(ExamSession.ts >= window.window_start)
+        if window.window_end is not None:
+            stmt = stmt.where(ExamSession.ts <= window.window_end)
+        stmt = stmt.order_by(ExamSession.ts.asc())
+    else:
+        stmt = stmt.order_by(ExamSession.ts.desc())
     if session_id is not None:
         stmt = stmt.where(ModuleResult.session_id == session_id)
     row = (await db.execute(stmt.limit(1))).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "No balance capture recorded in the baseline window"
+                            if reference else
                             "No balance capture recorded for this patient yet")
 
     result, ts = row
@@ -208,6 +251,7 @@ async def movement_trace(patient: AuthorisedPatient, db: Session,
         "patient_id": str(patient.id),
         "session_id": str(result.session_id),
         "date": ts.isoformat(),
+        "is_reference": reference,
         "units": "cm",
         "traces": trace.get("traces", {}),
         "metrics": {

@@ -17,21 +17,22 @@ import type {
   AuthResponse,
   Battery,
   ClinicPatientRow,
-  FallEvent,
-  WearableReading,
   Dashboard,
+  ExamReport,
   ExamSession,
+  FallEvent,
   FastCard,
   FinalizeResult,
   Instrument,
-  QuestionnaireResult,
   Lang,
   ModuleFeatures,
   ModuleResult,
   Patient,
+  QuestionnaireResult,
   Role,
   SessionType,
   TokenPair,
+  WearableReading,
 } from "./types";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
@@ -232,9 +233,20 @@ export const api = {
   }) => request<AshaSessionResult>("/asha/session", { method: "POST", json: payload }),
 
   // --- craniocorpography trace ---
-  movementTrace: (patientId: string, sessionId?: string) =>
-    request<import("../components/CcgTrace").CcgTraceData>(
-      `/trace/${patientId}` + (sessionId ? `?session_id=${sessionId}` : "")),
+  movementTrace: (patientId: string, opts: { sessionId?: string; reference?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.sessionId) q.set("session_id", opts.sessionId);
+    // The reference is the earliest capture INSIDE the locked baseline window, not the
+    // earliest ever — see the endpoint. 409 when no baseline is locked, which the caller
+    // must show as "not comparable yet" rather than falling back to something else.
+    if (opts.reference) q.set("reference", "true");
+    const qs = q.toString();
+    return request<import("../components/CcgTrace").CcgTraceData>(
+      `/trace/${patientId}` + (qs ? `?${qs}` : ""));
+  },
+
+  examReport: (patientId: string) =>
+    request<ExamReport>(`/report/${patientId}`),
 
   // --- sessions ---
   battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),

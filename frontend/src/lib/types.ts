@@ -1,5 +1,9 @@
 export type Role = "patient" | "caregiver" | "clinician";
-export type Band = "STABLE" | "WATCH" | "ALERT";
+/** PATTERN_ATYPICAL is a real band the engine emits, not a placeholder: persistent,
+ *  cross-modal, but SYMMETRIC change. Leaving it out of this union is how the dashboard
+ *  came to crash on it — `BAND_STYLE[band]` returned undefined and `style.ring` threw,
+ *  for exactly the patient the laterality gate exists to protect. */
+export type Band = "STABLE" | "WATCH" | "ALERT" | "PATTERN_ATYPICAL";
 export type Lang = "en" | "hi" | "pa";
 export type SessionType = "daily" | "weekly" | "monthly";
 export type BaselineState = "not_started" | "collecting" | "locked";
@@ -315,4 +319,46 @@ export interface AshaSessionResult {
   modules_rejected: string[];
   created: boolean;
   detail: string;
+}
+
+/** `GET /report/{id}` — drives both the on-screen clinician view and the printed export. */
+export interface ExamReport {
+  patient: {
+    id: string;
+    name: string;
+    age: number | null;
+    sex: string | null;
+    stroke_side: string;
+    stroke_date: string | null;
+    enrolment_date: string;
+    baseline_state: string;
+  };
+  baselines: {
+    module_code: string;
+    locked: boolean;
+    n_sessions: number;
+    /** Captures thrown out for quality. A baseline of 12 with 20 rejections is not the
+     *  same object as one with none, so the report shows it. */
+    n_rejected: number;
+    n_discarded: number;
+    window_start: string | null;
+    window_end: string | null;
+  }[];
+  sessions: {
+    date: string;
+    band: string;
+    reason: string;
+    domain_deviations: Record<string, number> | null;
+    /** All three gates. An ALERT needs every one of them, laterality included. */
+    gate1: boolean;
+    gate2: boolean;
+    gate3: boolean;
+    lateralised: boolean;
+    lateralised_domains: string[];
+    confidence: number;
+    confounders: string[];
+    clinician_note: string;
+  }[];
+  method_note: string;
+  fast: unknown;
 }

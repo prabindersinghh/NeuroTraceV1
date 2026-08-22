@@ -58,7 +58,12 @@ data/raw/
 # asset, the cost of a false negative is publishing someone's medical records to GitHub.
 #
 # Enforced by tests/test_privacy.py, which fails the build if any of them becomes tracked.
-*stroke report*/
+# Source medical photographs. NO TRAILING SLASH — it used to be `*stroke report*/`, which
+# matches directories only, so `real stroke report.zip` (an archive of all 22 photographs)
+# was ignored solely by the `*.zip` build-artifact rule above. Narrow or remove that rule
+# and somebody's hospital records become stageable. Two independent rules now cover it.
+*stroke report*
+*stroke report*.zip
 *.jpeg
 *.jpg
 
