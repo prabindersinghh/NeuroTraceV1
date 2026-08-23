@@ -71,15 +71,20 @@ async def run_migrations_online() -> None:
         await connection.run_sync(_do_migrations)
     await engine.dispose()
 
-    # Now verify, on a connection that DOES enforce, that nothing was left dangling.
-    checker = create_async_engine(_url(), future=True)
-    async with checker.connect() as connection:
-        await connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-        rows = list(await connection.exec_driver_sql("PRAGMA foreign_key_check"))
-    await checker.dispose()
-    if rows:
-        raise RuntimeError(
-            f"migration left {len(rows)} dangling foreign-key row(s): {rows[:5]}")
+    # The integrity re-check is a SQLite affair. PRAGMA is not SQL Postgres understands —
+    # it raises PostgresSyntaxError — and Postgres does not need it anyway: it enforced
+    # every foreign key throughout the migration, which is exactly what this re-check is
+    # compensating for on SQLite. Running it unconditionally is what broke the Neon boot
+    # one fix after `WHERE locked = 1`.
+    if _url().startswith("sqlite"):
+        checker = create_async_engine(_url(), future=True)
+        async with checker.connect() as connection:
+            await connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            rows = list(await connection.exec_driver_sql("PRAGMA foreign_key_check"))
+        await checker.dispose()
+        if rows:
+            raise RuntimeError(
+                f"migration left {len(rows)} dangling foreign-key row(s): {rows[:5]}")
 
 
 def run_migrations_sync_sqlite() -> None:

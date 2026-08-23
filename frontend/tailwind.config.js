@@ -7,6 +7,12 @@ export default {
     extend: {
       colors: {
         border: "hsl(var(--border))",
+        // `line` and `surface` are used across the app (TaskShell, FallRiskGate, the
+        // landing, every card) and were never defined here — so `border-line` fell back
+        // to currentColor and `bg-surface` painted nothing at all. Named here so the
+        // classes mean what they say.
+        line: "hsl(var(--border))",
+        surface: "hsl(var(--muted))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
