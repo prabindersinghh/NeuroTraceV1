@@ -50,7 +50,12 @@ def upgrade() -> None:
                reference_mad_json    = mad_json,
                reference_n_sessions  = n_sessions,
                reference_locked_at   = COALESCE(window_end, updated_at)
-         WHERE locked = 1 AND reference_locked_at IS NULL
+         -- `locked = true`, not `= 1`. SQLite stores booleans as integers and accepts
+         -- either; Postgres rejects `boolean = integer` outright with UndefinedFunction.
+         -- This migration ran clean on SQLite for weeks and broke the first Neon boot.
+         -- Rendering with `alembic upgrade --sql` cannot catch it: the text is literal,
+         -- so it renders identically and only fails when a real Postgres parses it.
+         WHERE locked = true AND reference_locked_at IS NULL
         """
     )
 
