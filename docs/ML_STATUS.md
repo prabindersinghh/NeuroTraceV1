@@ -5,7 +5,10 @@ One table. Every model. One column that says REAL DATA or SYNTHETIC, with no amb
 We will be asked this, and the honest answer is better than a good-looking one. Paraspeak
 published their word error rate and won on it.
 
-**Last verified:** August 2026, by running every pipeline and reading its metrics file.
+**Last verified:** 2026-08-23, by running every pipeline and reading its metrics file.
+The face identity check was added the same day and is listed here for the same reason
+everything else is: it makes a decision about a patient off a threshold, and the threshold
+is not calibrated on real data.
 
 ---
 
@@ -18,11 +21,28 @@ published their word error rate and won on it.
 | `asymmetry_discriminator` | **SYNTHETIC** | 0.976 (meaningless) | the empirical basis for Gate 3 | mPower — **publicly available after certification** |
 | `personalised_asr_adapter` | **SYNTHETIC** | — | per-patient Awaaz ASR | harvested pairs from a real patient |
 | `voice_clone` | **SYNTHETIC** | — | family-archive voice for Awaaz | a consented 2-minute clip |
+| `face_identity` (not a model — a threshold) | **SYNTHETIC CALIBRATION** | — | same-person check; flags a session as a confounder | enrolment pairs from real households |
 
 **Every model is currently synthetic.** The AUCs above are produced by generated data whose
 classes were separated by construction; they measure nothing except that the pipeline runs
 end to end. Every metrics file carries `"synthetic": true` or a limitations note beginning
 `SYNTHETIC RUN`, so no artefact can be mistaken for evidence.
+
+### The identity check is not a model, and is listed anyway
+
+`face_identity` is six ratios between bone-structure landmarks compared to an enrolment
+vector — no network, no training, no artefact. It appears in this table because it does the
+thing this document exists to police: it makes a call about a patient from a number
+(`VERIFY_THRESHOLD = 0.45`, `z / 12` scaling) that was set against **synthetic geometry
+only** — a same-person case, a facial-weakness case and a clearly-different-face case in
+`identity.test.ts`. The separation between "same person in worse light" and "different
+person" in the field is unmeasured.
+
+Its blocker is internal rather than a dataset request: enrolment pairs from real households
+and a look at how often the flag fires in the pilot. Until then it errs deliberately loose,
+because the cheap error is letting a session through unflagged and the expensive one is
+accusing a patient. It flags, never blocks — so a miscalibration costs a confounder, not a
+locked-out survivor. D-015, D-017.
 
 ### Two of these have no external blocker
 
@@ -49,6 +69,7 @@ probe.
 | 4 | JS↔Python feature parity | ✅ `parity.test.ts`, relative tolerance 1e-9 |
 | 5 | FPS honesty in saccade velocity | ✅ sample below |
 | 6 | SLM guardrail: band match, forbidden tokens, fallback | ✅ 71 tests in `test_safety_slm.py` |
+| 7 | Identity threshold declared synthetic wherever it appears | ✅ source comment, this table, D-017 |
 
 ### 5 · FPS honesty — sample output
 
