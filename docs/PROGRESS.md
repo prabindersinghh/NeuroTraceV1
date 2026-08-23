@@ -2,10 +2,14 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-23 · DEPLOYED — backend `neurotracev1-production.up.railway.app`,
-frontend `neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The exam now runs the
-21-step protocol (18 web-runnable) with the fall gate, fatigue fields, and raw-point
-server extraction. See CHANGELOG 2026-08-23 for the four-fault deploy debugging. · FINAL_PRODUCT_SPEC_v4 built; see
+**Last updated:** 2026-08-23 (later) · **DEPLOYED ON NEON POSTGRES** — backend
+`neurotracev1-production.up.railway.app` (`database: up`), frontend
+`neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The demo is seeded on Postgres and
+**survives redeploys**, which is the whole reason for leaving SQLite: `/clinic/patients`
+returns `Ramesh | band: ALERT` after a subsequent deploy. The exam runs the 21-step protocol
+(18 web-runnable) with the fall gate, fatigue fields, and raw-point server extraction. Face
+identity, the Awaaz listener page and the caregiver review queue are built. See CHANGELOG
+2026-08-23 (later) for the two dialect bugs the first Neon boot found. · FINAL_PRODUCT_SPEC_v4 built; see
 [COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for line-by-line status
 (verified-live vs verified-in-tests vs pending).
 
@@ -135,12 +139,23 @@ landmarks, and that the asymmetry features rise with a simulated droop (`corner_
 
 ---
 
+### Face identity — the confounder that finally has an input
+`identity_uncertain` and `identity_verified` existed from the start with nothing computing
+them. Six ratios between bone-structure landmarks, on device, compared to an enrolment
+vector in `calibration_json`. Not the M1 expression features — those move with every task
+and with the facial weakness the product measures. Flags a session, never blocks it;
+unenrolled is stored as verified. Threshold calibrated on synthetic geometry only and says
+so in the source. D-015, D-017.
+
 ### Awaaz — D1 through D5
 - **D1** phrase board, emergency mode, auto-speak gate (INV-9).
 - **D2** listener mode: expiring revocable link, display name only, context-aware coaching
-  in three languages.
+  in three languages. **Screen built** — `Listen.tsx` at `/listen/:token`, no auth because
+  the unguessable token is the capability, and no name, band or history for a stranger.
 - **D4** passive learning: card taps give free labelled pairs; caregiver evening queue is
-  worst-first and capped at 12.
+  worst-first and capped at 12. **Screen built** — `ReviewQueue.tsx` at `/review/:patientId`;
+  "nothing to review" is shown as success, not emptiness. Both screens were unreachable
+  until Awaaz got quiet caregiver entry points below the speaking surface.
 - **D5** convergence: conversational features route into M4/M5; prompted-only features
   (DDK, sustained phonation) are deliberately *not* inferred from free speech. Frozen
   day-30 adapter catches decline the live adapter hides.
@@ -171,10 +186,13 @@ never shrinks is a list nobody reads.)*
 - **Nothing has run on a physical phone.** Camera framing, pose scaling at 1.5 m and the
   handset-tilt SVV path are desktop-browser only. This is the largest untested surface in
   the product.
-- No deployment to Railway or Neon yet; everything runs locally on SQLite. `docs/DEPLOY.md`
-  is the runbook — provisioning needs your accounts.
-- **Migrations have never been executed against Postgres**, only rendered. The first Neon
-  branch deploy is the real test; see DEPLOY.md step 3.
+- ~~No deployment to Railway or Neon yet~~ — **DONE.** Both live; Postgres is the
+  production database and the seed persists across deploys.
+- ~~Migrations have never been executed against Postgres, only rendered~~ — **DONE, and the
+  prediction was right.** The first Neon boot was the real test and it failed twice:
+  `WHERE locked = 1` in migration 0004, then an unconditional `PRAGMA foreign_keys=ON` in
+  `env.py`. Both invisible to `--sql` rendering, because the text inside `op.execute` renders
+  identically for either dialect. Fixed and pinned by `test_migration_portability.py`; D-014.
 - Dataset requests not yet sent — `docs/DATASET_REQUESTS.md` has the exact emails and forms.
 - Real-device validation of M3/M9 against the clinical values in `CLINICAL_REFERENCE.md`.
 

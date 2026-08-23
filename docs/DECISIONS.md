@@ -205,6 +205,11 @@ degraded honestly:
 - The legacy video path (unused by the exam) already falls back to `video/mp4`.
 
 **D-034 · 2026-08-23 · The dark identity is the landing; the product stays light.**
+> **SUPERSEDED the same day by D-016.** The reasoning below still holds for why the product
+> surfaces are light; what did not survive is the split. Running a dark landing against a
+> light product meant maintaining two identities, and the landing was rebuilt in the light
+> editorial treatment. Kept because the accessibility argument is the load-bearing part and
+> is still the reason the product is not dark.
 The owner pointed at a reference landing (near-black, mint/sky, Inter + monospace) and
 said "exactly, or even better". Adopted — for the signed-out surface, where identity is
 the job. The in-product surfaces stay on the light high-contrast clinical palette because
