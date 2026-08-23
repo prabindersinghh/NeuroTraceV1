@@ -76,3 +76,7 @@ data/raw/
 
 # Throwaway probes
 frontend/scratch/
+
+# Playwright MCP session artefacts + root-level screenshots
+.playwright-mcp/
+/*.png

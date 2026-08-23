@@ -29,6 +29,10 @@ Every table and field, and what it means in plain language.
 | `deployment_tier` | what hardware they have: phone only / + watch / + shared ASHA kit. Decides which tasks are offered |
 | `asha_worker_id` | which community health worker visits this household |
 | `baseline_state` | `not_started` / `collecting` / `locked` |
+| `aphasia_mode` | icon-and-audio-first presentation. Changes nothing about what is measured |
+| `consent_version`, `consent_lang` | which consent text was agreed to, in which language. A future consent change is a re-consent event, not a silent swap |
+| `calibration_json` | onboarding device check: measured fps (with its timing source), mic level, height. Context for capture quality, never a measurement input |
+| `onboarding_complete` | the seven-step onboarding finished |
 
 ---
 
@@ -38,6 +42,7 @@ Every table and field, and what it means in plain language.
 |---|---|
 | `ts` | when it happened |
 | `type` | `daily` / `weekly` / `monthly` |
+| `is_practice` | a guided practice run. Stored in full — the family can see it went fine — but never scored and never in a baseline: a learning attempt inside the baseline manufactures a week of false improvement that is really familiarity |
 | `quality_score` | how good the capture was. Poor captures are re-prompted, not scored |
 | `identity_verified` | did the on-device check confirm the same person |
 | `off_window` | taken well outside their usual time |

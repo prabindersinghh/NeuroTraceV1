@@ -16,10 +16,13 @@
  * detects change over days. It cannot see an acute event. If a family misunderstands that,
  * every other thing we built is worse than useless.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
-import { useI18n } from "../lib/i18n";
-import { Button } from "../components/ui/button";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
+import { measureFps, probeMicLevel, type FpsResult } from "@/lib/deviceProbes";
+import { useI18n } from "@/lib/i18n";
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -76,12 +79,65 @@ const TITLES = {
   4: { en: "Setting up the camera", hi: "कैमरा सेट करना", pa: "ਕੈਮਰਾ ਸੈੱਟ ਕਰਨਾ" },
   5: { en: "Where to put the phone", hi: "फ़ोन कहाँ रखें", pa: "ਫ਼ੋਨ ਕਿੱਥੇ ਰੱਖੋ" },
   6: { en: "A practice run together", hi: "साथ में अभ्यास", pa: "ਇਕੱਠੇ ਅਭਿਆਸ" },
-  7: { en: "Learning what is normal for him", hi: "उनका सामान्य क्या है, यह सीखना", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਕੀ ਹੈ, ਇਹ ਸਿੱਖਣਾ" },
+  7: { en: "Learning what is normal for them", hi: "उनका सामान्य क्या है, यह सीखना", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਕੀ ਹੈ, ਇਹ ਸਿੱਖਣਾ" },
 } as const;
 
-export default function Onboarding({ onDone }: { onDone: () => void }) {
+const STEP_KEY = "nt.onboarding.step";
+
+export default function Onboarding() {
   const { lang } = useI18n();
-  const [step, setStep] = useState<Step>(1);
+  const { patientId = "" } = useParams();
+  const navigate = useNavigate();
+  // Survives the round trip through the practice session.
+  const [step, setStep] = useState<Step>(() => {
+    try {
+      const saved = Number(sessionStorage.getItem(STEP_KEY));
+      return (saved >= 1 && saved <= 7 ? saved : 1) as Step;
+    } catch { return 1; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(STEP_KEY, String(step)); } catch { /* fine */ }
+  }, [step]);
+
+  // ---- calibration state (step 4) ----
+  const [heightCm, setHeightCm] = useState("");
+  const [fps, setFps] = useState<FpsResult | null>(null);
+  const [mic, setMic] = useState<number | null>(null);
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibError, setCalibError] = useState<string | null>(null);
+
+  const runCalibration = useCallback(async () => {
+    setCalibrating(true);
+    setCalibError(null);
+    try {
+      setFps(await measureFps(60));
+      setMic(await probeMicLevel());
+    } catch (e) {
+      setCalibError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCalibrating(false);
+    }
+  }, []);
+
+  const complete = useCallback(async () => {
+    try {
+      await api.updatePatient(patientId, {
+        consent_version: CONSENT_VERSION,
+        consent_lang: lang,
+        onboarding_complete: true,
+        calibration_json: {
+          height_cm: heightCm ? Number(heightCm) : null,
+          fps: fps ?? null,
+          mic_peak: mic,
+          calibrated_at: new Date().toISOString(),
+        },
+      });
+    } catch {
+      /* Offline enrolment: completion is retried from the caregiver home on next load. */
+    }
+    try { sessionStorage.removeItem(STEP_KEY); } catch { /* fine */ }
+    navigate("/", { replace: true });
+  }, [patientId, lang, heightCm, fps, mic, navigate]);
   const [consented, setConsented] = useState(false);
   // One box per limit. The gate opens only when every one is ticked.
   const [limitsAcked, setLimitsAcked] = useState<boolean[]>(
@@ -91,7 +147,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const allLimitsAcked = limitsAcked.every(Boolean);
 
   function next() {
-    if (step === 7) return onDone();
+    if (step === 7) return void complete();
     setStep((s) => (s + 1) as Step);
   }
 
@@ -172,18 +228,50 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         )}
 
         {step === 4 && (
-          <p className="text-lg">
-            {{ en: "We measure their height for the balance tests, check how fast the camera records, take a test photo for lighting, check the microphone, and learn their face and voice so we know it is them.",
-               hi: "संतुलन जाँच के लिए हम उनकी लंबाई लेते हैं, कैमरे की गति जाँचते हैं, रोशनी के लिए एक टेस्ट फ़ोटो लेते हैं, माइक जाँचते हैं, और उनका चेहरा व आवाज़ पहचानना सीखते हैं।",
-               pa: "ਸੰਤੁਲਨ ਜਾਂਚ ਲਈ ਅਸੀਂ ਉਹਨਾਂ ਦੀ ਲੰਬਾਈ ਲੈਂਦੇ ਹਾਂ, ਕੈਮਰੇ ਦੀ ਰਫ਼ਤਾਰ ਜਾਂਚਦੇ ਹਾਂ, ਰੌਸ਼ਨੀ ਲਈ ਇੱਕ ਟੈਸਟ ਫ਼ੋਟੋ ਲੈਂਦੇ ਹਾਂ, ਮਾਈਕ ਜਾਂਚਦੇ ਹਾਂ, ਅਤੇ ਉਹਨਾਂ ਦਾ ਚਿਹਰਾ ਤੇ ਆਵਾਜ਼ ਪਛਾਣਨਾ ਸਿੱਖਦੇ ਹਾਂ।" }[lang]}
-          </p>
+          <div className="space-y-4">
+            <label className="block text-lg">
+              {{ en: "Their height (cm) - used to scale the balance measurements",
+                 hi: "उनकी लंबाई (सेमी) - संतुलन मापने के लिए",
+                 pa: "ਉਹਨਾਂ ਦੀ ਲੰਬਾਈ (ਸੈਮੀ) - ਸੰਤੁਲਨ ਮਾਪਣ ਲਈ" }[lang]}
+              <input
+                type="number" inputMode="numeric" min={100} max={220}
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-line p-4 text-xl"
+              />
+            </label>
+            <Button className="min-h-14 w-full" onClick={() => void runCalibration()} disabled={calibrating}>
+              {calibrating
+                ? { en: "Measuring…", hi: "माप रहे हैं…", pa: "ਮਾਪ ਰਹੇ ਹਾਂ…" }[lang]
+                : { en: "Check camera and microphone (10 s)", hi: "कैमरा और माइक जाँचें (10 से.)",
+                    pa: "ਕੈਮਰਾ ਅਤੇ ਮਾਈਕ ਜਾਂਚੋ (10 ਸਕਿੰਟ)" }[lang]}
+            </Button>
+            {calibError && <p className="text-sm text-alert">{calibError}</p>}
+            {fps && (
+              <p className="rounded-lg border border-line p-3 text-base">
+                {{ en: "Camera", hi: "कैमरा", pa: "ਕੈਮਰਾ" }[lang]}: {fps.measured} fps
+                ({fps.width}x{fps.height})
+                {fps.timing_source === "raf" &&
+                  { en: " - approximate on this browser", hi: " - इस ब्राउज़र पर अनुमानित",
+                    pa: " - ਇਸ ਬ੍ਰਾਊਜ਼ਰ 'ਤੇ ਅੰਦਾਜ਼ਨ" }[lang]}
+                <br />
+                {{ en: "Microphone", hi: "माइक", pa: "ਮਾਈਕ" }[lang]}:{" "}
+                {mic === null
+                  ? { en: "not available", hi: "उपलब्ध नहीं", pa: "ਉਪਲਬਧ ਨਹੀਂ" }[lang]
+                  : mic > 0.01
+                    ? { en: "working", hi: "काम कर रहा है", pa: "ਕੰਮ ਕਰ ਰਿਹਾ ਹੈ" }[lang]
+                    : { en: "very quiet - say something while it runs", hi: "बहुत धीमा - जाँच के दौरान कुछ बोलिए",
+                        pa: "ਬਹੁਤ ਹੌਲੀ - ਜਾਂਚ ਦੌਰਾਨ ਕੁਝ ਬੋਲੋ" }[lang]}
+              </p>
+            )}
+          </div>
         )}
 
         {step === 5 && (
           <ul className="space-y-3 text-lg">
             {(
               { en: ["Phone at chest height", "About one and a half metres away",
-                     "His whole body in the picture", "Light in front of him, not behind",
+                     "Their whole body in the picture", "Light in front of them, not behind",
                      "A chair or wall within reach"],
                 hi: ["फ़ोन छाती की ऊँचाई पर", "करीब डेढ़ मीटर दूर", "पूरा शरीर तस्वीर में",
                      "रोशनी सामने से, पीछे से नहीं", "पास में कुर्सी या दीवार"],
@@ -200,15 +288,27 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === 6 && (
           <p className="text-lg">
-            {{ en: "Do this one together. Every task shows a short video first. Nothing is scored — this is only so he knows what to expect.",
+            {{ en: "Do this one together. Every task shows a short video first. Nothing is scored — this is only so they know what to expect.",
                hi: "यह साथ मिलकर कीजिए। हर काम से पहले एक छोटा वीडियो दिखेगा। कुछ भी गिना नहीं जाएगा — यह सिर्फ़ अभ्यास है।",
                pa: "ਇਹ ਇਕੱਠੇ ਕਰੋ। ਹਰ ਕੰਮ ਤੋਂ ਪਹਿਲਾਂ ਇੱਕ ਛੋਟਾ ਵੀਡੀਓ ਦਿਖੇਗਾ। ਕੁਝ ਵੀ ਗਿਣਿਆ ਨਹੀਂ ਜਾਵੇਗਾ — ਇਹ ਸਿਰਫ਼ ਅਭਿਆਸ ਹੈ।" }[lang]}
           </p>
         )}
+        {step === 6 && (
+          <Button
+            className="min-h-14 w-full"
+            variant="outline"
+            onClick={() => {
+              setStep(7);
+              navigate(`/exam/${patientId}/practice`);
+            }}
+          >
+            {{ en: "Start the practice run", hi: "अभ्यास शुरू करें", pa: "ਅਭਿਆਸ ਸ਼ੁਰੂ ਕਰੋ" }[lang]}
+          </Button>
+        )}
 
         {step === 7 && (
           <p className="text-lg">
-            {{ en: "For the next two to three weeks we are learning what is normal FOR HIM. We will not show scores or warnings during this time, because we do not yet know what normal looks like for him — and a warning based on a guess is worse than none.",
+            {{ en: "For the next two to three weeks we are learning what is normal FOR THEM. We will not show scores or warnings during this time, because we do not yet know what normal looks like for them — and a warning based on a guess is worse than none.",
                hi: "अगले दो-तीन हफ़्ते हम सीखेंगे कि उनके लिए सामान्य क्या है। इस दौरान हम कोई स्कोर या चेतावनी नहीं दिखाएँगे, क्योंकि हमें अभी उनका सामान्य पता नहीं — और अंदाज़े पर दी चेतावनी न देने से बुरी है।",
                pa: "ਅਗਲੇ ਦੋ-ਤਿੰਨ ਹਫ਼ਤੇ ਅਸੀਂ ਸਿੱਖਾਂਗੇ ਕਿ ਉਹਨਾਂ ਲਈ ਆਮ ਕੀ ਹੈ। ਇਸ ਦੌਰਾਨ ਅਸੀਂ ਕੋਈ ਸਕੋਰ ਜਾਂ ਚੇਤਾਵਨੀ ਨਹੀਂ ਦਿਖਾਵਾਂਗੇ, ਕਿਉਂਕਿ ਸਾਨੂੰ ਹਾਲੇ ਉਹਨਾਂ ਦਾ ਆਮ ਪਤਾ ਨਹੀਂ।" }[lang]}
           </p>

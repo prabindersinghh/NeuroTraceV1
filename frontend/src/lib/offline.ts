@@ -22,12 +22,21 @@ export interface QueuedModule {
   features: ModuleFeatures;
   quality_flag: boolean;
   quality_detail?: unknown;
+  /** Raw landmark-derived points for server-side extraction (M3/M9/M6/M17). */
+  raw?: Record<string, unknown>;
+  // Fatigue instrumentation — travels with the result through the offline queue too,
+  // because a queued session is still a session performed at those positions.
+  session_position?: number;
+  elapsed_seconds_at_task_start?: number;
+  intensity?: string;
+  paused_before_task?: boolean;
 }
 
 export interface QueuedSession {
   /** Local id; the server id is assigned on sync. */
   localId: string;
   patientId: string;
+  isPractice?: boolean;
   type: SessionType;
   capturedAt: string;
   deviceInfo: Record<string, unknown>;
@@ -115,8 +124,12 @@ export interface SyncOutcome {
  */
 export async function syncPending(
   api: {
-    startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean }) => Promise<{ id: string }>;
-    submitModule: (sessionId: string, code: string, features: ModuleFeatures, quality?: { quality_flag?: boolean; quality_detail?: unknown }) => Promise<unknown>;
+    startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean; is_practice?: boolean }) => Promise<{ id: string }>;
+    submitModule: (sessionId: string, code: string, features: ModuleFeatures, quality?: {
+      quality_flag?: boolean; quality_detail?: unknown; raw?: Record<string, unknown>;
+      session_position?: number; elapsed_seconds_at_task_start?: number;
+      intensity?: string; paused_before_task?: boolean;
+    }) => Promise<unknown>;
     finalizeSession: (sessionId: string) => Promise<{ band: string }>;
   },
 ): Promise<SyncOutcome> {
@@ -129,11 +142,17 @@ export async function syncPending(
         type: session.type,
         device_info: session.deviceInfo,
         offline_captured: true,
+        is_practice: session.isPractice ?? false,
       });
       for (const module of session.modules) {
         await api.submitModule(started.id, module.code, module.features, {
           quality_flag: module.quality_flag,
           quality_detail: module.quality_detail,
+          raw: module.raw,
+          session_position: module.session_position,
+          elapsed_seconds_at_task_start: module.elapsed_seconds_at_task_start,
+          intensity: module.intensity,
+          paused_before_task: module.paused_before_task,
         });
       }
       const result = await api.finalizeSession(started.id);

@@ -96,6 +96,22 @@ export default function StepSvv({
     return () => window.removeEventListener("deviceorientation", onOrient);
   }, []);
 
+  // iOS Safari never fires deviceorientation until requestPermission() is called FROM A
+  // USER GESTURE — a mount-time request is silently ignored. So the first tap on this
+  // task asks. Denied or absent, the task still runs and the result says
+  // device_tilt_compensated=false rather than pretending the handset was level.
+  const askedOrientation = useRef(false);
+  const requestOrientationPermission = useCallback(() => {
+    if (askedOrientation.current) return;
+    askedOrientation.current = true;
+    const D = DeviceOrientationEvent as unknown as {
+      requestPermission?: () => Promise<"granted" | "denied">;
+    };
+    if (typeof D.requestPermission === "function") {
+      void D.requestPermission().catch(() => undefined);
+    }
+  }, []);
+
   // --- rotating background for the dynamic conditions ---
   useEffect(() => {
     if (!isDynamic) {
@@ -157,7 +173,7 @@ export default function StepSvv({
   const done = conditionIndex * TRIALS_PER_CONDITION + trial;
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4 p-4">
+    <div onPointerDownCapture={requestOrientationPermission} className="mx-auto flex max-w-md flex-col gap-4 p-4">
       <header className="space-y-1">
         <h2 className="text-lg font-semibold">{CONDITION_LABEL[condition][lang]}</h2>
         <div

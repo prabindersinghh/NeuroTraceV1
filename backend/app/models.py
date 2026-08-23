@@ -179,6 +179,20 @@ class Patient(Base):
     intensity: Mapped[str] = mapped_column(
         sa.String(16), default="FULL", nullable=False)
 
+    #: Icon-and-audio-first presentation for a patient whose LANGUAGE is affected. This is
+    #: presentation only — it changes nothing about what is measured.
+    aphasia_mode: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False, server_default=sa.false())
+    #: Which consent text the caregiver agreed to, and in which language. Versioned so a
+    #: future consent change is a re-consent event, not a silent swap under an old yes.
+    consent_version: Mapped[str | None] = mapped_column(sa.String(16))
+    consent_lang: Mapped[str | None] = mapped_column(sa.String(8))
+    #: Device calibration captured during onboarding: measured fps, lighting, audio level.
+    #: Informational context for capture quality — never a measurement input.
+    calibration_json: Mapped[dict | None] = mapped_column(sa.JSON)
+    onboarding_complete: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False, server_default=sa.false())
+
     #: Which hardware tier this patient is on. Gates which modules are offered.
     deployment_tier: Mapped[DeploymentTier] = mapped_column(
         _enum(DeploymentTier, "deployment_tier_enum"),
@@ -225,6 +239,12 @@ class ExamSession(Base):
     off_window: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     completed: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     offline_captured: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    #: A guided practice run from onboarding. Stored in full — the family can see it went
+    #: fine — but it never reaches the engine: no Score, no baseline contribution. The
+    #: patient is learning the tasks, and a learning attempt inside the baseline would
+    #: manufacture an improvement over the next week that is really just familiarity.
+    is_practice: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False, server_default=sa.false())
 
     patient: Mapped[Patient] = relationship(back_populates="sessions")
     module_results: Mapped[list["ModuleResult"]] = relationship(

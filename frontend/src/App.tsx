@@ -7,10 +7,21 @@ import { Clinic } from "@/routes/Clinic";
 import ClinicianReport from "@/routes/ClinicianReport";
 import { Dashboard } from "@/routes/Dashboard";
 import Diagnostics from "@/routes/Diagnostics";
-import { Exam } from "@/routes/Exam";
+import Landing from "@/routes/Landing";
+import Awaaz from "@/routes/Awaaz";
+import Onboarding from "@/routes/Onboarding";
+import { Exam, ExamPractice } from "@/routes/Exam";
 import { Login } from "@/routes/Login";
 import { PatientHome } from "@/routes/PatientHome";
 import { Register } from "@/routes/Register";
+
+function LandingOrHome() {
+  const { user, ready } = useAuth();
+  if (!ready) return <LoadingState />;
+  // Signed out, the root is the public landing page; signed in, it is the product.
+  if (!user) return <Landing />;
+  return <Home />;
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
@@ -35,10 +46,13 @@ export default function App() {
       <Route path="/diagnostics" element={<Diagnostics />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
+      <Route path="/" element={<LandingOrHome />} />
       <Route path="/clinic" element={<RequireAuth><Clinic /></RequireAuth>} />
       <Route path="/report/:patientId" element={<RequireAuth><ClinicianReport /></RequireAuth>} />
       <Route path="/exam/:patientId" element={<RequireAuth><Exam /></RequireAuth>} />
+      <Route path="/awaaz/:patientId" element={<RequireAuth><Awaaz /></RequireAuth>} />
+      <Route path="/onboarding/:patientId" element={<RequireAuth><Onboarding /></RequireAuth>} />
+      <Route path="/exam/:patientId/practice" element={<RequireAuth><ExamPractice /></RequireAuth>} />
       <Route path="/dashboard/:patientId" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

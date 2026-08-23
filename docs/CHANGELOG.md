@@ -4,6 +4,92 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-23 — LIVE on Railway and Vercel; the exam becomes the 21-step protocol
+
+### Deployed, and verified the only way that counts
+- **Backend**: https://neurotracev1-production.up.railway.app — `/health` 200, `database: up`.
+- **Frontend**: https://neuro-trace-v1.vercel.app — model asset served at full size
+  (3,758,596 bytes), the API URL baked into the shipped bundle.
+- **`verify_deploy.sh`: 7 passed, 0 failed.** The deployed engine reproduces the exact
+  local band sequence — `SSSSSSSSSSSSSSSSSSWAA -> ALERT` — band for band. A deploy that
+  returns 200 with different bands is a broken deploy that looks healthy; this is the
+  check that would have caught it.
+
+### What the deploy actually took: four stacked faults, each masking the next
+1. **`DATABASE_URL` defaulted to localhost Postgres** — locally a gitignored `.env`
+   overrides it; in the container nothing did. asyncpg's `Connect call failed
+   ('127.0.0.1', 5432)` was the one failure the logs API deigned to show.
+2. **`alembic upgrade head` never exited on aiosqlite** — every connection lives on a
+   worker thread, and a thread alive at interpreter shutdown blocks process exit. Printed
+   its last migration and hung; on Windows dev the same code exits by timing luck.
+   Migrations now run on the stdlib sqlite3 driver — one connection, sequential DDL,
+   deterministic exit — with Postgres staying on asyncpg.
+3. **The service domain was created with `targetPort: null` and no PORT variable** — the
+   edge and the healthcheck had no port to reach. Pinned to 8000 on both sides.
+4. **The container's stdout is a dead pipe** — no app stdout line ever reached the logs
+   from any deploy, and a WRITE to stdout fails. `echo MIGRATIONS_DONE` (stdout) was
+   killing the `&&` chain right after alembic (stderr, visible), so uvicorn never
+   started, invisibly. Diagnosed by making the app report on itself: a start command
+   where every stage appends to a file behind timeouts that always end in a file server,
+   then reading `boot.log` over the public URL — `ALEMBIC_EXIT=0`, uvicorn up on
+   `[::]:8000` in seconds, killed only by the diagnostic's own timeout. The permanent
+   start command routes every byte to stderr, uvicorn's stdout access log included.
+
+The Railway healthcheck gate is REMOVED, deliberately: its private-network probe could
+not see an app the public edge served fine, and a gate that kills provably healthy
+containers is worse than no gate. `verify_deploy.sh` after every deploy is the
+compensating control — it checks clinical output, which no HTTP probe can.
+
+The temporary diagnostic file server was flagged by the security review as a public file
+read — correctly — and lived for exactly one read of boot.log before removal.
+
+### The exam now runs the protocol
+`ProtocolRunner` replaces the v1 five-step battery: plan served by
+`GET /sessions/plan/{intensity}` (offline TS mirror pinned to `session_plan.PROTOCOL` by
+a parity test), FallRiskGate structurally in front of the standing block, pause/resume
+that never invalidates, and all four fatigue fields recorded per result and accepted by
+the API — the columns existed since 0008, but the submission schema never carried them,
+so the instrumentation was theater at the API boundary until today.
+
+**18 of 21 steps have real web capture.** New engines this session: M3 oculomotor (iris
+landmarks; saccades, pursuit, gaze-holding), M9 balance + M6 pronator (PoseLandmarker,
+staged and SHA-pinned like the face model), M17 fingertip PPG (torch where the platform
+has an API for it, honest `torch_available` where it does not), M11 word memory
+(recognition variant, features named `recognition_*` because it is NOT free recall).
+Excluded, stated, not faked: M2 tongue deviation (no tongue landmarks exist), M8 x2
+(needs hand tracking). A step without a capture engine is skipped, never rendered as a
+timer that measures nothing.
+
+**M3/M9/M6/M17/M21 submit raw landmark-derived POINTS and the server runs the extractor
+the test suite pins.** Numbers, never media — INV-1 is about media. One implementation,
+no JS parity drift. Side effect: M9 submissions now fill `trace_json`, which the /trace
+endpoint had been reading as an always-empty column — the CCG view was an endpoint over
+a field nothing wrote.
+
+### Onboarding is functional, not descriptive
+Versioned trilingual consent (2026-08-v4) recorded on the patient; real calibration
+(measured fps with `timing_source` honesty, mic probe, height for the balance scale)
+stored in `calibration_json`; practice session launched from step 6 and excluded from
+scoring server-side (`sessions.is_practice`, migration 0009 — stored so the family sees
+it happened, never scored because a learning attempt inside a baseline manufactures a
+week of false improvement).
+
+### Awaaz has a face
+`/awaaz/:patientId` — emergency-first board, tap-to-speak cards (voiced immediately: the
+patient chose those exact words), and the free-text path that renders INV-9: dysarthria
+above threshold speaks, aphasia only ever gets candidates and NOTHING is voiced before a
+tap. The gate stays server-side; the UI cannot route around it.
+
+### Landing
+Signed-out `/` is a landing page in the reference's dark identity (near-black ground,
+mint/sky accents, monospace details). Scoped to that page alone — D-034.
+
+### Verification
+Backend: 9/9 new protocol-runtime tests; full suite in `final12.log` by exit code.
+Frontend: `tsc -b` exit 0; production build exit 0. Deploys: verify_deploy 7/7 as above.
+
+---
+
 ## 2026-08-22 (deploy + PENDING closeout) - Railway/Vercel, three gaps closed, one crash found
 
 ### The Railway build failure was a one-field setting, and the log said so

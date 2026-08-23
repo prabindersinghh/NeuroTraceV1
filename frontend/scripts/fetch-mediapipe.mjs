@@ -43,14 +43,27 @@ const require = createRequire(import.meta.url);
 // The model is not on npm — it is published by Google as a standalone .task file. It is the
 // one asset we cannot take from the lockfile, so it is pinned by content hash instead: a
 // silently swapped model would move every baseline without anything else changing.
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-// float16/1 face_landmarker.task, verified 2026-08-22. Override only when deliberately
+// Each model is pinned by content hash: a silently swapped model moves every baseline
+// without anything else changing. Verified 2026-08-22/23. Override only when deliberately
 // moving to a different model build — which is a baseline migration, not a config change.
-const MODEL_SHA256 =
-  process.env.NEUROTRACE_MODEL_SHA256 ||
-  "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff";
-const MODEL_BYTES = 3758596;
+const MODELS = [
+  {
+    name: "face_landmarker.task",
+    url: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    sha256: process.env.NEUROTRACE_MODEL_SHA256 ||
+      "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    bytes: 3758596,
+  },
+  {
+    // PoseLandmarker (lite): the standing block (M9) and pronator drift (M6). Lite on
+    // purpose — it has to run per-frame on budget handsets alongside the UI.
+    name: "pose_landmarker_lite.task",
+    url: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    sha256: process.env.NEUROTRACE_POSE_SHA256 ||
+      "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+    bytes: 5777746,
+  },
+];
 
 // An operator with no egress can point this at a local copy or an internal mirror.
 const MODEL_SOURCE = process.env.NEUROTRACE_MODEL_PATH || process.env.NEUROTRACE_MODEL_URL;
@@ -119,16 +132,16 @@ async function stageRuntime() {
   }
 }
 
-async function stageModel() {
-  const target = join(OUT, "face_landmarker.task");
+async function stageModel({ name, url: modelUrl, sha256: expected, bytes }) {
+  const target = join(OUT, name);
 
   if (await exists(target)) {
     const size = (await stat(target)).size;
-    if (size === MODEL_BYTES || !MODEL_BYTES) {
-      console.log(`  model    face_landmarker.task (already present, ${size} bytes)`);
+    if (size === bytes) {
+      console.log(`  model    ${name} (already present, ${size} bytes)`);
       return;
     }
-    console.log(`  model    re-fetching: ${size} bytes is not the expected ${MODEL_BYTES}`);
+    console.log(`  model    re-fetching ${name}: ${size} bytes is not the expected ${bytes}`);
     await unlink(target);
   }
 
@@ -136,27 +149,27 @@ async function stageModel() {
 
   // A local path wins over any download — this is the fully-offline route.
   if (MODEL_SOURCE && !/^https?:/.test(MODEL_SOURCE)) {
-    await copyFile(MODEL_SOURCE, target);
-    console.log(`  model    copied from ${MODEL_SOURCE}`);
+    await copyFile(join(MODEL_SOURCE, name), target).catch(() => copyFile(MODEL_SOURCE, target));
+    console.log(`  model    ${name} copied from ${MODEL_SOURCE}`);
   } else {
-    const url = MODEL_SOURCE || MODEL_URL;
+    const url = modelUrl;
     const res = await fetch(url);
     if (!res.ok || !res.body) {
       throw new Error(
         `${res.status} ${res.statusText} for ${url}\n` +
-          "  If this host is unreachable, set NEUROTRACE_MODEL_PATH to a local copy of\n" +
-          "  face_landmarker.task, or NEUROTRACE_MODEL_URL to an internal mirror.",
+          "  If this host is unreachable, set NEUROTRACE_MODEL_PATH to a local directory\n" +
+          "  holding the .task files, or NEUROTRACE_MODEL_URL to an internal mirror.",
       );
     }
     await pipeline(Readable.fromWeb(res.body), createWriteStream(target));
-    console.log(`  model    face_landmarker.task from ${new URL(url).host}`);
+    console.log(`  model    ${name} from ${new URL(url).host}`);
   }
 
   const digest = await sha256(target);
-  if (MODEL_SHA256 && digest !== MODEL_SHA256) {
+  if (expected && digest !== expected) {
     await unlink(target);
     throw new Error(
-      `model checksum mismatch\n  expected ${MODEL_SHA256}\n  got      ${digest}\n` +
+      `model checksum mismatch for ${name}\n  expected ${expected}\n  got      ${digest}\n` +
         "  Refusing to stage it: a different landmarker shifts every patient baseline.",
     );
   }
@@ -165,5 +178,5 @@ async function stageModel() {
 
 console.log("Staging MediaPipe assets into public/mediapipe ...");
 await stageRuntime();
-await stageModel();
+for (const m of MODELS) await stageModel(m);
 console.log("Done. These are gitignored and precached by the service worker.");

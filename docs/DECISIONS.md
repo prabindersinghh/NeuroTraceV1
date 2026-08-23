@@ -175,6 +175,43 @@ calibration target we cannot reproduce is not a calibration target.
 `inspect.getsource` grepping produced a false INV-2 failure from a stale `.pyc`. An
 invariant that cries wolf gets disabled, which is worse than not having it.
 
+**D-037 · 2026-08-23 · Everything in the container writes to stderr.**
+This runtime's stdout is a dead pipe: writes to it fail, and they fail silently from the
+outside — a start command died at an `echo` for six consecutive deploys with nothing in
+any log. Rather than remember which tools default where (uvicorn's access log: stdout;
+its error log: stderr; alembic: stderr), the start command redirects wholesale. A rule
+that requires remembering is a rule that gets broken.
+
+**D-036 · 2026-08-23 · The Railway healthcheck gate is removed; verify_deploy.sh is the
+control.** The private-network probe could not reach an app the public edge served, so
+the gate killed provably healthy containers 90 seconds before anyone could look at them.
+Its job is done better by `scripts/verify_deploy.sh`, which checks that the deployed
+engine reproduces the exact local band sequence — clinical output, not liveness. Cost
+accepted: a broken build replaces a good one ungated; the script runs after every deploy.
+
+**D-035 · 2026-08-23 · Web only — laptop browsers for development, Chrome on Android and
+Safari on iOS for patients.** What degrades on iOS Safari, checked against the code, and
+degraded honestly:
+- `getUserMedia` / camera: fine (14.3+). The exam path uses NO MediaRecorder at all —
+  PCM via Web Audio and per-frame landmarks — so codec differences never arise.
+- `requestVideoFrameCallback`: present since 15.4. Older WebKit falls back to rAF, and
+  every fps result now carries `timing_source` — an rAF number is display rate, labelled
+  as such in /diagnostics rather than reported as camera rate.
+- `DeviceOrientationEvent`: gated behind `requestPermission()` FROM A USER GESTURE. The
+  SVV task asks on its first tap; denied or absent, the result says
+  `device_tilt_compensated: false` instead of pretending the handset was level.
+- Camera torch: no web API on iOS at all. M17 records `torch_available` and works on
+  ambient light through the finger.
+- The legacy video path (unused by the exam) already falls back to `video/mp4`.
+
+**D-034 · 2026-08-23 · The dark identity is the landing; the product stays light.**
+The owner pointed at a reference landing (near-black, mint/sky, Inter + monospace) and
+said "exactly, or even better". Adopted — for the signed-out surface, where identity is
+the job. The in-product surfaces stay on the light high-contrast clinical palette because
+their users are post-stroke patients in their sixties, often outdoors in Indian daylight,
+where a dark theme is an accessibility regression dressed as taste. Identity where
+identity matters; legibility where measurement happens.
+
 **D-033 · 2026-08-22 · The CCG reference is the earliest capture in the LOCKED window.**
 Not the earliest ever. A first-ever attempt is where the patient is still working out what
 is being asked of them, so comparing today against it manufactures an improvement that never

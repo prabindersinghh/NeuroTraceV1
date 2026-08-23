@@ -13,7 +13,7 @@
  * dialog they have seen before. So the confirm is a deliberate act with a checkbox, and it
  * reappears every session rather than being remembered.
  *
- * Skipping is a first-class option, not a failure. If nobody is home to stand beside him,
+ * Skipping is a first-class option, not a failure. If nobody is home to stand beside them,
  * the correct action is to skip the balance block — not to do it alone. An interface that
  * makes skipping feel like non-compliance will get the tests done unsupervised, which is
  * the outcome the gate exists to prevent.
@@ -31,9 +31,9 @@ const COPY = {
   },
   points: {
     en: [
-      "Someone must stand beside him.",
+      "Someone must stand beside them.",
       "Do this near a wall or a sturdy chair.",
-      "If he feels dizzy, stop immediately.",
+      "If they feel dizzy, stop immediately.",
     ],
     hi: [
       "किसी को उनके पास खड़ा होना चाहिए।",
@@ -47,7 +47,7 @@ const COPY = {
     ],
   },
   confirm: {
-    en: "I am standing beside him now",
+    en: "I am standing beside them now",
     hi: "मैं अभी उनके पास खड़ा/खड़ी हूँ",
     pa: "ਮੈਂ ਹੁਣ ਉਹਨਾਂ ਦੇ ਕੋਲ ਖੜ੍ਹਾ/ਖੜ੍ਹੀ ਹਾਂ",
   },

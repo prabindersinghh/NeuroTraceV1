@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.deps import CurrentUser, get_patient_for_user
 from ..db import get_session
 from ..exam.registry import MODULES, get_module, modules_for
+from ..exam.session_plan import Intensity, planned_seconds, steps_for
 from ..models import AuditLog, ExamSession, ModuleResult, Patient, SessionType
 from ..safety.fast import fast_card
 from ..schemas import (
@@ -54,6 +55,42 @@ async def battery(schedule: str) -> dict:
     }
 
 
+@router.get("/plan/{intensity}")
+async def session_plan(intensity: str) -> dict:
+    """The ordered daily protocol for one intensity. The server is the source of truth.
+
+    The frontend runs exactly this list in exactly this order. Ordering is part of the
+    measurement — each module's baseline absorbs its own position on the fatigue curve —
+    so the order ships from here, not from a constant someone edits in one place and
+    forgets in the other.
+    """
+    try:
+        # The enum's values are uppercase (they mirror the DB column); the URL is
+        # friendlier lowercase. Accept either.
+        level = Intensity(intensity.upper())
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "intensity must be full|standard|light|research")
+    steps = steps_for(level)
+    first_standing = next(
+        (st.position for st in steps if st.block.value.startswith("C_")), None)
+    return {
+        "intensity": level.value.lower(),
+        "planned_seconds": planned_seconds(steps),
+        # The fall-risk gate renders immediately before this position, full screen; the
+        # standing block cannot be reached around it.
+        "fall_gate_before_position": first_standing,
+        "steps": [
+            {
+                "position": st.position, "module": st.module, "task": st.task,
+                "block": st.block.value, "seconds": st.seconds,
+                "label_en": st.label_en, "core": st.core,
+            }
+            for st in steps
+        ],
+    }
+
+
 @router.post("/{patient_id}/start", response_model=SessionRead,
              status_code=status.HTTP_201_CREATED)
 async def start_session(
@@ -64,6 +101,7 @@ async def start_session(
         type=payload.type,
         device_info=payload.device_info,
         offline_captured=payload.offline_captured,
+        is_practice=payload.is_practice,
     )
     db.add(exam)
     await db.flush()
@@ -96,6 +134,22 @@ async def submit_module(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown exam module {code!r}")
 
     features = {k: v for k, v in payload.features.items() if v is not None}
+
+    trace_json = None
+    if payload.raw is not None and module.extract is not None:
+        # The device sent landmark-derived POINTS (numbers, never media), and the server
+        # runs the extractor the test suite pins. One implementation, no JS drift.
+        extracted = module.extract(payload.raw)
+        features = {**features, **{k: v for k, v in extracted.items() if v is not None}}
+        if module.code == "M9":
+            from ..exam.vestibular import ccg_trace
+            traces = {
+                test: ccg_trace(payload.raw, test)
+                for test in (payload.raw.get("tests") or {})
+            }
+            if traces:
+                trace_json = {"traces": traces}
+
     row = await db.scalar(
         select(ModuleResult).where(ModuleResult.session_id == session_id,
                                    ModuleResult.module_code == module.code)
@@ -109,6 +163,13 @@ async def submit_module(
     row.quality_flag = payload.quality_flag
     row.quality_detail = payload.quality_detail
     row.extracted_on_device = payload.extracted_on_device
+    if trace_json is not None:
+        row.trace_json = trace_json
+    # Fatigue instrumentation — recorded verbatim; interpretation is the engine's job.
+    row.session_position = payload.session_position
+    row.elapsed_seconds_at_task_start = payload.elapsed_seconds_at_task_start
+    row.intensity = payload.intensity
+    row.paused_before_task = payload.paused_before_task
 
     # Session quality is the worst module quality seen so far.
     if not payload.quality_flag:
@@ -132,6 +193,30 @@ async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> Ses
     if count == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "No module results submitted for this session")
+
+    if exam.is_practice:
+        # A practice run is stored — the family can see it happened — but it never
+        # reaches the engine. The patient is still learning the tasks; scoring a
+        # learning attempt, or letting it into a baseline, manufactures a week of
+        # false improvement that is really just familiarity.
+        exam.completed = True
+        db.add(AuditLog(actor_id=user.id, action="session.practice",
+                        patient_id=patient.id,
+                        meta_json={"session_id": str(session_id)}))
+        await db.commit()
+        lang = (patient.languages or ["en"])[0] if patient.languages else "en"
+        return SessionFinalizeResponse(
+            session_id=session_id, patient_id=patient.id, band="STABLE",
+            reason="practice", gate1_passed=False, gate2_passed=False,
+            persistent_domains=[], domain_deviations={}, drivers=[],
+            confounders={"active": [], "labels_en": [], "labels_hi": []},
+            confidence=0.0, improving=False, baseline_phase=True,
+            baseline_state=patient.baseline_state.value,
+            explanation_en="Practice complete. Nothing from a practice run is scored.",
+            explanation_hi="अभ्यास पूरा हुआ। अभ्यास के अंक नहीं गिने जाते।",
+            explanation_source="template", clinician_line="Practice session — excluded from scoring and baselines.",
+            fast=fast_card(lang),
+        )
 
     result = await compute_session(db, session_id)
 

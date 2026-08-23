@@ -247,3 +247,147 @@ export async function startFaceCapture(video: HTMLVideoElement): Promise<FaceCap
     },
   };
 }
+
+// ------------------------------------------------------------------ live landmark streams
+/**
+ * Face landmarks delivered to a callback per frame, for tasks that pair each frame with
+ * live UI state (M3 pairs gaze with where the target dot was AT THAT FRAME — a buffer
+ * collected first and joined later cannot express that pairing).
+ */
+export interface LandmarkStream {
+  stop: () => void;
+  /** Measured delivery rate so far — the number the capture reports as `fps`. */
+  fps: () => number;
+}
+
+export async function startFaceStream(
+  video: HTMLVideoElement,
+  onFrame: (pts: Landmark[] | null, tMs: number) => void,
+): Promise<LandmarkStream> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    throw new CaptureError("unsupported", "Camera is not available in this browser");
+  }
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: "user" },
+      audio: false,
+    });
+  } catch (err) {
+    throw classify(err);
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => undefined);
+
+  const landmarker = await loadFaceLandmarker().catch(() => {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new CaptureError("failed", "Could not load the on-device face model");
+  });
+
+  let running = true;
+  let lastTs = -1;
+  let frames = 0;
+  const started = performance.now();
+
+  const vrc = (video as HTMLVideoElement & {
+    requestVideoFrameCallback?: (cb: (now: number) => void) => number;
+  }).requestVideoFrameCallback?.bind(video);
+
+  const process = (nowMs: number) => {
+    if (!running) return;
+    if (video.readyState >= 2) {
+      const ts = Math.max(nowMs, lastTs + 1);
+      lastTs = ts;
+      frames += 1;
+      try {
+        const res = landmarker.detectForVideo(video, ts);
+        onFrame((res.faceLandmarks?.[0] as Landmark[] | undefined) ?? null, nowMs);
+      } catch {
+        onFrame(null, nowMs);
+      }
+    }
+    if (vrc) vrc(process);
+    else requestAnimationFrame((t) => process(t));
+  };
+  if (vrc) vrc(process);
+  else requestAnimationFrame((t) => process(t));
+
+  return {
+    stop: () => {
+      running = false;
+      stream.getTracks().forEach((t) => t.stop());
+    },
+    fps: () => frames / Math.max(0.001, (performance.now() - started) / 1000),
+  };
+}
+
+/**
+ * Pose landmarks per frame — the standing block and pronator drift. Uses the BACK camera
+ * when available: the phone is propped facing the patient from ~1.5 m, and the rear lens
+ * is the better one on every budget handset.
+ */
+export async function startPoseStream(
+  video: HTMLVideoElement,
+  onFrame: (pts: { x: number; y: number; z: number }[] | null, tMs: number) => void,
+  facing: "user" | "environment" = "environment",
+): Promise<LandmarkStream> {
+  const { loadPoseLandmarker } = await import("./ondevice/pose");
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    throw new CaptureError("unsupported", "Camera is not available in this browser");
+  }
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: facing },
+      audio: false,
+    });
+  } catch {
+    // Laptops have no rear camera; the front one is the honest fallback.
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).catch((err) => {
+      throw classify(err);
+    });
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => undefined);
+
+  const landmarker = await loadPoseLandmarker().catch(() => {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new CaptureError("failed", "Could not load the on-device pose model");
+  });
+
+  let running = true;
+  let lastTs = -1;
+  let frames = 0;
+  const started = performance.now();
+
+  const vrc = (video as HTMLVideoElement & {
+    requestVideoFrameCallback?: (cb: (now: number) => void) => number;
+  }).requestVideoFrameCallback?.bind(video);
+
+  const process = (nowMs: number) => {
+    if (!running) return;
+    if (video.readyState >= 2) {
+      const ts = Math.max(nowMs, lastTs + 1);
+      lastTs = ts;
+      frames += 1;
+      try {
+        const res = landmarker.detectForVideo(video, ts);
+        onFrame(res.landmarks?.[0] ?? null, nowMs);
+      } catch {
+        onFrame(null, nowMs);
+      }
+    }
+    if (vrc) vrc(process);
+    else requestAnimationFrame((t) => process(t));
+  };
+  if (vrc) vrc(process);
+  else requestAnimationFrame((t) => process(t));
+
+  return {
+    stop: () => {
+      running = false;
+      stream.getTracks().forEach((t) => t.stop());
+    },
+    fps: () => frames / Math.max(0.001, (performance.now() - started) / 1000),
+  };
+}

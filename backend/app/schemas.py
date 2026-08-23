@@ -78,6 +78,12 @@ class PatientCreate(PatientBase):
 
 class PatientUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
+    intensity: str | None = Field(default=None, pattern="^(FULL|STANDARD|LIGHT|RESEARCH)$")
+    aphasia_mode: bool | None = None
+    consent_version: str | None = Field(default=None, max_length=16)
+    consent_lang: str | None = Field(default=None, max_length=8)
+    calibration_json: dict | None = None
+    onboarding_complete: bool | None = None
     age: int | None = Field(default=None, ge=0, le=130)
     sex: str | None = Field(default=None, max_length=16)
     languages: list[str] | None = None
@@ -96,6 +102,10 @@ class PatientRead(PatientBase):
     enrolment_date: datetime
     baseline_state: BaselineState
     created_at: datetime
+    intensity: str = "FULL"
+    aphasia_mode: bool = False
+    consent_version: str | None = None
+    onboarding_complete: bool = False
 
 
 # --------------------------------------------------------------------------- sessions
@@ -103,14 +113,29 @@ class SessionStart(BaseModel):
     type: SessionType = SessionType.daily
     device_info: dict | None = None
     offline_captured: bool = False
+    is_practice: bool = False
 
 
 class ModuleSubmit(BaseModel):
-    """Features only. The device extracts; raw media never leaves it (TRD §1)."""
-    features: dict[str, float | str | list | None]
+    """Features — or raw landmark-derived POINTS for modules with a server extractor.
+
+    `raw` is numbers only: gaze coordinates, head positions, per-frame scalars already
+    computed from landmarks on the device. It is never audio, video or an image — INV-1 is
+    about media, and the raw-media invariant test enforces that no endpoint accepts a blob.
+    Sending points for M3/M9 lets the server run the SAME extractors the test suite pins,
+    instead of a JavaScript re-implementation drifting away from them.
+    """
+    features: dict[str, float | str | list | None] = {}
+    raw: dict | None = None
     quality_flag: bool = True
     quality_detail: dict | None = None
     extracted_on_device: bool = True
+    # Fatigue instrumentation (migration 0008). Position on the fatigue curve is part of
+    # every measurement; these make an intensity change or a pause visible to the engine.
+    session_position: int | None = Field(default=None, ge=1, le=64)
+    elapsed_seconds_at_task_start: float | None = Field(default=None, ge=0)
+    intensity: str | None = Field(default=None, pattern="^(full|standard|light|research)$")
+    paused_before_task: bool = False
 
 
 class SessionRead(BaseModel):
@@ -135,6 +160,10 @@ class ModuleResultRead(BaseModel):
     features_json: dict
     quality_flag: bool
     created_at: datetime
+    session_position: int | None = None
+    elapsed_seconds_at_task_start: float | None = None
+    intensity: str | None = None
+    paused_before_task: bool = False
 
 
 class SessionFinalizeResponse(BaseModel):

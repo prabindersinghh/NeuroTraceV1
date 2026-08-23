@@ -21,94 +21,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { hasWasmSimd, measureFps, type FpsResult } from "@/lib/deviceProbes";
 
 type Probe = { label: string; value: string; verdict: "good" | "warn" | "bad" | "info" };
-
-/** Measured frame delivery, not the requested rate. These differ, and only this one counts. */
-interface FpsResult {
-  requested: number;
-  measured: number;
-  frames: number;
-  seconds: number;
-  width: number;
-  height: number;
-  /** Worst gap between frames. A high value means dropped frames, which a mean FPS hides. */
-  worstGapMs: number;
-}
-
-async function measureFps(requestedFps: number, seconds = 6): Promise<FpsResult> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "user",
-      frameRate: { ideal: requestedFps },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-    },
-    audio: false,
-  });
-  const video = document.createElement("video");
-  video.srcObject = stream;
-  video.muted = true;
-  video.playsInline = true;
-  await video.play();
-
-  const track = stream.getVideoTracks()[0];
-  const settings = track.getSettings();
-
-  let frames = 0;
-  let last = 0;
-  let worstGapMs = 0;
-  const started = performance.now();
-
-  await new Promise<void>((resolve) => {
-    // requestVideoFrameCallback fires once per DECODED FRAME. rAF fires once per display
-    // repaint, which is 60 Hz regardless of what the camera is doing — using it here would
-    // report 60 fps on a 30 fps camera, which is exactly the wrong answer.
-    const rvfc = (video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: () => void) => number;
-    }).requestVideoFrameCallback?.bind(video);
-
-    const tick = () => {
-      const now = performance.now();
-      if (last) worstGapMs = Math.max(worstGapMs, now - last);
-      last = now;
-      frames += 1;
-      if (now - started >= seconds * 1000) return resolve();
-      if (rvfc) rvfc(tick);
-      else requestAnimationFrame(tick);
-    };
-    if (rvfc) rvfc(tick);
-    else requestAnimationFrame(tick);
-  });
-
-  const elapsed = (performance.now() - started) / 1000;
-  stream.getTracks().forEach((t) => t.stop());
-
-  return {
-    requested: requestedFps,
-    measured: Number((frames / elapsed).toFixed(1)),
-    frames,
-    seconds: Number(elapsed.toFixed(2)),
-    width: settings.width ?? 0,
-    height: settings.height ?? 0,
-    worstGapMs: Number(worstGapMs.toFixed(1)),
-  };
-}
-
-/** Does this browser get the SIMD wasm build? The non-SIMD fallback is several times slower. */
-function hasWasmSimd(): boolean {
-  try {
-    // Minimal module containing one v128 instruction. Validates only where SIMD is supported.
-    return WebAssembly.validate(
-      new Uint8Array([
-        0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10,
-        10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
-      ]),
-    );
-  } catch {
-    return false;
-  }
-}
 
 function verdictFor(measured: number): Probe["verdict"] {
   if (measured >= 55) return "good";
@@ -265,8 +180,15 @@ export default function Diagnostics() {
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {r.width}×{r.height} · {r.frames} frames in {r.seconds}s · worst gap{" "}
-            {r.worstGapMs} ms
+            {r.worstGapMs} ms · clock: {r.timing_source}
           </p>
+          {r.timing_source === "raf" && (
+            <p className="mt-2 text-sm text-amber-600">
+              Measured with requestAnimationFrame — this browser lacks per-frame callbacks,
+              so the number above is the DISPLAY rate, not the camera rate. Treat it as an
+              upper bound only.
+            </p>
+          )}
           {r.requested === 60 && r.measured < 45 && (
             <p className="mt-2 text-sm">
               Below ~45 fps, saccade <em>peak velocity</em> is not trustworthy on this

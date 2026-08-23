@@ -2,7 +2,10 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-22 · FINAL_PRODUCT_SPEC_v4 built; see
+**Last updated:** 2026-08-23 · DEPLOYED — backend `neurotracev1-production.up.railway.app`,
+frontend `neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The exam now runs the
+21-step protocol (18 web-runnable) with the fall gate, fatigue fields, and raw-point
+server extraction. See CHANGELOG 2026-08-23 for the four-fault deploy debugging. · FINAL_PRODUCT_SPEC_v4 built; see
 [COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for line-by-line status
 (verified-live vs verified-in-tests vs pending).
 

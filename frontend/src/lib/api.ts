@@ -209,6 +209,16 @@ export const api = {
     other_movement_disorder?: boolean;
   }) => request<Patient>("/patients", { method: "POST", json: payload }),
 
+  updatePatient: (id: string, payload: {
+    name?: string;
+    intensity?: string;
+    aphasia_mode?: boolean;
+    consent_version?: string;
+    consent_lang?: string;
+    calibration_json?: Record<string, unknown>;
+    onboarding_complete?: boolean;
+  }) => request<Patient>(`/patients/${id}`, { method: "PATCH", json: payload }),
+
 
   // --- wearables (TIER_2+) ---
   wearableSeries: (patientId: string, metric?: string, days = 30) =>
@@ -248,18 +258,42 @@ export const api = {
   examReport: (patientId: string) =>
     request<ExamReport>(`/report/${patientId}`),
 
+  // --- Awaaz ---
+  awaazBoard: (patientId: string) =>
+    request<import("./types").AwaazBoard>(`/awaaz/${patientId}/board`),
+  awaazSpeak: (patientId: string, payload: {
+    card_id?: string; text?: string; candidates?: string[]; lang?: string;
+  }) =>
+    request<import("./types").AwaazSpeakResult>(`/awaaz/${patientId}/speak`, {
+      method: "POST", json: payload,
+    }),
+  awaazEmergency: (patientId: string) =>
+    request<unknown>(`/awaaz/${patientId}/emergency`, { method: "POST" }),
+
   // --- sessions ---
   battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
 
-  startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean }) =>
+  startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean; is_practice?: boolean }) =>
     request<ExamSession>(`/sessions/${patientId}/start`, { method: "POST", json: payload }),
 
   /** Features only. There is deliberately no media variant of this call. */
+  sessionPlan: (intensity: string) =>
+    request<import("./protocol").SessionPlan>(`/sessions/plan/${intensity}`, { auth: false }),
+
   submitModule: (
     sessionId: string,
     code: string,
     features: ModuleFeatures,
-    quality: { quality_flag?: boolean; quality_detail?: unknown } = {},
+    quality: {
+      quality_flag?: boolean;
+      quality_detail?: unknown;
+      /** Landmark-derived POINTS for modules with a server extractor. Numbers, never media. */
+      raw?: Record<string, unknown>;
+      session_position?: number;
+      elapsed_seconds_at_task_start?: number;
+      intensity?: string;
+      paused_before_task?: boolean;
+    } = {},
   ) =>
     request<ModuleResult>(`/sessions/${sessionId}/module/${code}`, {
       method: "POST",

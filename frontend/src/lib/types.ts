@@ -63,6 +63,10 @@ export interface Patient {
   education_band: string | null;
   baseline_state: BaselineState;
   created_at: string;
+  intensity: string;
+  aphasia_mode: boolean;
+  consent_version: string | null;
+  onboarding_complete: boolean;
 }
 
 /** One exam module, as described by GET /sessions/battery/{schedule}. */
@@ -361,4 +365,44 @@ export interface ExamReport {
   }[];
   method_note: string;
   fast: unknown;
+}
+
+
+// ------------------------------------------------------------------ Awaaz
+export interface AwaazProfile {
+  patient_id: string;
+  /** dysarthria_dominant may auto-speak; everything else confirms first (INV-9). */
+  speech_profile: string;
+  auto_speak_enabled: boolean;
+  auto_speak_threshold: number;
+  voice_status: string;
+  endpoint_silence_seconds: number;
+}
+
+export interface AwaazCard {
+  id: string;
+  text: string;
+  lang: string;
+  icon: string | null;
+  category: string;
+  slot: number;
+  use_count: number;
+  is_emergency: boolean;
+}
+
+export interface AwaazBoard {
+  patient_id: string;
+  profile: AwaazProfile;
+  cards: AwaazCard[];
+}
+
+export interface AwaazSpeakResult {
+  patient_id: string;
+  text: string | null;
+  lang: string;
+  mode: string;
+  speak_now: boolean;
+  candidates: string[];
+  reason: string;
+  requires_confirmation: boolean;
 }

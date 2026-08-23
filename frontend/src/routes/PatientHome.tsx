@@ -2,7 +2,7 @@
  * What the patient sees when they sign in: one button.
  * PRD §4 — 55-75, low digital literacy. No score, no chart, no jargon.
  */
-import { HeartPulse } from "lucide-react";
+import { HeartPulse, MessageSquareText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
@@ -63,6 +63,15 @@ export function PatientHome() {
               className={cn(buttonVariants({ variant: "accent", size: "touch" }), "max-w-sm")}
             >
               {t("begin")}
+            </Link>
+            {/* Awaaz is the OTHER daily surface — for some patients the more important
+                one. Same size as the check-in button, never buried in a menu. */}
+            <Link
+              to={`/awaaz/${me.id}`}
+              className={cn(buttonVariants({ variant: "outline", size: "touch" }), "max-w-sm")}
+            >
+              <MessageSquareText className="mr-2 h-6 w-6" aria-hidden />
+              {t("awaazOpen")}
             </Link>
           </>
         ) : (

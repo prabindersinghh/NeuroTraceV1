@@ -1,5 +1,21 @@
 # DEPLOY — Railway + Neon
 
+> **STATUS 2026-08-23 — DEPLOYED.**
+> Backend: `https://neurotracev1-production.up.railway.app` (`/health` → `database: up`).
+> Frontend: `https://neuro-trace-v1.vercel.app`.
+> `verify_deploy.sh`: **7 passed, 0 failed** — the deployed engine reproduces the local
+> band sequence exactly. Database is container-local SQLite until Neon: data survives a
+> restart, NOT a redeploy. Swapping in Neon is changing `DATABASE_URL` and redeploying —
+> the migrations render clean on the Postgres dialect.
+>
+> Four facts this deploy taught, now baked into config (details in CHANGELOG 2026-08-23):
+> the container gets NO injected `PORT` and the domain's `targetPort` must be set;
+> migrations run on the sync sqlite3 driver because aiosqlite's worker thread blocks
+> process exit; **the container's stdout is a dead pipe** — everything is redirected to
+> stderr, uvicorn's access log included; and the healthcheck gate is REMOVED (D-036)
+> because its private-network probe kills containers the public edge serves fine —
+> run `verify_deploy.sh` after every deploy instead.
+
 A runbook. Follow it in order; every step is checkable.
 
 **Why this matters more than anything else outstanding:** the product currently works on one

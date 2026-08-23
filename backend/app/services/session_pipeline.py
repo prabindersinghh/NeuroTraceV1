@@ -77,6 +77,8 @@ async def _module_history(
             ModuleResult.module_code == module_code,
             ExamSession.ts < before.ts,
             ExamSession.id != before.id,
+            # Practice runs are familiarisation, not measurement (0009).
+            ExamSession.is_practice.is_(False),
         )
         .order_by(ExamSession.ts.asc())
     )
@@ -161,7 +163,8 @@ async def _recent_sessions(session: AsyncSession, patient_id: uuid.UUID,
         select(ExamSession.id, ExamSession.quality_score, ExamSession.identity_verified)
         .where(ExamSession.patient_id == patient_id,
                ExamSession.ts < current.ts,
-               ExamSession.completed.is_(True))
+               ExamSession.completed.is_(True),
+               ExamSession.is_practice.is_(False))
         .order_by(ExamSession.ts.desc())
         .limit(limit)
     )
