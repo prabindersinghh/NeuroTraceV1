@@ -9,7 +9,7 @@
  */
 import { ChevronRight, Plus, Stethoscope } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
 import { EmergencyButton } from "@/components/EmergencyButton";
@@ -24,6 +24,7 @@ import type { Lang, Patient } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CaregiverHome() {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const { user } = useAuth();
   const [patients, setPatients] = useState<Patient[] | null>(null);
@@ -71,9 +72,14 @@ export function CaregiverHome() {
       {adding && (
         <AddPatientForm
           onCancel={() => setAdding(false)}
-          onCreated={() => {
+          onCreated={(patientId) => {
             setAdding(false);
             void load();
+            // Straight into onboarding. Step 3 — "this cannot detect a stroke happening
+            // now, call 108" — is a safety control, and it was unreachable: nothing in the
+            // app ever navigated into this flow, so a family could start measuring having
+            // never been told what the product cannot do.
+            if (patientId) navigate(`/onboarding/${patientId}`);
           }}
         />
       )}
@@ -108,6 +114,14 @@ function PatientCard({ patient }: { patient: Patient }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="mt-auto flex flex-col gap-2">
+        {!patient.onboarding_complete && (
+          <Link
+            to={`/onboarding/${patient.id}`}
+            className={cn(buttonVariants({ variant: "accent", size: "sm" }), "w-full")}
+          >
+            {t("finishSetup")}
+          </Link>
+        )}
         {patient.baseline_state !== "locked" && (
           <span className="inline-flex w-fit items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
             {t("buildingBaseline")}
@@ -122,7 +136,13 @@ function PatientCard({ patient }: { patient: Patient }) {
         </Link>
         <Link
           to={`/exam/${patient.id}`}
-          className={cn(buttonVariants({ variant: "accent", size: "sm" }), "w-full")}
+          className={cn(
+            buttonVariants({
+              variant: patient.onboarding_complete ? "accent" : "outline",
+              size: "sm",
+            }),
+            "w-full",
+          )}
         >
           {t("startCheckin")}
         </Link>
@@ -131,7 +151,7 @@ function PatientCard({ patient }: { patient: Patient }) {
   );
 }
 
-function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
+function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: (patientId?: string) => void }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
@@ -157,7 +177,7 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
     setError(null);
     setBusy(true);
     try {
-      await api.createPatient({
+      const created = await api.createPatient({
         name,
         stroke_date: new Date(strokeDate).toISOString(),
         age: age ? Number(age) : null,
@@ -167,7 +187,7 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
         preferred_hour: hour ? Number(hour) : null,
         other_movement_disorder: movementDisorder,
       });
-      onCreated();
+      onCreated(created?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not enrol the patient");
     } finally {

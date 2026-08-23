@@ -62,7 +62,8 @@ export default function Enrol() {
     if (!sig) { setState("failed"); framesRef.current = []; setCount(0); return; }
     await api.saveIdentitySignature(patientId, sig).catch(() => undefined);
     setState("saved");
-    setTimeout(() => navigate(`/patient/${patientId}`), 1200);
+    // Back where they came from — onboarding, usually, mid-setup.
+    setTimeout(() => navigate(-1), 1200);
   }, [navigate, patientId]);
 
   const start = useCallback(async () => {
@@ -120,7 +121,7 @@ export default function Enrol() {
           {state !== "saved" && (
             <button
               type="button"
-              onClick={() => navigate(`/patient/${patientId}`)}
+              onClick={() => navigate(-1)}
               className="min-h-16 rounded-xl border border-line px-5 text-base"
             >
               {COPY.skip[lang]}

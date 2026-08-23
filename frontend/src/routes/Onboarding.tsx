@@ -286,6 +286,25 @@ export default function Onboarding() {
           </ul>
         )}
 
+        {step === 5 && (
+          <Button
+            className="mt-5 min-h-14 w-full"
+            variant="outline"
+            onClick={() => navigate(`/enrol/${patientId}`)}
+          >
+            {{ en: "Optional: teach it their face (30 seconds)",
+               hi: "वैकल्पिक: उनका चेहरा सिखाएँ (30 सेकंड)",
+               pa: "ਵਿਕਲਪਿਕ: ਉਹਨਾਂ ਦਾ ਚਿਹਰਾ ਸਿਖਾਓ (30 ਸਕਿੰਟ)" }[lang]}
+          </Button>
+        )}
+        {step === 5 && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {{ en: "This helps us notice if someone else does the check-in by mistake. No photo is kept.",
+               hi: "इससे पता चलता है कि जाँच कोई और तो नहीं कर रहा। कोई फ़ोटो नहीं रखी जाती।",
+               pa: "ਇਸ ਨਾਲ ਪਤਾ ਲੱਗਦਾ ਹੈ ਕਿ ਜਾਂਚ ਕੋਈ ਹੋਰ ਤਾਂ ਨਹੀਂ ਕਰ ਰਿਹਾ। ਕੋਈ ਫ਼ੋਟੋ ਨਹੀਂ ਰੱਖੀ ਜਾਂਦੀ।" }[lang]}
+          </p>
+        )}
+
         {step === 6 && (
           <p className="text-lg">
             {{ en: "Do this one together. Every task shows a short video first. Nothing is scored — this is only so they know what to expect.",

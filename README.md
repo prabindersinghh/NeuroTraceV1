@@ -15,6 +15,26 @@ Nothing is diagnosed. No recording ever leaves the device.
 
 ---
 
+## Try it now
+
+**Live:** https://neuro-trace-v1.vercel.app · API https://neurotracev1-production.up.railway.app
+
+| Role | Email | Password |
+|---|---|---|
+| Clinician | `clinician@neurotrace.app` | `neurotrace-demo` |
+| Caregiver | `demo@neurotrace.app` | `neurotrace-demo` |
+| Patient | `ramesh@neurotrace.app` | `neurotrace-demo` |
+
+The clinician view shows the seeded 21-day story: eighteen stable days, then two domains
+drifting together, then the ALERT — with every gate shown. Sign in as the caregiver to run
+a check-in yourself.
+
+> These are demonstration accounts on demonstration data. There is no real patient in this
+> system and no real patient data has ever been in it. If `$DEMO_PASSWORD` is set on the
+> instance it overrides the password above.
+
+---
+
 ## The problem
 
 After an ischemic stroke, survivors go home and effectively disappear from clinical view. A
