@@ -58,6 +58,31 @@ class Settings(BaseSettings):
             v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif v.startswith("sqlite://") and "+aiosqlite" not in v:
             v = v.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
+        if v.startswith("postgresql+asyncpg://") and "?" in v:
+            # Providers hand out libpq-style URLs (Neon's dashboard, Heroku, RDS docs all
+            # do). asyncpg is not libpq: `sslmode` and `channel_binding` are not connect
+            # arguments it accepts, and SQLAlchemy forwards unknown query params straight
+            # into asyncpg.connect(), which raises TypeError AT FIRST CONNECT — i.e. in
+            # production, at boot, not on anyone's laptop. Normalise here so the value an
+            # operator pastes verbatim from a provider dashboard simply works:
+            #   sslmode=require|verify-*  ->  ssl=require   (asyncpg's spelling)
+            #   sslmode=disable           ->  dropped       (asyncpg default is off)
+            #   channel_binding=...       ->  dropped       (asyncpg negotiates SCRAM
+            #                                                channel binding itself)
+            from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+            parts = urlsplit(v)
+            params = []
+            for key, value in parse_qsl(parts.query):
+                if key == "channel_binding":
+                    continue
+                if key == "sslmode":
+                    if value != "disable":
+                        params.append(("ssl", "require"))
+                    continue
+                params.append((key, value))
+            v = urlunsplit(parts._replace(query=urlencode(params)))
         return v
 
     @property

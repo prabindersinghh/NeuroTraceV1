@@ -715,6 +715,10 @@ class UtteranceLog(Base):
     confirmed: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     confidence: Mapped[float | None] = mapped_column(sa.Float)
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    #: The caregiver's evening correction (D4). (text -> corrected_text) IS the labelled
+    #: training pair for the personalised adapter; nothing else stores it.
+    corrected_text: Mapped[str | None] = mapped_column(sa.String(500))
+    reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     ts: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
         nullable=False)

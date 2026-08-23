@@ -33,7 +33,7 @@ import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { demoClipFor } from "@/lib/demoClips";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type StringKey } from "@/lib/i18n";
 import { enqueueSession, isOnline, newLocalId, type QueuedModule } from "@/lib/offline";
 import { emptyOculomotorRaw } from "@/lib/ondevice/ocular";
 import { emptyBalanceRaw } from "@/lib/ondevice/pose";
@@ -56,6 +56,21 @@ import { StepTapping } from "./StepTapping";
 
 type Quality = { ok: boolean; reason?: string };
 
+/** Capture-failure reason → the sentence the patient sees. Anything unmapped falls back
+ *  to the generic retake line — a reason must never surface as a raw code. */
+const QUALITY_MESSAGE: Record<string, StringKey> = {
+  too_noisy: "qualityTooNoisy",
+  no_speech_detected: "qualityNoSpeech",
+  too_loud: "qualityTooLoud",
+  face_not_detected: "qualityNoFace",
+  face_kept_leaving_frame: "qualityNoFace",
+  person_not_detected: "qualityNoPerson",
+  person_kept_leaving_frame: "qualityNoPerson",
+  finger_moved_off_lens: "qualityFinger",
+};
+
+const MAX_RETRIES = 2;
+
 interface Props {
   /** Practice sessions run a short subset, are stored, and are never scored (0009). */
   practice?: boolean;
@@ -74,6 +89,9 @@ export function ProtocolRunner({ practice = false }: Props) {
   const [gatePassed, setGatePassed] = useState(false);
   const [gateSkipped, setGateSkipped] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  // Forces a clean remount of the step's capture component on retry.
+  const [attempt, setAttempt] = useState(0);
   const [stepError, setStepError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -89,6 +107,10 @@ export function ProtocolRunner({ practice = false }: Props) {
     totalPausedMs: 0,
     ocular: emptyOculomotorRaw(),
     balance: emptyBalanceRaw(),
+    retries: new Map<number, number>(),
+    // Lengths of the shared M3 arrays at step entry — a retry truncates back to these,
+    // otherwise the failed attempt's trials stay in the payload alongside the retry's.
+    ocularMark: { pursuit: 0, saccades: 0, holding: -1 },
   });
 
   useEffect(() => {
@@ -146,7 +168,36 @@ export function ProtocolRunner({ practice = false }: Props) {
 
   const advance = useCallback(() => {
     setStepError(null);
+    setRetryNotice(null);
     setIndex((i) => i + 1);
+  }, []);
+
+  /**
+   * TaskShell's rule, enforced at the one choke point every capture passes through:
+   * a failed quality check re-prompts up to twice, then the capture is ACCEPTED with the
+   * flag set — stored, kept out of the baseline, surfaced as a confounder. Asking a third
+   * time tells a patient they are failing; silently keeping a bad capture without ever
+   * offering a retry (what this runner did until now) wastes a recoverable measurement.
+   */
+  const gateQuality = useCallback((quality: Quality, rewind?: () => void): boolean => {
+    const s = step!;
+    if (quality.ok || !quality.reason) return true;
+    const used = store.current.retries.get(s.position) ?? 0;
+    if (used >= MAX_RETRIES) return true;
+    store.current.retries.set(s.position, used + 1);
+    rewind?.();
+    const key = QUALITY_MESSAGE[quality.reason];
+    setRetryNotice(key ? t(key) : t("retake"));
+    setAttempt((a) => a + 1); // remount the capture component clean
+    return false;
+  }, [step, t]);
+
+  const rewindOcular = useCallback(() => {
+    const st = store.current;
+    st.ocular.pursuit.length = st.ocularMark.pursuit;
+    st.ocular.saccades.length = st.ocularMark.saccades;
+    if (st.ocularMark.holding < 0) delete st.ocular.gaze_holding;
+    else if (st.ocular.gaze_holding) st.ocular.gaze_holding.length = st.ocularMark.holding;
   }, []);
 
   // ---- pause ----
@@ -161,6 +212,17 @@ export function ProtocolRunner({ practice = false }: Props) {
       setPaused(false);
     }
   }, [paused]);
+
+  // Mark the aggregate buffers at each step entry, so a retry can rewind them.
+  useEffect(() => {
+    const st = store.current;
+    st.ocularMark = {
+      pursuit: st.ocular.pursuit.length,
+      saccades: st.ocular.saccades.length,
+      holding: st.ocular.gaze_holding?.length ?? -1,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step?.position]);
 
   // Speak each step's instruction as it arrives.
   useEffect(() => {
@@ -279,6 +341,7 @@ export function ProtocolRunner({ practice = false }: Props) {
 
   // ---- per-step render ----
   const done = (code: string) => (features: ModuleFeatures, quality: Quality) => {
+    if (!gateQuality(quality)) return;
     record(code, features, quality);
     advance();
   };
@@ -308,6 +371,12 @@ export function ProtocolRunner({ practice = false }: Props) {
           className="mb-4 max-h-44 w-full rounded-lg border border-line object-cover" />
       )}
       {stepError && <div className="mb-4"><ErrorState message={stepError} /></div>}
+      {retryNotice && (
+        <p role="status"
+          className="mb-4 rounded-xl border-2 border-watch/40 bg-watch-soft px-4 py-3 text-center text-lg">
+          {retryNotice}
+        </p>
+      )}
 
       {step.task === "simple_and_choice_rt" && (
         <StepAttention onDone={done("M10")} onSkip={advance} />
@@ -325,19 +394,20 @@ export function ProtocolRunner({ practice = false }: Props) {
           }} />
       )}
       {step.task === "sustained_ddk_sentence" && (
-        <StepSpeech onDone={done("M4")} onError={setStepError} onSkip={advance} />
+        <StepSpeech key={`m4-${attempt}`} onDone={done("M4")} onError={setStepError} onSkip={advance} />
       )}
       {step.task === "facial_battery" && (
-        <StepFace onDone={done("M1")} onError={setStepError} onSkip={advance} />
+        <StepFace key={`m1-${attempt}`} onDone={done("M1")} onError={setStepError} onSkip={advance} />
       )}
       {["horizontal_saccades", "vertical_saccades", "smooth_pursuit", "gaze_holding"].includes(step.task) && (
         <StepOcular
-          key={step.task}
+          key={`${step.task}-${attempt}`}
           task={step.task as OcularTask}
           seconds={step.seconds}
           raw={store.current.ocular}
           onError={setStepError}
           onDone={(q) => {
+            if (!gateQuality(q, rewindOcular)) return;
             // Submit M3 once, after its last step.
             if (step.task === "gaze_holding") {
               record("M3", {}, q, { raw: store.current.ocular as unknown as Record<string, unknown> });
@@ -358,12 +428,15 @@ export function ProtocolRunner({ practice = false }: Props) {
       )}
       {["romberg_eyes_open", "romberg_eyes_closed", "tandem_stance"].includes(step.task) && (
         <StepBalance
-          key={step.task}
+          key={`${step.task}-${attempt}`}
           task={step.task as BalanceTask}
           seconds={step.seconds}
           raw={store.current.balance}
           onError={setStepError}
           onDone={(q) => {
+            // A balance retry just overwrites tests[task] on the next finish; clearing it
+            // here keeps a half-failed capture out of the payload if the retry is skipped.
+            if (!gateQuality(q, () => { delete store.current.balance.tests[step.task]; })) return;
             if (step.task === "tandem_stance") {
               record("M9", {}, q, { raw: store.current.balance as unknown as Record<string, unknown> });
             }
@@ -372,8 +445,9 @@ export function ProtocolRunner({ practice = false }: Props) {
         />
       )}
       {step.task === "pronator_drift" && (
-        <StepPronator seconds={step.seconds} onError={setStepError}
+        <StepPronator key={`m6-${attempt}`} seconds={step.seconds} onError={setStepError}
           onDone={(raw, q) => {
+            if (!gateQuality(q)) return;
             record("M6", {}, q, { raw: raw as unknown as Record<string, unknown> });
             advance();
           }} />
@@ -388,8 +462,9 @@ export function ProtocolRunner({ practice = false }: Props) {
         />
       )}
       {step.task === "ppg_rhythm" && (
-        <StepPpg seconds={step.seconds} onError={setStepError}
+        <StepPpg key={`m17-${attempt}`} seconds={step.seconds} onError={setStepError}
           onDone={(raw, q, detail) => {
+            if (!gateQuality(q)) return;
             record("M17", {}, { ok: q.ok, reason: q.reason },
               { raw: raw as unknown as Record<string, unknown>, quality_detail: detail });
             advance();

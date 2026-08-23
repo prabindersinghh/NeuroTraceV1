@@ -305,3 +305,149 @@ async def emergency(patient: AuthorisedPatient, db: Session,
         used_speech_recognition=False,
         message="Help has been requested. The phrase was spoken aloud on the device.",
     )
+
+
+# --------------------------------------------------------------------------- D2 · listener
+# Listener sessions are CAPABILITIES, held in process memory on purpose: a link is a
+# bounded window (TTL-capped in listener.py), and a server restart revoking every
+# outstanding link errs exactly the right way for something that shows a live transcript.
+# Nothing about a listener session belongs in the durable record except the audit line.
+from ..awaaz.listener import (  # noqa: E402  (grouped with the endpoints they serve)
+    ListenerState,
+    coaching_line,
+    create_listener_session,
+)
+
+_LISTENER_SESSIONS: dict[str, object] = {}
+
+
+@router.post("/{patient_id}/listener")
+async def mint_listener_link(
+    payload: dict, patient: AuthorisedPatient, user: CurrentUser, db: Session,
+) -> dict:
+    """Caregiver mints a shareable listener link.
+
+    `display_name` is whatever the caregiver wants a stranger to see — often a first name,
+    sometimes just "my father". The enrolled patient name never goes on a page that can be
+    forwarded.
+    """
+    display_name = str(payload.get("display_name") or "").strip()
+    if not display_name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "display_name is required")
+    session = create_listener_session(
+        patient_id=str(patient.id),
+        display_name=display_name[:60],
+        lang=str(payload.get("lang") or "en")[:8],
+        ttl_minutes=int(payload.get("ttl_minutes") or 60),
+    )
+    _LISTENER_SESSIONS[session.token] = session
+    db.add(AuditLog(actor_id=user.id, action="awaaz.listener.mint", patient_id=patient.id,
+                    meta_json={"expires_at": session.expires_at.isoformat()}))
+    await db.commit()
+    return {**session.to_json(), "path": f"/listen/{session.token}"}
+
+
+@router.delete("/listener/{token}", response_model=MessageResponse)
+async def revoke_listener_link(token: str, user: CurrentUser, db: Session) -> MessageResponse:
+    session = _LISTENER_SESSIONS.get(token)
+    if session is not None:
+        session.revoked = True  # type: ignore[attr-defined]
+        db.add(AuditLog(actor_id=user.id, action="awaaz.listener.revoke",
+                        patient_id=uuid.UUID(session.patient_id)))  # type: ignore[attr-defined]
+        await db.commit()
+    return MessageResponse(detail="Listener link revoked")
+
+
+@router.get("/listen/{token}")
+async def listener_view(token: str, db: Session) -> dict:
+    """The listener's page. NO auth — the unguessable token IS the capability.
+
+    Returns the display name, one coaching line (the single most useful thing to say right
+    now, computed from the live utterance pattern), and the recent confirmed utterances.
+    Expired or revoked tokens 404 indistinguishably from never-existed ones.
+    """
+    session = _LISTENER_SESSIONS.get(token)
+    if session is None or not session.active:  # type: ignore[attr-defined]
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This link is no longer active")
+
+    pid = uuid.UUID(session.patient_id)  # type: ignore[attr-defined]
+    rows = list(await db.scalars(
+        select(UtteranceLog)
+        .where(UtteranceLog.patient_id == pid, UtteranceLog.confirmed.is_(True))
+        .order_by(UtteranceLog.ts.desc())
+        .limit(5)
+    ))
+    now = datetime.now(timezone.utc)
+    last_ts = rows[0].ts if rows else None
+    if last_ts is not None and last_ts.tzinfo is None:
+        last_ts = last_ts.replace(tzinfo=timezone.utc)
+    state = ListenerState(
+        display_name=session.display_name,  # type: ignore[attr-defined]
+        lang=session.lang,  # type: ignore[attr-defined]
+        recent_confidences=[float(r.confidence) for r in rows if r.confidence is not None],
+        seconds_since_last_utterance=(now - last_ts).total_seconds() if last_ts else 0.0,
+        utterances=len(rows),
+    )
+    code, line = coaching_line(state)
+    return {
+        "display_name": session.display_name,  # type: ignore[attr-defined]
+        "lang": session.lang,  # type: ignore[attr-defined]
+        "expires_at": session.expires_at.isoformat(),  # type: ignore[attr-defined]
+        "coaching": {"code": code, "line": line},
+        "recent": [
+            {"text": r.text, "lang": r.lang, "ts": r.ts.isoformat()} for r in rows
+        ],
+    }
+
+
+# ------------------------------------------------------------------- D4 · review queue
+from ..awaaz.convergence import build_review_queue  # noqa: E402
+
+
+@router.get("/{patient_id}/review")
+async def review_queue(patient: AuthorisedPatient, db: Session) -> dict:
+    """The caregiver's evening list — worst-first, capped, last 24 hours.
+
+    Worst-first because those labels buy the most; capped because a caregiver who does
+    only three items should have done the three that mattered, and a list that scrolls
+    forever teaches them to do none.
+    """
+    from datetime import timedelta
+
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    rows = list(await db.scalars(
+        select(UtteranceLog)
+        .where(UtteranceLog.patient_id == patient.id,
+               UtteranceLog.ts >= since,
+               UtteranceLog.reviewed_at.is_(None),
+               UtteranceLog.is_emergency.is_(False))
+    ))
+    queue = build_review_queue([
+        {"id": str(r.id), "text": r.text, "lang": r.lang,
+         "confidence": r.confidence, "card_id": str(r.card_id) if r.card_id else None,
+         "ts": r.ts.isoformat()}
+        for r in rows
+    ])
+    return {"patient_id": str(patient.id), "items": queue, "total_candidates": len(rows)}
+
+
+@router.post("/review/{utterance_id}", response_model=MessageResponse)
+async def label_utterance(
+    utterance_id: uuid.UUID, payload: dict, user: CurrentUser, db: Session,
+) -> MessageResponse:
+    """One correction = one labelled training pair, on the utterance row itself."""
+    row = await db.get(UtteranceLog, utterance_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Utterance not found")
+    # Access control rides the patient, same as every other awaaz surface.
+    from ..auth.deps import get_patient_for_user
+
+    await get_patient_for_user(row.patient_id, user, db)
+    corrected = str(payload.get("corrected_text") or "").strip()
+    if not corrected:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "corrected_text is required")
+    row.corrected_text = corrected[:500]
+    row.reviewed_at = datetime.now(timezone.utc)
+    db.add(AuditLog(actor_id=user.id, action="awaaz.review.label", patient_id=row.patient_id))
+    await db.commit()
+    return MessageResponse(detail="Labelled. This is one training pair for their adapter.")

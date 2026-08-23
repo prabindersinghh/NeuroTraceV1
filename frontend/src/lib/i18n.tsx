@@ -12,6 +12,16 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { Lang } from "./types";
 
 const STRINGS = {
+  qualityNoPerson: {
+    en: "We could not see the whole body. Step back so everything fits, then try again.",
+    hi: "पूरा शरीर नहीं दिखा। थोड़ा पीछे हों ताकि सब दिखे, फिर दोबारा करें।",
+    pa: "ਪੂਰਾ ਸਰੀਰ ਨਹੀਂ ਦਿਖਿਆ। ਥੋੜ੍ਹਾ ਪਿੱਛੇ ਹੋਵੋ ਤਾਂ ਜੋ ਸਭ ਦਿਖੇ, ਫਿਰ ਦੁਬਾਰਾ ਕਰੋ।",
+  },
+  qualityFinger: {
+    en: "The finger came off the camera. Rest it gently and try again.",
+    hi: "उँगली कैमरे से हट गई। हल्के से रखें और दोबारा करें।",
+    pa: "ਉਂਗਲੀ ਕੈਮਰੇ ਤੋਂ ਹਟ ਗਈ। ਹਲਕੇ ਨਾਲ ਰੱਖੋ ਅਤੇ ਦੁਬਾਰਾ ਕਰੋ।",
+  },
   awaazOpen: { en: "Help me speak", hi: "बोलने में मदद", pa: "ਬੋਲਣ ਵਿੱਚ ਮਦਦ" },
   awaazEmergency: { en: "I need help", hi: "मुझे मदद चाहिए", pa: "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ" },
   awaazTypeSpeak: {
