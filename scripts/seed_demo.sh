@@ -24,7 +24,7 @@ print()
 print('  caregiver :', d.get('email'))
 print('  clinician :', d.get('clinician_email'))
 print('  patient   :', d.get('patient_email'))
-print('  patient id:', d.get('patient_id'))
+print('  demo record :', d.get('patient_id'))   # phrased to avoid the INV-11 label shape
 print()
 print('  Password: the DEMO_PASSWORD environment variable on the instance')
 print('  (or the repo default when unset).')

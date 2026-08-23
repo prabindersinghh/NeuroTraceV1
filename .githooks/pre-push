@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The privacy gate, wired into git itself.
+#
+# It already existed as a script. On 2026-08-23 it was run as
+# `preflight_push.sh | tail -3 && git push` — the pipeline's exit code is tail's, so a
+# FAILING gate returned 0 and the push proceeded. The gate was fine; the invocation
+# defeated it. A control that depends on being invoked correctly is not a control, so it
+# now runs where no invocation can get it wrong.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+exec bash "$(git rev-parse --show-toplevel)/scripts/preflight_push.sh"
