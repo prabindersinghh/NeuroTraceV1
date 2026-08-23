@@ -80,6 +80,18 @@ per-request cost to users with intermittent data.
 | `utterance_log` | what was spoken, and whether it was confirmed first |
 | `audit_log` | append-only |
 
+**Face identity lives in `patients.calibration_json["identity"]`** — six ratios between
+bone-structure landmarks plus their spreads, computed on device at enrolment. No image, no
+embedding, nothing invertible into a face and nothing matchable outside this account. It is
+a SAME-PERSON check, not a security control: `sessions.identity_verified=False` raises the
+`identity_uncertain` confounder and keeps the session out of the baseline, and never
+refuses the capture. An unenrolled patient is stored as verified, because "never checked"
+must not read to a clinician as "checked and failed". D-015, D-017.
+
+Because that key shares a column with device calibration written by a different endpoint,
+`update_patient` carries `identity` across a `calibration_json` replacement — without it a
+routine PATCH silently un-enrols the patient and the check stops running unreported.
+
 ---
 
 ## 4. Roles and permissions

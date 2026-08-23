@@ -4,6 +4,71 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-23 (later) — Neon boots for real; identity, listener UI, honest imagery
+
+### Two dialect bugs that only a real Postgres could find
+The Neon swap deployed SUCCESS and served 502. Migration 0004's `WHERE locked = 1` is valid
+SQLite (booleans are integers) and rejected by Postgres with `UndefinedFunctionError`. Fixed
+it; the next boot failed on `PRAGMA foreign_keys=ON`, which `alembic/env.py` ran
+unconditionally — a SQLite compensation Postgres neither understands nor needs.
+
+Both had passed CI for weeks. `alembic upgrade --sql` cannot catch either: the statements
+are literal text inside `op.execute`, so they render identically for both dialects. "Rendered
+against Postgres" was never the same claim as "run against Postgres" — D-014.
+`test_migration_portability.py` now scans raw SQL (inside `op.execute`, tracked by paren
+depth) for booleans-as-integers and SQLite-only functions. Its first version flagged
+`sa.DateTime(` as the SQLite `datetime(` and failed two innocent migrations, so the scanner
+is scoped and pinned by its own tests in both directions.
+
+**Verified:** `/health` `database: up`, demo seeded on Postgres, `/clinic/patients` returns
+`Ramesh | band: ALERT`, and the seed survives a subsequent redeploy — which is the entire
+reason for leaving SQLite.
+
+### Identity: the confounder that had nothing computing it
+`identity_uncertain` and `identity_verified` have existed since the beginning, unfed. The
+realistic threat is not an attacker but a family member "helping" with a task, whose
+measurements then enter the patient's baseline.
+
+- Six ratios between **bone-structure** landmarks, on device. Deliberately NOT the M1
+  expression features — those change with every task and with the facial weakness the
+  product exists to measure.
+- `Enrol.tsx`, optional and skippable. No image, no embedding, nothing invertible.
+- **Flags, never blocks.** Unenrolled is recorded as verified, so "never checked" cannot
+  read to a clinician as "checked and failed". D-015.
+- Threshold is calibrated on synthetic geometry only and says so in the source — D-017.
+- Found while testing: `PatientUpdate.calibration_json` REPLACES the dict, so a routine
+  calibration PATCH silently wiped enrolment and the check stopped running with nothing
+  reporting that it had. `update_patient` now carries the `identity` key across.
+
+### The listener and review screens existed only as endpoints
+D2 and D4 shipped as backend earlier; both were unreachable from the UI. `Listen.tsx` (no
+auth — the unguessable token is the capability; no name, no bands, no history for a
+stranger) and `ReviewQueue.tsx` (worst-first, capped, "nothing to review" shown as success).
+Awaaz now carries quiet caregiver-only entry points, placed below the speaking surface so
+nothing competes with the emergency card.
+
+### Landing rebuilt, and why there is no stock portrait on it
+Repositioned around the recovery ecosystem — seven systems, the 21-task protocol, the
+pipeline, the models (labelled synthetic where they are), the three gates — with Awaaz as
+§04 rather than the headline. D-016.
+
+The hero mesh runs on the **visitor's own camera**, opt-in, or shows a labelled diagram. A
+stock portrait was written first and then actually looked at: a studio shot of a young
+bearded Western man. Checking the other three found two more wrong — `hands` is clasped
+hands, captioned as a tapping task, and `home` was an office. But the deciding issue is that
+an identifiable person's face under a medical overlay on a stroke page reads as "this is a
+patient"; the Unsplash licence covers the photograph, not that likeness for implying a
+neurological condition.
+
+### Docs
+README duration claims now match `steps_for()`: 90 seconds is the daily core, ~11m35s the
+21-step FULL protocol. D-014 through D-017 recorded.
+
+**Verified:** backend 841 passed exit 0; frontend 18 passed exit 0; `tsc -b` and production
+build exit 0; preflight 7 passed.
+
+---
+
 ## 2026-08-23 — LIVE on Railway and Vercel; the exam becomes the 21-step protocol
 
 ### Deployed, and verified the only way that counts
@@ -83,6 +148,8 @@ tap. The gate stays server-side; the UI cannot route around it.
 ### Landing
 Signed-out `/` is a landing page in the reference's dark identity (near-black ground,
 mint/sky accents, monospace details). Scoped to that page alone — D-034.
+**Superseded later the same day** by the light editorial treatment (D-016): the product
+surfaces were already light for legibility, and two identities was one too many.
 
 ### Post-deploy additions, verified against the live instances
 Trilingual instructions for all 21 tasks (keyed by TASK so a reorder cannot attach the

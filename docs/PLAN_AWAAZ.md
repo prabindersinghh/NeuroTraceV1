@@ -89,7 +89,7 @@ one-tap family call.
 
 ---
 
-## D2 — listener mode (planned, not built)
+## D2 — listener mode (BUILT — backend + `Listen.tsx` at `/listen/:token`)
 Shareable browser link, no install, showing live cleaned text of what the survivor is
 saying, plus one line of listener coaching: *"Give him 10 extra seconds. Don't finish his
 sentences. Ask yes/no questions if he's stuck."*
@@ -108,7 +108,7 @@ mechanism.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
-## D4 — passive learning loop (planned)
+## D4 — passive learning loop (BUILT — backend + `ReviewQueue.tsx` at `/review/:patientId`)
 Never ask a tired stroke survivor for 500 phrases up front — that is why Project Relate
 stalls. Instead: when the patient taps a card, silently record what they also said aloud →
 a free audio/target pair. Caregiver's 2-minute evening task replays unclear utterances and

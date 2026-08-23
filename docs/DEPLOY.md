@@ -5,8 +5,14 @@
 > Frontend: `https://neuro-trace-v1.vercel.app`.
 > `verify_deploy.sh`: **7 passed, 0 failed** — the deployed engine reproduces the local
 > band sequence exactly. Database is container-local SQLite until Neon: data survives a
-> restart, NOT a redeploy. Swapping in Neon is changing `DATABASE_URL` and redeploying —
-> the migrations render clean on the Postgres dialect.
+> restart, NOT a redeploy. Swapping in Neon is changing `DATABASE_URL` and redeploying.
+>
+> **DONE — and the migrations did NOT run clean, despite rendering clean.** Rendering is not
+> running: `alembic upgrade --sql` emits the literal text inside `op.execute` unchanged, so a
+> SQLite-ism renders identically for Postgres and only fails when a real Postgres parses it.
+> Two did. `WHERE locked = 1` (0004) and an unconditional `PRAGMA foreign_keys=ON` (env.py)
+> each returned SUCCESS-then-502 on the first Neon boot. Fixed, and pinned by
+> `test_migration_portability.py`. D-014 — do not restore the old sentence.
 >
 > Four facts this deploy taught, now baked into config (details in CHANGELOG 2026-08-23):
 > the container gets NO injected `PORT` and the domain's `targetPort` must be set;
