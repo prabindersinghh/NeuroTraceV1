@@ -39,6 +39,7 @@ import { emptyOculomotorRaw } from "@/lib/ondevice/ocular";
 import { emptyBalanceRaw } from "@/lib/ondevice/pose";
 import { loadPlan, runnableSteps, type Intensity, type PlanStep, type SessionPlan } from "@/lib/protocol";
 import { speak, warmUpVoices } from "@/lib/speech-synthesis";
+import { taskLabel } from "@/lib/taskLabels";
 import type { FastCard as FastCardData, ModuleFeatures, Patient } from "@/lib/types";
 
 import { StepAttention } from "./StepAttention";
@@ -163,7 +164,7 @@ export function ProtocolRunner({ practice = false }: Props) {
 
   // Speak each step's instruction as it arrives.
   useEffect(() => {
-    if (step && !paused) speak(step.label_en, lang);
+    if (step && !paused) speak(taskLabel(step.task, step.label_en, lang), lang);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step?.position, paused]);
 
@@ -296,7 +297,12 @@ export function ProtocolRunner({ practice = false }: Props) {
         </button>
       </header>
 
-      <p className="mb-4 text-xl leading-snug">{step.label_en}</p>
+      <p className={[
+        "mb-4 leading-snug",
+        // Aphasia mode: bigger, fewer words on screen at once. Presentation only —
+        // the measured task is identical.
+        patient.aphasia_mode ? "text-3xl" : "text-xl",
+      ].join(" ")}>{taskLabel(step.task, step.label_en, lang)}</p>
       {demo && (
         <video src={demo} autoPlay loop muted playsInline
           className="mb-4 max-h-44 w-full rounded-lg border border-line object-cover" />

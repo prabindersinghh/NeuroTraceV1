@@ -26,6 +26,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { SessionSettings } from "@/components/SessionSettings";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import type { Band, Dashboard as DashboardData } from "@/lib/types";
@@ -306,6 +307,11 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Session settings — caregiver only. Clinicians read; they do not reconfigure. */}
+      {!readOnly && (
+        <SessionSettings patientId={patientId} className="mt-6" />
+      )}
 
       {/* Balance trace. Rendered for clinicians only — a caregiver reading a sway plot
           without a reference frame draws conclusions from ordinary day-to-day variation,

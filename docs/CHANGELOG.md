@@ -84,6 +84,17 @@ tap. The gate stays server-side; the UI cannot route around it.
 Signed-out `/` is a landing page in the reference's dark identity (near-black ground,
 mint/sky accents, monospace details). Scoped to that page alone — D-034.
 
+### Post-deploy additions, verified against the live instances
+Trilingual instructions for all 21 tasks (keyed by TASK so a reorder cannot attach the
+wrong wording); `SessionSettings` on the caregiver dashboard — intensity with the
+position-shift warning printed beside the control, and the aphasia-mode toggle, which the
+runner consumes (larger on-screen wording; everything already speaks). Gendered copy in
+the gate and onboarding corrected to they/them.
+
+Live probes after the auto-deploy of this commit: `/sessions/plan/full` on the PUBLIC
+backend serves 21 steps with the gate before position 11; the pose model ships from the
+public frontend at its full 5,777,746 bytes.
+
 ### Verification
 Backend: 9/9 new protocol-runtime tests; full suite in `final12.log` by exit code.
 Frontend: `tsc -b` exit 0; production build exit 0. Deploys: verify_deploy 7/7 as above.
