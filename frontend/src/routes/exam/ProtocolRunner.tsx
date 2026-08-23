@@ -44,6 +44,7 @@ import type { FastCard as FastCardData, ModuleFeatures, Patient } from "@/lib/ty
 
 import { StepAttention } from "./StepAttention";
 import { StepBalance, type BalanceTask } from "./StepBalance";
+import type { IdentitySignature } from "@/lib/ondevice/identity";
 import { StepFace } from "./StepFace";
 import { StepOcular, type OcularTask } from "./StepOcular";
 import { StepPpg } from "./StepPpg";
@@ -101,6 +102,7 @@ export function ProtocolRunner({ practice = false }: Props) {
   // ---- session-scoped mutable state ----
   const store = useRef({
     modules: new Map<string, QueuedModule>(),
+    identity: null as { score: number; verified: boolean; unenrolled: boolean } | null,
     startedAt: 0,
     pausedBeforeNext: false,
     pauseStartedAt: 0,
@@ -224,6 +226,17 @@ export function ProtocolRunner({ practice = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step?.position]);
 
+  // The enrolled signature, fetched once. If this fails or the patient never enrolled,
+  // `null` means "not checked" and the session is recorded as verified.
+  const [identitySignature, setIdentitySignature] =
+    useState<IdentitySignature | null>(null);
+  useEffect(() => {
+    if (!patientId) return;
+    void api.getIdentitySignature(patientId)
+      .then((r) => setIdentitySignature((r.signature as IdentitySignature) ?? null))
+      .catch(() => setIdentitySignature(null));
+  }, [patientId]);
+
   // Speak each step's instruction as it arrives.
   useEffect(() => {
     if (step && !paused) speak(taskLabel(step.task, step.label_en, lang), lang);
@@ -239,8 +252,13 @@ export function ProtocolRunner({ practice = false }: Props) {
                          gate_skipped: gateSkipped ?? undefined };
     try {
       if (!isOnline()) throw new Error("offline");
+      const identity = st.identity;
       const session = await api.startSession(patientId, {
         type: "daily", device_info: deviceInfo, is_practice: practice,
+        // Unenrolled means "not checked": send verified, so a clinician never reads a
+        // missing enrolment as a failed identity check.
+        identity_verified: identity ? identity.unenrolled || identity.verified : true,
+        identity_score: identity && !identity.unenrolled ? identity.score : undefined,
       });
       for (const m of collected) {
         await api.submitModule(session.id, m.code, m.features, {
@@ -397,7 +415,14 @@ export function ProtocolRunner({ practice = false }: Props) {
         <StepSpeech key={`m4-${attempt}`} onDone={done("M4")} onError={setStepError} onSkip={advance} />
       )}
       {step.task === "facial_battery" && (
-        <StepFace key={`m1-${attempt}`} onDone={done("M1")} onError={setStepError} onSkip={advance} />
+        <StepFace
+          key={`m1-${attempt}`}
+          onDone={done("M1")}
+          onError={setStepError}
+          onSkip={advance}
+          identitySignature={identitySignature}
+          onIdentity={(v) => { store.current.identity = v; }}
+        />
       )}
       {["horizontal_saccades", "vertical_saccades", "smooth_pursuit", "gaze_holding"].includes(step.task) && (
         <StepOcular

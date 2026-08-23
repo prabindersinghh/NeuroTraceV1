@@ -270,10 +270,34 @@ export const api = {
   awaazEmergency: (patientId: string) =>
     request<unknown>(`/awaaz/${patientId}/emergency`, { method: "POST" }),
 
+  awaazMintListener: (patientId: string, payload: { display_name: string; lang?: string; ttl_minutes?: number }) =>
+    request<{ token: string; display_name: string; expires_at: string; path: string }>(
+      `/awaaz/${patientId}/listener`, { method: "POST", json: payload }),
+  /** No auth: the unguessable token IS the capability. */
+  listenerView: (token: string) =>
+    request<{
+      display_name: string; lang: string; expires_at: string;
+      coaching: { code: string; line: string };
+      recent: { text: string; lang: string; ts: string }[];
+    }>(`/awaaz/listen/${token}`, { auth: false }),
+  awaazReviewQueue: (patientId: string) =>
+    request<{ items: unknown[]; total_candidates: number }>(`/awaaz/${patientId}/review`),
+  awaazLabel: (utteranceId: string, correctedText: string) =>
+    request<{ detail: string }>(`/awaaz/review/${utteranceId}`, {
+      method: "POST", json: { corrected_text: correctedText },
+    }),
+
+  saveIdentitySignature: (patientId: string, signature: unknown) =>
+    request<{ detail: string }>(`/patients/${patientId}/identity`, {
+      method: "POST", json: { signature },
+    }),
+  getIdentitySignature: (patientId: string) =>
+    request<{ signature: unknown | null }>(`/patients/${patientId}/identity`),
+
   // --- sessions ---
   battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
 
-  startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean; is_practice?: boolean }) =>
+  startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean; is_practice?: boolean; identity_verified?: boolean; identity_score?: number }) =>
     request<ExamSession>(`/sessions/${patientId}/start`, { method: "POST", json: payload }),
 
   /** Features only. There is deliberately no media variant of this call. */

@@ -8,6 +8,9 @@ import ClinicianReport from "@/routes/ClinicianReport";
 import { Dashboard } from "@/routes/Dashboard";
 import Diagnostics from "@/routes/Diagnostics";
 import Landing from "@/routes/Landing";
+import Enrol from "@/routes/Enrol";
+import Listen from "@/routes/Listen";
+import ReviewQueue from "@/routes/ReviewQueue";
 import Awaaz from "@/routes/Awaaz";
 import Onboarding from "@/routes/Onboarding";
 import { Exam, ExamPractice } from "@/routes/Exam";
@@ -50,6 +53,10 @@ export default function App() {
       <Route path="/clinic" element={<RequireAuth><Clinic /></RequireAuth>} />
       <Route path="/report/:patientId" element={<RequireAuth><ClinicianReport /></RequireAuth>} />
       <Route path="/exam/:patientId" element={<RequireAuth><Exam /></RequireAuth>} />
+      {/* No auth guard: a listener link is opened by a stranger with no account. */}
+      <Route path="/listen/:token" element={<Listen />} />
+      <Route path="/enrol/:patientId" element={<RequireAuth><Enrol /></RequireAuth>} />
+      <Route path="/review/:patientId" element={<RequireAuth><ReviewQueue /></RequireAuth>} />
       <Route path="/awaaz/:patientId" element={<RequireAuth><Awaaz /></RequireAuth>} />
       <Route path="/onboarding/:patientId" element={<RequireAuth><Onboarding /></RequireAuth>} />
       <Route path="/exam/:patientId/practice" element={<RequireAuth><ExamPractice /></RequireAuth>} />

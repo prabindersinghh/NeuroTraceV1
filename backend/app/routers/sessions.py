@@ -102,6 +102,11 @@ async def start_session(
         device_info=payload.device_info,
         offline_captured=payload.offline_captured,
         is_practice=payload.is_practice,
+        # Recorded, never enforced. A failed same-person check makes the session a
+        # confounder (`identity_uncertain`), which lowers confidence and keeps it out of
+        # the baseline — it does not lock a stroke survivor out of their own check-in.
+        identity_verified=payload.identity_verified,
+        identity_score=payload.identity_score,
     )
     db.add(exam)
     await db.flush()

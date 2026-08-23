@@ -2,8 +2,9 @@
 
 # NeuroTrace
 
-**A 90-second neurological examination, performed daily at home, entirely on the patient's
-own phone.**
+**A neurological examination, performed daily at home, entirely on the patient's own
+phone.** Ninety seconds of capture for the daily core; about twelve minutes for the full
+twenty-one-task protocol.
 
 Learns what is normal *for one person*, then reports deviation from that — to their family
 in plain Hindi, Punjabi or English, and to their clinician with the numbers behind it.
@@ -30,8 +31,12 @@ All of it progresses silently, and is noticed when it becomes a crisis.
 ## What this is
 
 A digital replication of the neurological follow-up examination, run daily at home. Twenty
-exam modules across seven clinical domains, of which six run every day inside a 90-second
-budget:
+exam modules across seven clinical domains, executed by a **21-step session plan** at four
+intensities — FULL and RESEARCH run all 21 steps in ~11m35s, STANDARD 18 steps in ~9m45s,
+LIGHT 11 steps in ~6m35s, for the days when a patient cannot manage more.
+
+Six of those modules form the **daily core**, and it is those six that fit the 90-second
+capture budget:
 
 | | Module | What it measures | NIHSS |
 |---|---|---|---|

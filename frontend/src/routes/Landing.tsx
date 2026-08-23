@@ -19,6 +19,10 @@
  * acceptable HERE and nowhere else in the product: a marketing page has no offline
  * promise and no patient on it. The exam never loads a third-party asset — that is INV-1
  * territory.
+ *
+ * There is deliberately NO stock portrait in the hero. The mesh runs on the visitor's own
+ * camera, opt-in, or shows a labelled diagram — see FaceMeshShowcase for why putting a
+ * real person's face under a medical overlay on this page is not ours to do.
  */
 import { Link } from "react-router-dom";
 
@@ -27,12 +31,13 @@ import { FaceMeshShowcase } from "@/components/FaceMeshShowcase";
 const U = (id: string, w = 1200) =>
   `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=70`;
 
+// Verified by eye, not by filename — the first portrait picked for the hero turned out to
+// be a studio shot of a young bearded man, and the "home" candidate was an office.
 const IMG = {
-  // An older man's face, front-lit — the mesh runs on this one for real.
-  portrait: U("1552058544-f2b08422138a", 900),
+  /** A clinician in a white coat holding a phone. No identifiable face. */
   clinician: U("1576091160399-112ba8d25d1d", 1000),
+  /** Two people's hands, one holding the other. No identifiable face. */
   hands: U("1584515933487-779824d29309", 1000),
-  home: U("1590650153855-d9e808231d41", 1000),
 };
 
 const SYSTEMS = [
@@ -127,9 +132,9 @@ export default function Landing() {
 
         {/* The mesh is the hero image: our actual model, running in the visitor's browser. */}
         <div>
-          <FaceMeshShowcase src={IMG.portrait} />
+          <FaceMeshShowcase />
           <p className="mt-3 font-mono text-xs tracking-wide text-muted-foreground">
-            LIVE — the same landmarker the daily check-in uses, running here.
+            DIAGRAM — turn on your camera to run the real landmarker, in your browser.
           </p>
         </div>
       </section>
@@ -185,10 +190,7 @@ export default function Landing() {
           ))}
         </ol>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
-          <div className="overflow-hidden rounded-2xl border border-line">
-            <img src={IMG.hands} alt="A hand performing a tapping task on a phone" className="h-full w-full object-cover" loading="lazy" />
-          </div>
+        <div className="mt-12">
           <div>
             <h3 className="text-2xl font-semibold tracking-tight">The models we run</h3>
             <p className="mt-3 text-muted-foreground">
@@ -272,7 +274,8 @@ export default function Landing() {
             </div>
           </div>
           <div className="overflow-hidden rounded-2xl border border-line">
-            <img src={IMG.home} alt="An older adult at home with a family member" className="h-full w-full object-cover" loading="lazy" />
+            <img src={IMG.hands} alt="Two people's hands, one holding the other"
+                 className="h-full w-full object-cover" loading="lazy" />
           </div>
         </div>
       </section>
@@ -299,7 +302,7 @@ export default function Landing() {
           </div>
           <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_1.2fr]">
             <div className="overflow-hidden rounded-2xl border border-line">
-              <img src={IMG.clinician} alt="A clinician reviewing results" className="h-full w-full object-cover" loading="lazy" />
+              <img src={IMG.clinician} alt="A clinician in a white coat holding a phone" className="h-full w-full object-cover" loading="lazy" />
             </div>
             <div className="flex flex-col justify-center">
               <h3 className="text-2xl font-semibold tracking-tight">Built for where the patients are</h3>

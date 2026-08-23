@@ -24,6 +24,28 @@ const STRINGS = {
   },
   awaazOpen: { en: "Help me speak", hi: "बोलने में मदद", pa: "ਬੋਲਣ ਵਿੱਚ ਮਦਦ" },
   awaazEmergency: { en: "I need help", hi: "मुझे मदद चाहिए", pa: "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ" },
+  awaazListenerShare: {
+    en: "Share a listening link",
+    hi: "सुनने वाला लिंक भेजें",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਭੇਜੋ",
+  },
+  awaazListenerCopy: {
+    en: "Copy the link again",
+    hi: "लिंक फिर कॉपी करें",
+    pa: "ਲਿੰਕ ਫਿਰ ਕਾਪੀ ਕਰੋ",
+  },
+  // The default listener name is deliberately not the patient's full name: a link can be
+  // forwarded, and a stranger does not need their identity in order to help them.
+  awaazListenerDefaultName: {
+    en: "someone who is recovering",
+    hi: "एक व्यक्ति जो ठीक हो रहे हैं",
+    pa: "ਇੱਕ ਵਿਅਕਤੀ ਜੋ ਠੀਕ ਹੋ ਰਹੇ ਹਨ",
+  },
+  awaazReviewTonight: {
+    en: "This evening's review",
+    hi: "आज शाम की जाँच",
+    pa: "ਅੱਜ ਸ਼ਾਮ ਦੀ ਜਾਂਚ",
+  },
   awaazTypeSpeak: {
     en: "Type what you want said aloud",
     hi: "जो बुलवाना है, वह लिखें",

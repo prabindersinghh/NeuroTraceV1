@@ -109,11 +109,23 @@ class PatientRead(PatientBase):
 
 
 # --------------------------------------------------------------------------- sessions
+class IdentitySignatureSave(BaseModel):
+    """The on-device enrolment vector: ratios and spreads, never an image."""
+
+    signature: dict
+
+
 class SessionStart(BaseModel):
     type: SessionType = SessionType.daily
     device_info: dict | None = None
     offline_captured: bool = False
     is_practice: bool = False
+    # The same-person check runs on the device; the server only records its verdict.
+    # `identity_verified=False` flags the session as a confounder — it never rejects it.
+    # Omitted (the default) means "not checked", which is stored as verified: an
+    # unenrolled patient must not read to a clinician as a failed identity check.
+    identity_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    identity_verified: bool = True
 
 
 class ModuleSubmit(BaseModel):

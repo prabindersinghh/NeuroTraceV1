@@ -262,3 +262,49 @@ reference).**
 The adaptive expectation is `intercept + slope × days` — a recovery trajectory extrapolated
 forward. A patient declining along that line is invisible to it forever. Every session is
 scored twice: adaptive for "unlike recently", frozen for "far from established normal".
+
+**D-014 · 2026-08-23 · Rendering a migration against Postgres is not running it.**
+Migration 0004 contained `WHERE locked = 1`. SQLite stores booleans as integers and accepts
+it; Postgres rejects `boolean = integer` with UndefinedFunctionError. It passed CI for weeks
+and broke the first Neon boot. `alembic upgrade --sql` could never have caught it — the
+statement is literal text inside `op.execute`, so it renders identically for both dialects
+and only fails when a real Postgres parses it. The next boot then failed again on
+`PRAGMA foreign_keys=ON`, which env.py ran unconditionally. Two dialect bugs, one root
+cause: the claim "migrations verified against Postgres" was doing work the evidence did not
+support. `backend/tests/test_migration_portability.py` now scans raw SQL for both classes.
+
+**D-015 · 2026-08-23 · Identity is a same-person check, and it never blocks a session.**
+The engine has had an `identity_uncertain` confounder and an `identity_verified` column
+since the beginning, with nothing computing either. The realistic threat is not an attacker
+— it is a daughter who does the tapping task herself because her father is tired, whose
+measurements then enter his baseline. Data poisoning by kindness. So: six ratios between
+bone-structure landmarks, computed on device, compared to an enrolment vector in
+`calibration_json`. Never an image, never an embedding, nothing invertible.
+
+Two rules follow from the population. It uses STRUCTURAL geometry, not the M1 expression
+features — reusing those would flag a patient for smiling, or for the facial weakness the
+product exists to measure. And a failed check flags the session as a confounder; it never
+refuses to run. Locking a stroke survivor out of their own check-in because the light
+changed is worse than a flagged measurement. An unenrolled patient is recorded as verified,
+because "never checked" must not read to a clinician as "checked and failed".
+
+**D-016 · 2026-08-23 · The landing sells the ecosystem; Awaaz is a section inside it.**
+Awaaz demos well and had drifted to the top of the page. It is one capability of a
+post-stroke recovery ecosystem, not the product. The page now leads with the seven body
+systems, the 21-task protocol, the on-device pipeline, the models we actually run (labelled
+synthetic where they are synthetic), and the three-gate engine; Awaaz appears as §04.
+
+The hero mesh runs the real pinned FaceLandmarker on a portrait and draws the 468 landmarks
+it returns — and renders nothing if the model cannot load. A marketing page that draws a
+pretend mesh is claiming a capability, which is the exact failure this product argues
+against. Unsplash imagery is hotlinked: acceptable on a page with no offline promise and no
+patient on it, and nowhere else in the product.
+
+**D-017 · 2026-08-23 · The identity threshold is uncalibrated, and says so.**
+`VERIFY_THRESHOLD = 0.45` and the `z / 12` scaling were set against synthetic geometry —
+a same-person case, a facial-weakness case, a different-face case. No real enrolment pairs
+exist yet, so the field separation between "same person in worse light" and "different
+person" is unmeasured. Recorded here and in the source rather than left to look tuned: the
+same rule the synthetic classifiers are held to. It errs loose on purpose, because the
+cheap mistake is letting a session through unflagged and the expensive one is accusing a
+patient.

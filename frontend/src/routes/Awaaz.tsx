@@ -21,7 +21,7 @@
  */
 import { AlertTriangle, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -109,6 +109,31 @@ export default function Awaaz() {
     api.awaazEmergency(patientId).catch(() => undefined);
   }, [lang, patientId]);
 
+  const [listenerLink, setListenerLink] = useState<string | null>(null);
+
+  /**
+   * Mint a short-lived listener link. The token IS the capability, so the display name is
+   * the caregiver's choice and defaults to something non-identifying — a link can be
+   * forwarded, and a stranger does not need the patient's full name to help them.
+   */
+  const mintListenerLink = useCallback(async () => {
+    if (listenerLink) {
+      await navigator.clipboard?.writeText(listenerLink).catch(() => undefined);
+      return;
+    }
+    try {
+      const res = await api.awaazMintListener(patientId, {
+        display_name: t("awaazListenerDefaultName"),
+        lang, ttl_minutes: 30,
+      });
+      const url = `${window.location.origin}/listen/${res.token}`;
+      setListenerLink(url);
+      await navigator.clipboard?.writeText(url).catch(() => undefined);
+    } catch {
+      // A failed mint is not worth an error screen over the speaking surface.
+    }
+  }, [lang, listenerLink, patientId, t]);
+
   if (error && !board) return <AppShell><ErrorState message={error} /></AppShell>;
   if (!board) return <AppShell><LoadingState /></AppShell>;
 
@@ -183,6 +208,29 @@ export default function Awaaz() {
         <p className="text-xs text-muted-foreground">
           {isAphasia ? t("awaazAphasiaNote") : t("awaazDysarthriaNote")}
         </p>
+        {/* Caregiver actions. Deliberately at the BOTTOM and visually quiet: the patient
+            uses the top of this screen to speak, and a share button competing with the
+            emergency card would be a design failure with real consequences. */}
+        <section className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
+          <button
+            type="button"
+            onClick={() => void mintListenerLink()}
+            className="min-h-12 rounded-xl border border-line px-4 text-sm"
+          >
+            {listenerLink ? t("awaazListenerCopy") : t("awaazListenerShare")}
+          </button>
+          {listenerLink && (
+            <p className="break-all rounded-xl border border-line bg-secondary p-3 text-xs">
+              {listenerLink}
+            </p>
+          )}
+          <Link
+            to={`/review/${patientId}`}
+            className="min-h-12 rounded-xl border border-line px-4 py-3 text-center text-sm"
+          >
+            {t("awaazReviewTonight")}
+          </Link>
+        </section>
       </div>
     </AppShell>
   );

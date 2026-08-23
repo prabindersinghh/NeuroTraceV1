@@ -13,7 +13,13 @@ from ..auth.deps import CurrentUser, get_patient_for_user, require_roles
 from ..db import get_session
 from ..engine.baseline import EnrolmentError, check_enrolment
 from ..models import AuditLog, Patient, Role, User
-from ..schemas import MessageResponse, PatientCreate, PatientRead, PatientUpdate
+from ..schemas import (
+    IdentitySignatureSave,
+    MessageResponse,
+    PatientCreate,
+    PatientRead,
+    PatientUpdate,
+)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -105,7 +111,19 @@ async def update_patient(
     if user.role is Role.clinician or patient.caregiver_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "Only the owning caregiver can edit this patient")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    # `calibration_json` REPLACES the stored dict, which is the right semantics for the
+    # device calibration a caller owns — but the enrolment vector lives in the same column
+    # under `identity` and is written by a different endpoint. Without this, a routine
+    # calibration PATCH silently wipes enrolment, and the same-person check quietly stops
+    # running with nothing anywhere reporting that it had. Carry that one key across.
+    if "calibration_json" in updates:
+        existing_identity = (patient.calibration_json or {}).get("identity")
+        merged = dict(updates["calibration_json"] or {})
+        if existing_identity is not None and "identity" not in merged:
+            merged["identity"] = existing_identity
+        updates["calibration_json"] = merged
+    for field, value in updates.items():
         setattr(patient, field, value)
     db.add(AuditLog(actor_id=user.id, action="patient.update", patient_id=patient.id))
     await db.commit()
@@ -124,3 +142,35 @@ async def delete_patient(
     await db.delete(patient)
     await db.commit()
     return MessageResponse(detail="Patient deleted")
+
+
+@router.post("/{patient_id}/identity", response_model=MessageResponse)
+async def save_identity_signature(
+    payload: IdentitySignatureSave,
+    patient: Annotated[Patient, Depends(get_patient_for_user)],
+    db: Session,
+) -> MessageResponse:
+    """Store the on-device enrolment vector.
+
+    What lands here is six ratios between bone-structure landmarks plus their spreads —
+    not an image, not an embedding, and not something that can be inverted back into a
+    face or matched against anyone outside this account. It rides in `calibration_json`
+    alongside the other per-patient calibration rather than earning a table of its own.
+    """
+    calibration = dict(patient.calibration_json or {})
+    calibration["identity"] = payload.signature
+    patient.calibration_json = calibration
+    await db.commit()
+    return MessageResponse(detail="Identity signature saved")
+
+
+@router.get("/{patient_id}/identity")
+async def get_identity_signature(
+    patient: Annotated[Patient, Depends(get_patient_for_user)],
+) -> dict:
+    """Hand the signature back so the device can compare against it.
+
+    A patient who never enrolled returns `null`, and the device treats that as "not
+    checked" — never as a failed check.
+    """
+    return {"signature": (patient.calibration_json or {}).get("identity")}

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { CaptureError, startFaceCapture, type FaceCaptureHandle } from "@/lib/capture";
 import { useI18n, type StringKey } from "@/lib/i18n";
 import { assessFaceQuality, extractFacialMotor, type FaceTask, type Landmark } from "@/lib/ondevice/face";
+import { verifyAgainst, type IdentitySignature } from "@/lib/ondevice/identity";
 import { speak } from "@/lib/speech-synthesis";
 import type { ModuleFeatures } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -27,11 +28,18 @@ const TASKS: { task: FaceTask; label: StringKey; seconds: number }[] = [
 
 interface Props {
   onDone: (features: ModuleFeatures, quality: { ok: boolean; reason?: string }) => void;
+  /**
+   * The enrolled signature, if this patient ever enrolled. M1 is the only module that
+   * sees the face, so the same-person check rides along here rather than costing the
+   * patient a separate capture.
+   */
+  identitySignature?: IdentitySignature | null;
+  onIdentity?: (verdict: { score: number; verified: boolean; unenrolled: boolean }) => void;
   onError: (message: string) => void;
   onSkip: () => void;
 }
 
-export function StepFace({ onDone, onError, onSkip }: Props) {
+export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentity }: Props) {
   const { t, lang } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const handleRef = useRef<FaceCaptureHandle | null>(null);
@@ -52,8 +60,10 @@ export function StepFace({ onDone, onError, onSkip }: Props) {
       Object.values(captured).flat() as Landmark[][],
       attemptedRef.current || detected,
     );
+    // Same-person check on the frames already in hand — no extra capture, no new model.
+    onIdentity?.(verifyAgainst(identitySignature, Object.values(captured).flat() as Landmark[][]));
     onDone(extractFacialMotor(captured), { ok: quality.ok, reason: quality.reason });
-  }, [onDone]);
+  }, [onDone, onIdentity, identitySignature]);
 
   // Drive the task sequence off a single countdown so the on-screen timer and the
   // capture window can never disagree.
