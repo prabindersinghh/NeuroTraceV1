@@ -4,6 +4,60 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-24 (later) — Three bugs found by driving the app; and a rebase that broke it
+
+### GET /report/{id} was 500ing on any patient who had a session
+`Score.lateralised` does not exist. `lateralised` is a column on `Deviation` (per module);
+`Score` is per session. Both the clinician report and the caregiver review queue presented
+in the browser as **CORS failures**, which is the misleading part worth remembering: an
+unhandled exception bypasses `CORSMiddleware`, so the 500 arrives with no
+`Access-Control-Allow-Origin` header and the browser reports the missing header rather than
+the crash. Now derived from `lateralised_domains` — the list printed beside it — so the flag
+cannot contradict what the clinician is reading.
+
+Two tests already hit this endpoint and both stayed green, because both report on a patient
+who has never run a session: `body["sessions"]` was always `[]`, so the comprehension
+holding the bad attribute never executed. Added `test_the_report_renders_a_row_for_a_scored_session`,
+and **verified it fails with the old line and passes with the new one** rather than assuming.
+
+### Two frontend bugs
+`Diagnostics` appended "Storage quota" from an unguarded async `storage.estimate()`, and
+StrictMode runs effects twice in development — two rows, same React key. Guarded, and the
+append made idempotent. `StepRecall` called `useMemo` below the `mode === "encode"` early
+return, so the hook count changed with the prop; `ProtocolRunner` renders the two modes from
+different slots so it never fired, but it is a latent crash and it failed `npm run lint`.
+Hoisted.
+
+### The blank page, and what caused it
+`pull.rebase = true`, so `git pull` rebases — and **rebase drops merge commits**. The merge
+that integrated origin/main held both the conflict resolutions and unique work, so
+discarding it resurfaced every conflict. The rebase was then completed with resolutions
+that kept BOTH sides of each import conflict, leaving `App.tsx` declaring `Awaaz`,
+`Onboarding`, `Exam` and `ExamPractice` twice. In dev the browser evaluates that module as
+native ESM, so it is a SyntaxError, the module never evaluates, React never mounts, and
+`#root` has zero children — nothing rendered and nothing could.
+
+The same rebase reverted the motion work wholesale: `PipelineFlow.tsx` and
+`SymmetryDiagram.tsx` deleted outright, `index.css` stripped of the route-in, scroll-cue and
+narration keyframes, and NinetyDays, RunTimeline, GateBoard, Landing, button, card and
+states all returned to pre-animation versions. `frontend/src` was restored from the verified
+commit; nothing outside it had differed.
+
+`npm run typecheck` catches the duplicate immediately — confirmed by putting the broken file
+back and running it. It was simply never run after the rebase finished. **If a rebase
+touches this repo, run the verification before trusting the result**, and prefer
+`git config pull.rebase merges` so a merge commit is preserved rather than dropped.
+
+**Verified:** `tsc -b --force` clean · `vitest` 27/27 · `oxlint` 0 errors · `vite build`
+clean · backend `pytest` exit 0, 0 failures · landing mounts with 9/9 sections and zero
+console errors · 0 long tasks across a full-page scroll · the run section's `sticky` pins at
+top 0 through 20/50/80% with the day advancing 08 → 17 → 20 · no mobile overflow at 390px ·
+reduced motion leaves only the three intentionally-hidden elements · `/`, `/clinic`,
+`/dashboard`, `/report`, `/review`, `/enrol`, `/awaaz`, `/diagnostics` all render against a
+seeded backend with no page errors.
+
+---
+
 ## 2026-08-24 — The landing page becomes the argument; scroll motion off the render path
 
 ### The signed-out page was a feature list; it is now one argument

@@ -2,7 +2,12 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-24 · The **signed-out landing page** is now the product's
+**Last updated:** 2026-08-24 (later) · Three bugs fixed by running the app end to end
+against a seeded backend: `GET /report/{id}` 500'd on any patient with a scored session
+(`Score.lateralised` is a column on `Deviation`), `Diagnostics` rendered duplicate React
+keys, and `StepRecall` called a hook conditionally. **A `git pull` rebase dropped a merge
+commit, broke `App.tsx` with duplicate declarations and reverted the motion work** — see
+CHANGELOG 2026-08-24 (later); prefer `git config pull.rebase merges` here. · The **signed-out landing page** is now the product's
 argument rather than a feature list, with a motion system (`frontend/src/lib/motion.ts`)
 built on one rAF ticker: scroll-linked effects write to the DOM or a canvas instead of React
 state, and measure 0 long tasks across a full-page scroll. Smooth scrolling is Lenis, landing
