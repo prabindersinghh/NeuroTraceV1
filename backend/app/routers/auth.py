@@ -19,6 +19,10 @@ from ..schemas import AuthResponse, RefreshRequest, TokenPair, UserCreate, UserL
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+#: The only roles a stranger may assign themselves. Everything else sees data belonging to
+#: someone other than the person signing up.
+SELF_SERVICE_ROLES = frozenset({Role.caregiver, Role.patient})
+
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 _BAD_CREDENTIALS = HTTPException(
@@ -38,6 +42,23 @@ def _issue(user: User) -> TokenPair:
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserCreate, session: Session) -> AuthResponse:
+    # SELF-SERVICE ROLES ONLY.
+    #
+    # `role` arrives from the client, so before this check anyone could sign up as a
+    # clinician and read /clinic/patients — which returns every patient's name and age
+    # across all caregivers. The frontend only ever offered caregiver and patient, which is
+    # precisely why this was invisible: INV-6 says the UI is never the boundary, and here
+    # the UI was doing all the work.
+    #
+    # Privileged accounts are provisioned by an admin (`POST /admin/users`) or by the seed,
+    # both server-side. Nobody grants themselves a role that can see other people's data.
+    if payload.role not in SELF_SERVICE_ROLES:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"The {payload.role.value} role is provisioned by an administrator, "
+            "not through registration",
+        )
+
     email = payload.email.lower().strip()
     existing = await session.scalar(select(User).where(User.email == email))
     if existing is not None:

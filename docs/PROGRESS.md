@@ -2,16 +2,19 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-23 (later) · **DEPLOYED ON NEON POSTGRES** — backend
+**Last updated:** 2026-08-24 (later still) · **DEPLOYED ON NEON POSTGRES** — backend
 `neurotracev1-production.up.railway.app` (`database: up`), frontend
 `neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The demo is seeded on Postgres and
-**survives redeploys**, which is the whole reason for leaving SQLite: `/clinic/patients`
-returns `Ramesh | band: ALERT` after a subsequent deploy. The exam runs the 21-step protocol
-(18 web-runnable) with the fall gate, fatigue fields, and raw-point server extraction. Face
-identity, the Awaaz listener page and the caregiver review queue are built. See CHANGELOG
-2026-08-23 (later) for the two dialect bugs the first Neon boot found. · FINAL_PRODUCT_SPEC_v4 built; see
-[COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for line-by-line status
-(verified-live vs verified-in-tests vs pending).
+**survives redeploys**: `/clinic/patients` returns `Ramesh | band: ALERT` after a subsequent
+deploy. The exam runs the 21-step protocol (18 web-runnable) with the fall gate, fatigue
+fields, and raw-point server extraction. Face identity, the Awaaz listener page, the
+caregiver review queue, onboarding-on-the-actual-path, and an admin console that sees counts
+and never patients are all built. See CHANGELOG 2026-08-23 (later) for the two dialect bugs
+the first Neon boot found, and CHANGELOG 2026-08-24 for a privilege-escalation hole closed
+(D-040) and for the landing page rebuilt as a scroll-driven argument with its own motion
+system (`frontend/src/lib/motion.ts`) and route-level code splitting. ·
+FINAL_PRODUCT_SPEC_v4 built; see [COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md) for
+line-by-line status (verified-live vs verified-in-tests vs pending).
 
 ---
 
@@ -138,6 +141,18 @@ landmarks, and that the asymmetry features rise with a simulated droop (`corner_
 - Frozen-reference drift over 60 days — simulated decline.
 
 ---
+
+### Roles, and a privilege-escalation hole that was open until 2026-08-24
+`/auth/register` used the `role` from the request body, so anyone could sign up as a
+clinician and read `/clinic/patients` — every patient's name and age, across all caregivers.
+Verified against the running app before fixing. Registration is now caregiver/patient only;
+clinician, ASHA worker and admin are provisioned by `POST /admin/users` (admin-only,
+audited) or by the seed. D-040.
+
+### Admin — an operator console that cannot read patients
+`/admin` for the new `admin` role: census, the three-gate funnel, identity flag rate, and
+the append-only audit trail with patient references truncated. No names, no emails, no
+features — asserted by a test, so adding one fails the build. D-041.
 
 ### Face identity — the confounder that finally has an input
 `identity_uncertain` and `identity_verified` existed from the start with nothing computing

@@ -24,6 +24,12 @@ Nothing is diagnosed. No recording ever leaves the device.
 | Clinician | `clinician@neurotrace.app` | `neurotrace-demo` |
 | Caregiver | `demo@neurotrace.app` | `neurotrace-demo` |
 | Patient | `ramesh@neurotrace.app` | `neurotrace-demo` |
+| Admin | `admin@neurotrace.app` | `neurotrace-demo` |
+
+The admin account opens an operator console at `/admin` — census, the three-gate funnel,
+identity flag rate and the audit trail. It shows **no patient records**: an admin who can
+read clinical data is a backdoor around the privacy invariant, so that surface returns
+counts and events only (D-041).
 
 The clinician view shows the seeded 21-day story: eighteen stable days, then two domains
 drifting together, then the ALERT — with every gate shown. Sign in as the caregiver to run

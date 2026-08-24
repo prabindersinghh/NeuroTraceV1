@@ -313,3 +313,34 @@ person" is unmeasured. Recorded here and in the source rather than left to look 
 same rule the synthetic classifiers are held to. It errs loose on purpose, because the
 cheap mistake is letting a session through unflagged and the expensive one is accusing a
 patient.
+
+**D-040 · 2026-08-24 · Privileged roles are provisioned, never self-assigned.**
+`/auth/register` took `role` from the request body and used it. A stranger could sign up as
+`clinician` and read `/clinic/patients`, which returns every patient's name and age across
+every caregiver. Verified before fixing: a fresh self-registered clinician got 200 and a
+real patient row belonging to an unrelated family.
+
+It survived because the frontend only ever offered caregiver and patient, so nothing in the
+product exercised the hole — and because `test_register_accepts_every_role` asserted it as
+though it were a feature. A passing test is what made it look intentional. That is the more
+useful lesson than the fix: INV-6 says the UI is never the boundary, and here the UI was
+doing all the work.
+
+Registration now accepts `caregiver` and `patient` only. Clinician, ASHA worker and admin
+are minted by `POST /admin/users` (admin-only, audited) or by the seed — both server-side.
+Tests must not route around it: `conftest.provision` writes the row directly, the way
+production does.
+
+**D-041 · 2026-08-24 · The admin sees counts, not patients.**
+An operator console is the obvious place for "just let me look at the data" to creep in, and
+in a product whose entire argument is that raw data never leaves the device, an admin who
+can read patient records would be the loudest possible contradiction — a backdoor around
+INV-11 with a friendlier name.
+
+So `/admin` returns aggregates (census, band distribution, the three-gate funnel, identity
+flag rate) and the append-only audit trail with the patient reference truncated to eight
+characters — enough to see repeated activity on one record, not enough to address it. No
+names, no emails, no features, no free text.
+`test_no_admin_response_contains_patient_identifying_data` asserts the shape, so adding a
+name to any admin payload fails the build. If someone needs one patient's clinical data,
+that is a clinician's path, where it is authorised and logged.

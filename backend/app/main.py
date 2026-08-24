@@ -11,7 +11,7 @@ from sqlalchemy import text
 from . import __version__
 from .config import apply_seed, settings
 from .db import engine
-from .routers import asha as asha_router
+from .routers import admin as admin_router, asha as asha_router
 from .routers import auth as auth_router
 from .routers import awaaz as awaaz_router
 from .routers import clinical_data as clinical_router
@@ -67,6 +67,7 @@ app.include_router(demo_router.router)
 app.include_router(wearable_router.router)
 app.include_router(asha_router.router)
 app.include_router(awaaz_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])

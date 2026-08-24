@@ -103,3 +103,32 @@ async def client(engine) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
     fastapi_app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def provision(engine):
+    """Create a privileged account the way production does — server-side.
+
+    `/auth/register` refuses clinician / asha_worker / admin, because `role` comes from the
+    client and a self-assigned clinician can read every patient's name. That is the fix, not
+    an inconvenience, so tests must not route around it by calling the endpoint. This writes
+    the row directly (as the seed and `POST /admin/users` do) and returns a bearer token.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.auth.password import hash_password
+    from app.models import Role, User
+
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def _make(client, email: str, role: str, password: str = "correct-horse-battery"):
+        async with maker() as s:
+            s.add(User(email=email.lower(), pw_hash=hash_password(password),
+                       role=Role(role), full_name=f"Test {role}"))
+            await s.commit()
+        resp = await client.post("/auth/login", json={"email": email, "password": password})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        return body["tokens"]["access_token"], body["user"]
+
+    return _make

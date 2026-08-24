@@ -1,4 +1,4 @@
-export type Role = "patient" | "caregiver" | "clinician";
+export type Role = "patient" | "caregiver" | "clinician" | "asha_worker" | "admin";
 /** PATTERN_ATYPICAL is a real band the engine emits, not a placeholder: persistent,
  *  cross-modal, but SYMMETRIC change. Leaving it out of this union is how the dashboard
  *  came to crash on it — `BAND_STYLE[band]` returned undefined and `style.ring` threw,

@@ -37,6 +37,11 @@ class Role(str, enum.Enum):
     #: monthly deep assessment on a shared tablet, and syncs per patient. They see only
     #: their own households, and only what a visit requires.
     asha_worker = "asha_worker"
+    #: Operator of the deployment, not a participant in care. Sees system health, aggregate
+    #: counts and the audit trail — and NO clinical content, by design. An admin who can
+    #: read patient data is a backdoor around INV-11 with a friendlier name, so the admin
+    #: endpoints return numbers and never rows. See `routers/admin.py`.
+    admin = "admin"
 
 
 class DeploymentTier(str, enum.Enum):

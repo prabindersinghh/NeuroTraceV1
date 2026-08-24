@@ -297,18 +297,18 @@ async def test_the_dashboard_is_empty_but_valid_for_a_new_patient(client):
 
 
 # --------------------------------------------------------------------------- clinician
-async def test_the_clinic_list_is_clinician_only(client):
+async def test_the_clinic_list_is_clinician_only(client, provision):
     caregiver, _ = await register(client)
     assert (await client.get("/clinic/patients", headers=auth(caregiver))).status_code == 403
 
-    clinician, _ = await register(client, email="dr@example.com", role="clinician")
+    clinician, _ = await provision(client, "dr@example.com", "clinician")
     resp = await client.get("/clinic/patients", headers=auth(clinician))
     assert resp.status_code == 200
 
 
-async def test_the_clinic_list_ranks_by_sustained_deviation(client):
+async def test_the_clinic_list_ranks_by_sustained_deviation(client, provision):
     caregiver, _ = await register(client)
-    clinician, _ = await register(client, email="dr@example.com", role="clinician")
+    clinician, _ = await provision(client, "dr@example.com", "clinician")
     await make_patient(client, caregiver, name="Quiet")
     await make_patient(client, caregiver, name="Also quiet")
 
@@ -390,10 +390,10 @@ async def test_another_caregiver_cannot_reach_the_patient(client):
         assert (await client.get(path, headers=auth(other))).status_code == 403, path
 
 
-async def test_a_clinician_has_read_access_but_cannot_edit(client):
+async def test_a_clinician_has_read_access_but_cannot_edit(client, provision):
     token, _ = await register(client)
     patient = await make_patient(client, token)
-    clinician, _ = await register(client, email="dr@example.com", role="clinician")
+    clinician, _ = await provision(client, "dr@example.com", "clinician")
 
     assert (await client.get(f"/dashboard/{patient['id']}",
                              headers=auth(clinician))).status_code == 200

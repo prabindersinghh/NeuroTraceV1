@@ -294,6 +294,16 @@ export const api = {
   getIdentitySignature: (patientId: string) =>
     request<{ signature: unknown | null }>(`/patients/${patientId}/identity`),
 
+  // --- admin (operator surface: counts and audit only, never patient rows) ---
+  adminOverview: () => request<unknown>("/admin/overview"),
+  adminIdentity: () => request<unknown>("/admin/identity"),
+  adminAudit: (limit = 50) => request<unknown>(`/admin/audit?limit=${limit}`),
+  adminProvisionUser: (payload: {
+    email: string; password: string; role: string; full_name?: string;
+  }) => request<{ id: string; email: string; role: string }>("/admin/users", {
+    method: "POST", json: payload,
+  }),
+
   // --- sessions ---
   battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
 

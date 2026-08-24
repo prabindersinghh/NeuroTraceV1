@@ -689,3 +689,46 @@ system's **highest-confidence ALERT** for a condition it does not monitor.
   and producing calm reassurance for a progressive finding.
 
 **32 tests.** Migration 0003. Demo story preserved (still ALERT, now with Gate 3 satisfied).
+
+---
+
+## 2026-08-24 — Admin console, and a privilege-escalation hole closed
+
+### The hole
+`/auth/register` used the `role` from the request body. A stranger could sign up as a
+clinician and read `/clinic/patients`, which returns every patient's name and age across
+every caregiver. **Verified against the running app before fixing:** a freshly self-registered
+clinician got 200 and a real patient row belonging to an unrelated family.
+
+It survived because the frontend only ever offered caregiver and patient, so nothing in the
+product exercised it — and because a test named `test_register_accepts_every_role` asserted
+it as though it were intended. The passing test is what made it look deliberate. INV-6 says
+the UI is never the boundary; here the UI was the whole boundary.
+
+Registration is now caregiver/patient only. Clinician, ASHA worker and admin come from
+`POST /admin/users` (admin-only, audited) or the seed. `conftest.provision` creates them the
+way production does, so tests cannot route around the fix. D-040.
+
+### The console
+New `admin` role (migration 0011, `batch_alter_table` so it works on both dialects — the
+rendered Postgres SQL was checked against what 0001 and the asha_worker migration actually
+named the constraint, `ck_users_role_enum`, rather than assumed). `/admin` shows census, the
+three-gate funnel, baseline and band distributions, the identity flag rate, and the audit
+trail.
+
+It shows **no patient records**, by construction: counts and events only, patient references
+truncated to eight characters. `test_no_admin_response_contains_patient_identifying_data`
+creates a real patient and asserts their name, email and full id appear in no admin payload,
+so adding one fails the build. D-041.
+
+Demo login `admin@neurotrace.app` / `neurotrace-demo`, in the README with the others.
+
+### Onboarding
+The 7-step flow existed, was routed, and nothing navigated into it — including step 3, the
+scope disclosure the file itself calls a safety control. Creating a patient now enters it;
+an unfinished setup shows on the patient card and demotes the check-in button. Face
+enrolment moved into step 5, where the camera is already being set up.
+
+**Verified:** migration + privacy + invariants green; auth and admin suites green;
+frontend 18 passed, `tsc -b` and build exit 0; Postgres render of 0011 matches the
+constraint name in the deployed schema.

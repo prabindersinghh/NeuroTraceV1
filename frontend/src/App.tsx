@@ -8,6 +8,7 @@ import ClinicianReport from "@/routes/ClinicianReport";
 import { Dashboard } from "@/routes/Dashboard";
 import Diagnostics from "@/routes/Diagnostics";
 import Landing from "@/routes/Landing";
+import Admin from "@/routes/Admin";
 import Enrol from "@/routes/Enrol";
 import Listen from "@/routes/Listen";
 import ReviewQueue from "@/routes/ReviewQueue";
@@ -23,6 +24,9 @@ function LandingOrHome() {
   if (!ready) return <LoadingState />;
   // Signed out, the root is the public landing page; signed in, it is the product.
   if (!user) return <Landing />;
+  // An admin has no patients of their own, so Home would show them an empty caregiver
+  // screen. Send them to the operator console instead.
+  if (user.role === "admin") return <Navigate to="/admin" replace />;
   return <Home />;
 }
 
@@ -55,6 +59,7 @@ export default function App() {
       <Route path="/exam/:patientId" element={<RequireAuth><Exam /></RequireAuth>} />
       {/* No auth guard: a listener link is opened by a stranger with no account. */}
       <Route path="/listen/:token" element={<Listen />} />
+      <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
       <Route path="/enrol/:patientId" element={<RequireAuth><Enrol /></RequireAuth>} />
       <Route path="/review/:patientId" element={<RequireAuth><ReviewQueue /></RequireAuth>} />
       <Route path="/awaaz/:patientId" element={<RequireAuth><Awaaz /></RequireAuth>} />

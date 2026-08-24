@@ -109,6 +109,15 @@ class PatientRead(PatientBase):
 
 
 # --------------------------------------------------------------------------- sessions
+class ProvisionUser(BaseModel):
+    """An admin minting a privileged account. Not reachable from /auth/register."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: Role
+    full_name: str | None = Field(default=None, max_length=120)
+
+
 class IdentitySignatureSave(BaseModel):
     """The on-device enrolment vector: ratios and spreads, never an image."""
 

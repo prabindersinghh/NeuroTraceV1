@@ -38,6 +38,7 @@ logger = logging.getLogger("neurotrace.seed")
 DEMO_CAREGIVER_EMAIL = "demo@neurotrace.app"
 DEMO_CLINICIAN_EMAIL = "clinician@neurotrace.app"
 DEMO_PATIENT_EMAIL = "ramesh@neurotrace.app"
+DEMO_ADMIN_EMAIL = "admin@neurotrace.app"
 #: Credentials for the seeded demo accounts.
 #:
 #: Overridable from the environment, and it must be overridden on any deployed instance.
@@ -71,6 +72,9 @@ async def seed_demo(db: AsyncSession) -> dict:
                                           "Dr Demo")
     patient_user = await _get_or_create_user(db, DEMO_PATIENT_EMAIL, Role.patient,
                                              DEMO_PATIENT_NAME, lang="pa")
+    # The operator account. It has no patient of its own and no clinical read path — the
+    # admin endpoints return counts and audit events only.
+    await _get_or_create_user(db, DEMO_ADMIN_EMAIL, Role.admin, "Demo Admin")
 
     # Wipe any previous demo patient so the story always starts clean.
     for old in list(await db.scalars(
@@ -129,6 +133,7 @@ async def seed_demo(db: AsyncSession) -> dict:
         "password": DEMO_PASSWORD,
         "clinician_email": DEMO_CLINICIAN_EMAIL,
         "patient_email": DEMO_PATIENT_EMAIL,
+        "admin_email": DEMO_ADMIN_EMAIL,
         "patient_id": str(patient.id),
         "days": len(DEMO_PLAN),
         "bands": bands,

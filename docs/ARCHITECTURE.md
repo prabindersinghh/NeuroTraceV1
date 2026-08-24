@@ -105,6 +105,20 @@ routine PATCH silently un-enrols the patient and the check stops running unrepor
 
 Enforced server-side on every route (INV-6). UI hiding is never the boundary.
 
+
+**`admin` — the operator, not a participant in care.** Sees `/admin`: census, band
+distribution, the three-gate funnel, the identity flag rate, and the append-only audit trail
+with patient references truncated to eight characters. Sees **no clinical content at all** —
+no names, no emails, no features. An admin who can read patient records is a backdoor around
+INV-11 with a friendlier name, so the surface returns counts and events by construction and
+a test asserts the shape. D-041.
+
+**Privileged roles are provisioned, never self-assigned.** `/auth/register` accepts
+`caregiver` and `patient` only. `clinician`, `asha_worker` and `admin` are created by
+`POST /admin/users` (admin-only, audited) or by the seed. Until 2026-08-24 registration took
+the role from the request body, so a stranger could sign up as a clinician and read the
+whole roster. D-040.
+
 ---
 
 ## 5. The engine

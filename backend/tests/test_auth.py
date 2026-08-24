@@ -1,6 +1,8 @@
 """Auth: register -> login -> protected route -> refresh -> role guard."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.auth.jwt import TokenError, create_access_token, create_refresh_token, decode_token
@@ -44,14 +46,27 @@ async def test_register_rejects_short_password(client):
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("role", ["patient", "caregiver", "clinician"])
-async def test_register_accepts_every_role(client, role):
+@pytest.mark.parametrize("role", ["patient", "caregiver"])
+async def test_register_accepts_the_self_service_roles(client, role):
+    """This once read `test_register_accepts_every_role` and included clinician.
+
+    It was asserting the privilege-escalation hole as though it were a feature: a stranger
+    choosing `clinician` at signup could then read /clinic/patients. The test passing is
+    what made the hole look intentional, which is the more useful lesson than the fix.
+    """
     body = await _register(client, email=f"{role}@example.com", role=role)
     assert body["user"]["role"] == role
 
 
 async def test_register_rejects_unknown_role(client):
-    resp = await client.post("/auth/register", json={**CAREGIVER, "role": "admin"})
+    """A role outside the enum is a validation error (422), not an authorisation one.
+
+    This used "admin" as its example of an unknown role, which stopped being unknown when
+    the admin role was added — it is now a real role that registration refuses, and that
+    refusal is a 403 covered below. Kept distinct because the two failures mean different
+    things: 422 is "no such role", 403 is "that role is not yours to take".
+    """
+    resp = await client.post("/auth/register", json={**CAREGIVER, "role": "superuser"})
     assert resp.status_code == 422
 
 
@@ -130,12 +145,12 @@ async def test_refresh_rejects_an_access_token(client):
 
 
 # --------------------------------------------------------------------------- role guards
-async def test_role_guard_allows_caregiver_and_clinician(client):
+async def test_role_guard_allows_caregiver_and_clinician(client, provision):
     for role in ("caregiver", "clinician"):
-        body = await _register(client, email=f"{role}-guard@example.com", role=role)
+        token, _ = await provision(client, f"{role}-guard@example.com", role)
         resp = await client.get(
             "/auth/clinician-check",
-            headers={"Authorization": f"Bearer {body['tokens']['access_token']}"},
+            headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 200, f"{role}: {resp.text}"
 
@@ -195,3 +210,76 @@ async def test_health_endpoint(client):
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+# --------------------------------------------------------- privilege escalation via role
+# `role` arrives in the registration body. Before this was closed, a stranger could sign up
+# as a clinician and read /clinic/patients — every patient's name and age, across every
+# caregiver. The frontend only ever offered caregiver and patient, which is exactly why it
+# went unnoticed: INV-6 says the UI is never the boundary, and here the UI was the boundary.
+
+PRIVILEGED = ["clinician", "asha_worker", "admin"]
+
+
+@pytest.mark.parametrize("role", PRIVILEGED)
+async def test_a_stranger_cannot_register_themselves_a_privileged_role(client, role):
+    resp = await client.post("/auth/register", json={
+        "email": f"impostor-{role}@example.com",
+        "password": "correct-horse-battery",
+        "role": role,
+    })
+    assert resp.status_code == 403, resp.text
+
+
+@pytest.mark.parametrize("role", ["caregiver", "patient"])
+async def test_self_service_roles_still_work(client, role):
+    resp = await client.post("/auth/register", json={
+        "email": f"real-{role}@example.com",
+        "password": "correct-horse-battery",
+        "role": role,
+    })
+    assert resp.status_code == 201, resp.text
+
+
+async def test_the_roster_is_unreachable_without_a_provisioned_account(client):
+    """The concrete exposure this closed, asserted end to end."""
+    care = (await client.post("/auth/register", json={
+        "email": "family@example.com", "password": "correct-horse-battery",
+        "role": "caregiver"})).json()["tokens"]["access_token"]
+    made = await client.post("/patients", json={
+        "name": "Harjit Kaur", "age": 71, "sex": "female",
+        "stroke_date": (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+        "stroke_side": "right", "languages": ["pa"], "preferred_hour": 9.0,
+    }, headers={"Authorization": f"Bearer {care}"})
+    assert made.status_code == 201, made.text
+
+    blocked = await client.post("/auth/register", json={
+        "email": "stranger@example.com", "password": "correct-horse-battery",
+        "role": "clinician"})
+    assert blocked.status_code == 403, "a stranger just became a clinician"
+
+
+async def test_an_admin_can_provision_a_real_clinician(client, provision):
+    """Blocking self-assignment must not make legitimate clinicians unprovisionable."""
+    admin_token, _ = await provision(client, "ops@neurotrace.app", "admin")
+    resp = await client.post("/admin/users", json={
+        "email": "dr.real@hospital.example", "password": "correct-horse-battery",
+        "role": "clinician", "full_name": "Dr Real",
+    }, headers={"Authorization": f"Bearer {admin_token}"})
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["role"] == "clinician"
+
+    login = await client.post("/auth/login", json={
+        "email": "dr.real@hospital.example", "password": "correct-horse-battery"})
+    assert login.status_code == 200
+    assert login.json()["user"]["role"] == "clinician"
+
+
+async def test_a_caregiver_cannot_provision(client):
+    care = (await client.post("/auth/register", json={
+        "email": "care2@example.com", "password": "correct-horse-battery",
+        "role": "caregiver"})).json()["tokens"]["access_token"]
+    resp = await client.post("/admin/users", json={
+        "email": "self.promoted@example.com", "password": "correct-horse-battery",
+        "role": "clinician"}, headers={"Authorization": f"Bearer {care}"})
+    assert resp.status_code == 403
