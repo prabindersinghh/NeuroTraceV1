@@ -1,341 +1,587 @@
 /**
  * The public landing page — `/` when signed out.
  *
- * POSITIONING, which is the point of this file.
- * NeuroTrace is a POST-STROKE RECOVERY ECOSYSTEM. What it is: a measurement system that
- * learns one survivor's normal across seven body systems and detects deterioration before
- * anyone in the house can name it. Awaaz is ONE capability inside that ecosystem — a real
- * one, and the one that moves a room — but it is a feature of the product, not the
- * product. Every section below is ordered on that basis: the daily measurement and the
- * engine lead; Awaaz appears as a capability card and gets its own section further down.
+ * WHAT THIS PAGE IS FOR
+ * ---------------------
+ * One argument, in as few words as it can be made. A visitor who scrolls to the bottom
+ * should be able to restate it:
  *
- * DESIGN: light, editorial, near-black on warm white with one blue accent — matching the
- * reference the owner supplied. This supersedes the dark treatment (D-034 revised): the
- * product surfaces were already light for legibility, and a landing that matches them is
- * one identity instead of two.
+ *   Nobody measures a stroke survivor between appointments. You cannot fix that with a
+ *   threshold, because a survivor is outside the population's normal range every day by
+ *   definition. So compare them to themselves — and then refuse to raise an alarm unless
+ *   the change persists, appears in more than one system, and has a side.
  *
- * IMAGERY: Unsplash, hotlinked with their documented CDN parameters, under the Unsplash
- * licence (free for commercial use, no attribution required). External requests are
- * acceptable HERE and nowhere else in the product: a marketing page has no offline
- * promise and no patient on it. The exam never loads a third-party asset — that is INV-1
- * territory.
+ * Everything else on the page — the domain table, the pipeline, the care network, Awaaz,
+ * the limits — hangs off those beats rather than competing with them, and every block is
+ * written to be read at a glance: two short sentences, plain words, the technical term
+ * only where it is load-bearing. The earlier draft said the same things in twice as many
+ * words and was correspondingly harder to follow. Length is the enemy on this page, not
+ * detail.
  *
- * There is deliberately NO stock portrait in the hero. The mesh runs on the visitor's own
- * camera, opt-in, or shows a labelled diagram — see FaceMeshShowcase for why putting a
- * real person's face under a medical overlay on this page is not ours to do.
+ * WHAT IT MAY NOT DO
+ * ------------------
+ * No number here is invented. Every figure is in the README, in
+ * `backend/app/engine/gates.py`, or in `backend/app/exam/registry.py`, and the illustrated
+ * run says on its face that it is the seeded demo run.
+ *
+ * MOTION
+ * ------
+ * IntersectionObserver, CSS transitions and two canvases. No animation library — see the
+ * note at the top of `lib/motion.ts`. Every effect has a reduced-motion end state.
  */
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { FaceMeshShowcase } from "@/components/FaceMeshShowcase";
+import { GateBoard } from "@/components/landing/GateBoard";
+import { LandingNav } from "@/components/landing/LandingNav";
+import { NinetyDays } from "@/components/landing/NinetyDays";
+import { PopulationBand } from "@/components/landing/PopulationBand";
+import { RunTimeline } from "@/components/landing/RunTimeline";
+import { TraceLanes } from "@/components/landing/TraceLanes";
+import { DOMAINS, NON_GATING, buildRun } from "@/components/landing/traceData";
+import { LineReveal, Reveal } from "@/components/motion/Reveal";
+import { useTween } from "@/lib/motion";
 
-const U = (id: string, w = 1200) =>
-  `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=70`;
+/**
+ * The portrait the mesh runs on.
+ *
+ * Hotlinked from Unsplash under their licence, with their documented CDN parameters, and
+ * NOT vendored into the repository — `*.jpg` is gitignored and `test_no_source_image_is_tracked`
+ * fails the build on any tracked raster image, because the working tree also contains
+ * photographs of a real patient's records. Punching an exception through that rule to save
+ * one request on a marketing page is not a trade worth making.
+ *
+ * An external request is acceptable HERE and nowhere else in the product: this page has no
+ * offline promise and no patient on it. The exam never loads a third-party asset. If the
+ * fetch fails, `FaceMeshShowcase` draws nothing rather than faking a mesh.
+ */
+const PORTRAIT =
+  "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=760&q=70";
 
-// Verified by eye, not by filename — the first portrait picked for the hero turned out to
-// be a studio shot of a young bearded man, and the "home" candidate was an office.
-const IMG = {
-  /** A clinician in a white coat holding a phone. No identifiable face. */
-  clinician: U("1576091160399-112ba8d25d1d", 1000),
-  /** Two people's hands, one holding the other. No identifiable face. */
-  hands: U("1584515933487-779824d29309", 1000),
-};
+/**
+ * The mesh pulls in the MediaPipe wrapper. Splitting it out of the landing chunk is the
+ * difference between a marketing page that costs 800 kB and one that costs a fifth of
+ * that; the model itself was already deferred to intersection, the code loading it was not.
+ */
+const FaceMeshShowcase = lazy(() =>
+  import("@/components/FaceMeshShowcase").then((m) => ({ default: m.FaceMeshShowcase })),
+);
 
-const SYSTEMS = [
-  ["Cranial nerves", "Face symmetry, eye movement, tongue and palate"],
-  ["Motor speech", "Articulation rate, timing, voice quality"],
-  ["Language", "Naming, comprehension, word finding"],
-  ["Motor", "Tapping speed, drift, fine control, left versus right"],
-  ["Coordination & gait", "Finger-to-nose, alternating movement, walking"],
-  ["Posterior / vestibular", "Saccades, pursuit, balance, subjective vertical"],
-  ["Cognition & mood", "Reaction time, memory, attention, PHQ-2"],
-];
-
-const PIPELINE = [
-  ["01", "Capture", "The phone camera and microphone record a task. Nothing is stored."],
-  ["02", "Extract on device", "MediaPipe landmarks and DSP turn the signal into numbers, in the browser. The recording is discarded in the same tick."],
-  ["03", "Compare to their own baseline", "Median and MAD over a 12-session window, robust z, RCI, CUSUM — never a population average."],
-  ["04", "Three gates", "Persistence, then cross-modality, then laterality. All three, or it is not an alert."],
-  ["05", "Explain in their language", "A guardrailed template in English, Hindi or Punjabi — with what changed, and what to do."],
-];
-
-const MODELS = [
-  ["Face landmarker", "468 points, on device", "MediaPipe, SHA-pinned"],
-  ["Pose landmarker", "33 points for balance and drift", "MediaPipe, SHA-pinned"],
-  ["Dysarthria classifier", "Advisory signal into motor speech", "Synthetic — awaiting TORGO/UASpeech"],
-  ["Rhythm irregularity", "“Get an ECG” advisory from fingertip PPG", "Synthetic — awaiting PhysioNet AF"],
-  ["Asymmetry discriminator", "Empirical basis for the laterality gate", "Synthetic — awaiting mPower"],
-];
-
-function Kicker({ children }: { children: React.ReactNode }) {
+function Rule({ n, label, dark = false }: { n: string; label: string; dark?: boolean }) {
   return (
-    <p className="mb-4 font-mono text-xs tracking-[0.22em] text-accent">{children}</p>
+    <div className={`flex items-center gap-3 border-t pt-4 ${dark ? "border-white/15" : "border-line"}`}>
+      <span className={`font-mono text-[11px] tracking-[0.2em] ${dark ? "text-[#7FB2F0]" : "text-accent"}`}>{n}</span>
+      <span className={`font-mono text-[11px] uppercase tracking-[0.2em] ${dark ? "text-white/50" : "text-muted-foreground"}`}>
+        {label}
+      </span>
+    </div>
   );
 }
 
+const H2 = "text-[clamp(1.75rem,3.4vw,2.6rem)] font-semibold leading-[1.1] tracking-[-0.025em]";
+const LEAD = "text-[16px] leading-relaxed text-muted-foreground sm:text-[17px]";
+
 export default function Landing() {
+  const series = useMemo(() => buildRun(42), []);
+
+  // The hero plate draws the eighteen quiet days and stops. It does not show the alert —
+  // that is the payoff further down, and spending it here would flatten the page.
+  const [heroTarget, setHeroTarget] = useState(1);
+  useEffect(() => {
+    const t = window.setTimeout(() => setHeroTarget(18), 260);
+    return () => window.clearTimeout(t);
+  }, []);
+  const heroDay = useTween(heroTarget, 2400);
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* ---------------------------------------------------------------- header */}
-      <header className="sticky top-0 z-40 border-b border-line bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <span className="text-lg font-semibold tracking-tight">NEUROTRACE</span>
-          <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            <a href="#ecosystem" className="hover:text-foreground">The ecosystem</a>
-            <a href="#technology" className="hover:text-foreground">Technology</a>
-            <a href="#engine" className="hover:text-foreground">The engine</a>
-            <a href="#awaaz" className="hover:text-foreground">Awaaz</a>
-            <a href="#care" className="hover:text-foreground">Care network</a>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Link to="/login" className="px-3 py-2 text-sm text-muted-foreground">Log in</Link>
+    <div id="top" className="min-h-screen bg-background text-foreground">
+      <a
+        href="#main"
+        className="focus-ring sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-foreground focus:px-4 focus:py-2 focus:text-background"
+      >
+        Skip to content
+      </a>
+
+      <LandingNav />
+
+      <main id="main">
+        {/* ══════════════════════════════════════════════════════════ 01 · HERO */}
+        <section className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-14 lg:pb-24">
+          <div className="grid items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
+            <div>
+              <Reveal>
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  Post-stroke recovery · measured at home · EN / हिं / ਪੰ
+                </p>
+              </Reveal>
+
+              <h1 className="mt-6 text-[clamp(2.05rem,5.6vw,3.9rem)] font-semibold leading-[1.03] tracking-[-0.032em]">
+                <LineReveal lines={["Twenty minutes of neurology,", "every three months."]} />
+                <LineReveal
+                  lines={["Ninety seconds a day is more."]}
+                  className="block text-muted-foreground"
+                  step={2}
+                />
+              </h1>
+
+              <Reveal step={4} className="mt-6 max-w-xl">
+                <p className="text-[17px] leading-[1.6] text-muted-foreground sm:text-[19px]">
+                  Recovery happens at home, where nobody is measuring anything. NeuroTrace
+                  runs a ninety-second neurological check on the survivor's own phone each
+                  morning and learns what normal looks like{" "}
+                  <em className="not-italic text-foreground">for that one person</em>.
+                </p>
+              </Reveal>
+
+              <Reveal step={5} className="mt-8 flex flex-wrap items-center gap-3">
+                <Link
+                  to="/register"
+                  className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-6 py-3.5 text-[15px] font-medium text-background"
+                >
+                  Open the demo
+                  <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
+                </Link>
+                <a
+                  href="#gates"
+                  className="focus-ring rounded-xl border border-line px-6 py-3.5 text-[15px] transition-colors hover:border-foreground/40"
+                >
+                  See how it decides
+                </a>
+              </Reveal>
+
+              <Reveal step={6} className="mt-8">
+                <p className="max-w-lg border-l-2 border-watch pl-4 text-[14px] leading-relaxed text-muted-foreground">
+                  A monitoring aid, not a medical device. It reasons over days, so it cannot
+                  see a stroke that is happening now. Sudden weakness, a drooping face or
+                  slurred speech is an emergency — call 108 first, always.
+                </p>
+              </Reveal>
+            </div>
+
+            {/* The instrument. Dark because it is an instrument inside a light page, not a
+                second theme: the product surfaces stay light for patients in daylight. */}
+            <Reveal step={3} y={24}>
+              <div className="rounded-2xl border border-white/10 bg-[#0A121C] p-4 sm:p-5">
+                <div className="flex items-baseline justify-between gap-3 pb-3">
+                  <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
+                    SEVEN DOMAINS · ONE PERSON
+                  </p>
+                  <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
+                    DAY {String(Math.round(heroDay)).padStart(2, "0")}
+                  </p>
+                </div>
+                <TraceLanes series={series} day={heroDay} laneHeight={30} />
+              </div>
+              <p className="mt-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
+                Seeded demo run · the band is this person's own normal, and it does not exist
+                until twelve sessions have built it
+              </p>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════ 02 · THE GAP */}
+        <section id="problem" className="border-y border-line bg-surface/50">
+          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+            <Reveal><Rule n="01" label="The gap" /></Reveal>
+
+            <div className="mt-7 grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-16">
+              <div>
+                <h2 className={H2}>
+                  <LineReveal lines={["Ninety days between", "appointments. One of them", "is measured."]} />
+                </h2>
+                <Reveal step={2} className="mt-5 max-w-lg">
+                  <p className={LEAD}>
+                    A neurologist sees a survivor for about twenty minutes, once every one to
+                    three months. What goes wrong in between goes wrong slowly — and is
+                    noticed when it has become a crisis.
+                  </p>
+                </Reveal>
+              </div>
+
+              <Reveal step={2}>
+                <NinetyDays measured={false} />
+                <p className="mt-3.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  ■ examined&nbsp;&nbsp;·&nbsp;&nbsp;□ not observed
+                </p>
+              </Reveal>
+            </div>
+
+            {/* All four are the README's, and all four are published ranges rather than
+                anything this product measured. Said so, on the page. */}
+            <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["39–47%", "develop post-stroke cognitive impairment"],
+                ["~60%", "still have aphasia or dysarthria past six months"],
+                ["11–41%", "develop post-stroke depression"],
+                ["1 in 4", "has a second stroke"],
+              ].map(([stat, label], i) => (
+                <Reveal key={stat} step={i} className="bg-background p-5">
+                  <p className="text-[27px] font-semibold tracking-[-0.02em] tabular-nums">{stat}</p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">{label}</p>
+                </Reveal>
+              ))}
+            </div>
+            <Reveal className="mt-3.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Published incidence ranges. Not measurements taken by this product.
+              </p>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ════════════════════════════════════════════════════ 03 · WHOSE NORMAL */}
+        <section id="baseline" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <Reveal><Rule n="02" label="Whose normal" /></Reveal>
+          <div className="mt-7 grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-end lg:gap-14">
+            <h2 className={H2}>
+              <LineReveal lines={["Normal is a person,", "not a population."]} />
+            </h2>
+            <Reveal step={2}>
+              <p className={LEAD}>
+                A stroke survivor is outside the population's normal range on the day they
+                come home and on every day after — that is what a stroke is. So a population
+                threshold either fires every morning until someone mutes it, or is widened
+                until it can no longer see anything. We compare each morning to that person's
+                own last twelve sessions instead.
+              </p>
+            </Reveal>
+          </div>
+
+          {/* The same data, twice, with only the reference changed. Two static plates rather
+              than a scrubbed morph: the comparison is the point, and a comparison you can
+              look back and forth between is read faster than one you have to scroll. */}
+          <div className="mt-10 grid gap-5 md:grid-cols-2">
+            {[
+              { p: 0, label: "AGAINST A POPULATION", note: "Flagged every single day. Useless by the end of the first week." },
+              { p: 1, label: "AGAINST THEMSELVES", note: "Flat for eighteen days, then days 19–21 move. Same data, different reference." },
+            ].map((panel, i) => (
+              <Reveal key={panel.label} step={i}>
+                <div className="rounded-2xl border border-white/10 bg-[#0A121C] p-4">
+                  <p className="pb-3 font-mono text-[10px] tracking-[0.2em] text-white/45">{panel.label}</p>
+                  <PopulationBand progress={panel.p} />
+                </div>
+                <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">{panel.note}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════ 04 · THE SECOND PROBLEM */}
+        <section className="border-y border-line bg-surface/50">
+          <div className="mx-auto max-w-3xl px-6 py-16 text-center lg:py-20">
+            <Reveal>
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                The second problem
+              </p>
+            </Reveal>
+            {/* The forced line breaks are sized for the narrowest viewport: a "line" that
+                wraps again inside its own mask produces a ragged centred block on a phone. */}
+            <h2 className="mt-6 text-[clamp(1.6rem,3.6vw,2.6rem)] font-semibold leading-[1.12] tracking-[-0.028em]">
+              <LineReveal
+                lines={[
+                  "Three domains agreeing",
+                  "looks like overwhelming",
+                  "evidence.",
+                  <span key="k" className="text-muted-foreground">Sometimes it is evidence</span>,
+                  <span key="l" className="text-muted-foreground">of the wrong thing.</span>,
+                ]}
+              />
+            </h2>
+            <Reveal step={5} className="mx-auto mt-7 max-w-xl">
+              <p className={LEAD}>
+                Parkinson's slows the hand, quietens the voice and flattens the face — all at
+                once, and it is common in the age band we monitor. Persistence and
+                corroboration alone would make it our most confident alert, for a condition
+                this product does not monitor and cannot help with.
+              </p>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════ 05 · THE DECISION */}
+        <section id="gates" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div>
+            <Reveal><Rule n="03" label="The decision" /></Reveal>
+            <div className="mt-7 grid gap-8 lg:grid-cols-[1fr_1fr] lg:items-end lg:gap-14">
+              <h2 className={H2}>
+                <LineReveal lines={["Three gates. All three,", "or it is not an alert."]} />
+              </h2>
+              <Reveal step={2}>
+                <p className={LEAD}>
+                  A false alarm does not cost one notification — it costs the product, because
+                  a muted tool detects nothing. Each gate refuses a specific way this system
+                  could have been fooled. Pick one.
+                </p>
+              </Reveal>
+            </div>
+            <Reveal step={3} className="mt-10">
+              <GateBoard />
+            </Reveal>
+
+            <Reveal className="mt-8 rounded-2xl border border-line bg-surface/60 p-5 sm:p-6">
+              <p className="text-[16px] font-medium">And an improving trajectory never alerts.</p>
+              <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-muted-foreground">
+                A recovering patient deviates enormously from a baseline taken when they were
+                worse. That is the largest signal this engine will ever see, and it is success.
+              </p>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════ 06 · THE RUN */}
+        <section id="run" className="border-y border-line bg-surface/50">
+          <div className="mx-auto max-w-6xl px-6 pb-2 pt-16 lg:pt-20">
+            <Reveal><Rule n="04" label="Twenty-one days" /></Reveal>
+            <Reveal step={1} className="mt-7 max-w-2xl">
+              <h2 className={H2}>One alert for the episode. Not one every morning.</h2>
+            </Reveal>
+          </div>
+          <RunTimeline series={series} />
+        </section>
+
+        {/* ════════════════════════════════════════════════════════ 07 · ON DEVICE */}
+        <section id="device">
+          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+            <Reveal><Rule n="05" label="On the phone" /></Reveal>
+            <div className="mt-7 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
+              <div>
+                <h2 className={H2}>
+                  <LineReveal lines={["The server has no endpoint", "that accepts a recording."]} />
+                </h2>
+                <Reveal step={2} className="mt-5 max-w-xl space-y-4">
+                  <p className={LEAD}>
+                    Landmarks and audio features are computed in the browser and the frames
+                    are dropped in the same tick. What syncs is a dictionary of numbers.
+                  </p>
+                  <p className={LEAD}>
+                    This is not a policy someone has to remember. There is no upload route for
+                    audio, video or images anywhere in the API, and no column in the database
+                    that could hold one — so a deployment mistake cannot leak a recording that
+                    was never sent.
+                  </p>
+                  <p className={LEAD}>
+                    The session completes in airplane mode and syncs later, because the model
+                    is served from our own origin and precached.
+                  </p>
+                </Reveal>
+
+                <div className="mt-8 space-y-px overflow-hidden rounded-2xl border border-line">
+                  {[
+                    ["Capture", "The camera and microphone run a task. Nothing is written to disk."],
+                    ["Extract, on device", "MediaPipe landmarks and audio DSP turn the signal into numbers, in the browser."],
+                    ["Compare to their own history", "Twelve sessions of their own past. Never a population average."],
+                    ["Three gates", "Persistence, then corroboration, then a side."],
+                    ["Say it in their language", "One guardrailed sentence in English, Hindi or Punjabi: what changed, and what to do."],
+                  ].map(([title, body], i) => (
+                    <Reveal key={title} step={i} className="bg-background px-5 py-3.5">
+                      <div className="flex gap-4">
+                        <span className="mt-0.5 font-mono text-[11px] tabular-nums text-accent">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <div>
+                          <p className="text-[15px] font-medium">{title}</p>
+                          <p className="mt-1 text-[14px] leading-relaxed text-muted-foreground">{body}</p>
+                        </div>
+                      </div>
+                    </Reveal>
+                  ))}
+                </div>
+              </div>
+
+              <Reveal step={2}>
+                <Suspense
+                  fallback={
+                    <div className="aspect-[3/4] w-full max-w-[360px] animate-pulse rounded-2xl border border-line bg-background" />
+                  }
+                >
+                  <FaceMeshShowcase src={PORTRAIT} className="max-w-[360px]" />
+                </Suspense>
+                <p className="mt-3 max-w-[360px] text-[13px] leading-relaxed text-muted-foreground">
+                  Not an illustration — the same pinned face model the daily check-in uses,
+                  running in your browser. If it cannot run here, nothing is drawn.
+                </p>
+              </Reveal>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════ 08 · WHAT IT MEASURES */}
+        <section id="measures" className="border-y border-line bg-surface/50">
+          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+            <Reveal><Rule n="06" label="What it measures" /></Reveal>
+            <div className="mt-7 grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-14">
+              <h2 className={H2}>
+                <LineReveal lines={["Seven domains can raise a flag.", "Four of them carry a side."]} />
+              </h2>
+              <Reveal step={2}>
+                <p className={LEAD}>
+                  Twenty-one tasks. Six run every day inside the ninety-second budget; the rest
+                  are weekly or monthly. Speech and language have no left or right — they can
+                  back up a one-sided finding, never establish one.
+                </p>
+              </Reveal>
+            </div>
+
+            <div className="mt-10 overflow-hidden rounded-2xl border border-line bg-background">
+              {DOMAINS.map((domain, i) => (
+                <Reveal
+                  key={domain.key}
+                  step={i}
+                  className="grid grid-cols-1 gap-1.5 border-b border-line px-5 py-3.5 last:border-0 sm:grid-cols-[minmax(150px,0.85fr)_minmax(0,2.4fr)_auto] sm:items-baseline sm:gap-6"
+                >
+                  <p className="text-[15px] font-medium">{domain.label}</p>
+                  <p className="text-[14px] leading-relaxed text-muted-foreground">{domain.measures}</p>
+                  <div className="flex items-center gap-3 sm:justify-end">
+                    <span className="font-mono text-[11px] text-muted-foreground">{domain.modules}</span>
+                    <span
+                      className={`rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wider ${domain.lateral ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
+                        }`}
+                    >
+                      {domain.lateral ? "HAS A SIDE" : "NO SIDE"}
+                    </span>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+
+            <Reveal className="mt-3.5 grid gap-3 sm:grid-cols-2">
+              {NON_GATING.map((row) => (
+                <div key={row.label} className="rounded-xl border border-dashed border-line px-5 py-3.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-[15px] font-medium">{row.label}</p>
+                    <span className="font-mono text-[11px] text-muted-foreground">{row.modules}</span>
+                  </div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                    {row.note}. Recorded daily and shown to the clinician — but never gates an alert.
+                  </p>
+                </div>
+              ))}
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════════ 09 · THE CARE NETWORK */}
+        <section id="care" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <Reveal><Rule n="07" label="One morning, four views" /></Reveal>
+          <h2 className={`mt-7 max-w-2xl ${H2}`}>
+            <LineReveal lines={["Four people. Four different", "views of the same morning."]} />
+          </h2>
+
+          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Survivor", "One button and a short session. Never a score — a number in front of the person being measured changes what they do next."],
+              ["Caregiver", "A band, one sentence about what changed, and what to do. Confounders printed, not hidden."],
+              ["Clinician", "A ranked roster, gate states, laterality, drift against a frozen reference, and an audit log."],
+              ["ASHA worker", "A household list with due items. Offline-first, and safe to sync twice."],
+            ].map(([who, what], i) => (
+              <Reveal key={who} step={i} className="bg-background p-5">
+                <p className="text-[15px] font-medium">{who}</p>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">{what}</p>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal className="mt-5 grid gap-6 rounded-2xl border border-line p-6 sm:p-7 lg:grid-cols-[1fr_1.15fr] lg:gap-10">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                A capability inside the system
+              </p>
+              <h3 className="mt-4 text-[24px] font-semibold tracking-[-0.02em]">
+                Awaaz — so they can be understood
+              </h3>
+              <p className="mt-2.5 text-[15px] leading-relaxed text-muted-foreground">
+                A communication board for survivors whose speech was affected. It runs on the
+                speech profile the daily check-in already produces, so it behaves differently
+                for a muscle problem than for a language one.
+              </p>
+            </div>
+            <div className="space-y-3 text-[14px] leading-relaxed">
+              <p className="rounded-xl border border-line p-4">
+                <strong className="font-medium">Dysarthria</strong> — the muscles are affected,
+                the message is intact. Confident speech is spoken aloud automatically.
+              </p>
+              <p className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4">
+                <strong className="font-medium">Aphasia</strong> — the language system is
+                affected, and the intended words may not be the ones produced. So the system
+                only ever offers candidates, and nothing is spoken until the patient taps one.
+                Putting words into a mouth that cannot veto them is the one thing this feature
+                must never do, and the rule is enforced on the server.
+              </p>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* ═══════════════════════════════════════════ 10 · WHAT WE DO NOT CLAIM */}
+        <section id="limits" className="bg-[#0A121C] text-white">
+          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+            <Reveal><Rule n="08" label="What we do not claim" dark /></Reveal>
+            <h2 className={`mt-7 max-w-2xl ${H2}`}>
+              <LineReveal lines={["The limits are part of the product."]} />
+            </h2>
+            <Reveal step={2} className="mt-5 max-w-xl">
+              <p className="text-[16px] leading-relaxed text-white/60 sm:text-[17px]">
+                A monitoring tool that oversells itself is worse than no tool, because the
+                family stops looking. So these are here, in onboarding, and in the app.
+              </p>
+            </Reveal>
+
+            <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 md:grid-cols-2">
+              {[
+                ["It does not diagnose, and it does not detect stroke.",
+                  "It measures findings against a person's own history and reports what changed. Every trained model publishes its metrics and a limitations note."],
+                ["Three of the five models are trained on synthetic data today.",
+                  "Labelled synthetic in the repository, in each model card, and here, while dataset access is pending. The face and pose landmarkers are production models, pinned by content hash."],
+                ["It cannot see an acute stroke.",
+                  "So the FAST card renders after every session and on every dashboard — always, not only when the band is high. An acute symptom report bypasses the engine entirely."],
+                ["Nothing may assert wellness.",
+                  "“You are fine”, “all clear”, “nothing to worry about” are forbidden in three languages, enforced by a test that sweeps the shipped source."],
+                ["It is for one population, deliberately.",
+                  "Anterior-circulation ischemic stroke, three or more months post-discharge, clinically stable, living at home. Enrolment below three months is refused in one place, so no other route can bypass it."],
+                ["Nothing has run on a physical phone yet.",
+                  "Camera framing and pose scaling at 1.5 m are desktop-browser only so far. It is the largest untested surface in the product, and it is written down as such."],
+              ].map(([head, body], i) => (
+                <Reveal key={head} step={i % 2} className="bg-[#0A121C] p-6">
+                  <p className="text-[16px] font-medium leading-snug">{head}</p>
+                  <p className="mt-2 text-[14px] leading-relaxed text-white/55">{body}</p>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════════════════ 11 · CTA */}
+        <section className="mx-auto max-w-3xl px-6 py-20 text-center lg:py-24">
+          <h2 className="text-[clamp(1.9rem,4vw,2.9rem)] font-semibold leading-[1.07] tracking-[-0.03em]">
+            <LineReveal lines={["Nobody can watch someone", "for ninety days."]} />
+            <LineReveal
+              lines={["Ninety seconds a day, they can."]}
+              className="block text-muted-foreground"
+              step={2}
+            />
+          </h2>
+          <Reveal step={4} className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               to="/register"
-              className="rounded-xl bg-foreground px-5 py-2.5 text-sm font-medium text-background"
+              className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-7 py-4 text-[15px] font-medium text-background"
             >
-              Open demo →
+              Open the demo
+              <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
             </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* ---------------------------------------------------------------- hero */}
-      <section className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
-        <div>
-          <Kicker>■ POST-STROKE RECOVERY ECOSYSTEM</Kicker>
-          <h1 className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-            Recovery, seen.
-            <br />
-            <span className="text-muted-foreground">Measured every day.</span>
-            <br />
-            One phone. No wearable.
-          </h1>
-          <p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            After discharge a survivor is at home for 167 hours a week and seen by a
-            clinician for one. NeuroTrace measures seven body systems daily on an ordinary
-            phone, learns what is normal <em>for that person</em>, and raises a flag only
-            when the change is persistent, cross-modal and one-sided.
-          </p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <Link to="/register" className="rounded-xl bg-foreground px-6 py-4 text-base font-medium text-background">
-              Explore the ecosystem →
+            <Link
+              to="/login"
+              className="focus-ring rounded-xl border border-line px-7 py-4 text-[15px] transition-colors hover:border-foreground/40"
+            >
+              Log in
             </Link>
-            <Link to="/diagnostics" className="rounded-xl border border-line px-6 py-4 text-base">
-              Test this phone
-            </Link>
-          </div>
-          <p className="mt-8 max-w-xl border-l-2 border-watch pl-4 text-sm leading-relaxed text-muted-foreground">
-            Not a medical device, and it cannot detect a stroke that is happening now.
-            Sudden weakness, a drooping face or slurred speech is an emergency — call 108
-            first, always.
-          </p>
-        </div>
-
-        {/* The mesh is the hero image: our actual model, running in the visitor's browser. */}
-        <div>
-          <FaceMeshShowcase />
-          <p className="mt-3 font-mono text-xs tracking-wide text-muted-foreground">
-            DIAGRAM — turn on your camera to run the real landmarker, in your browser.
-          </p>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- ecosystem */}
-      <section id="ecosystem" className="border-y border-line bg-surface/40">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <Kicker>01 · WHAT THE ECOSYSTEM COVERS</Kicker>
-          <h2 className="max-w-3xl text-4xl font-semibold tracking-tight">
-            Seven body systems, twenty-one tasks, twelve minutes.
-          </h2>
-          <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
-            A stroke does not decline in one channel. Neither does the measurement. Every
-            task feeds a domain, and an alert requires two independent domains to agree —
-            which is what separates a real change from a bad night's sleep.
-          </p>
-          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-            {SYSTEMS.map(([name, detail]) => (
-              <div key={name} className="bg-background p-5">
-                <p className="font-medium">{name}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{detail}</p>
-              </div>
-            ))}
-            <div className="bg-accent p-5 text-accent-foreground">
-              <p className="font-medium">Vitals & prevention</p>
-              <p className="mt-1.5 text-sm leading-relaxed opacity-90">
-                Fingertip PPG rhythm, blood pressure, medication adherence
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- technology */}
-      <section id="technology" className="mx-auto max-w-6xl px-6 py-20">
-        <Kicker>02 · HOW THE MEASUREMENT WORKS</Kicker>
-        <h2 className="max-w-3xl text-4xl font-semibold tracking-tight">
-          The recording never leaves the phone.
-        </h2>
-        <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
-          Feature extraction runs in the browser. The server receives numbers and has no
-          endpoint that accepts media at all — an invariant with a test that fails the
-          build if one ever appears.
-        </p>
-
-        <ol className="mt-10 grid gap-4 md:grid-cols-5">
-          {PIPELINE.map(([n, title, body]) => (
-            <li key={n} className="rounded-2xl border border-line p-5">
-              <span className="font-mono text-xs text-accent">{n}</span>
-              <p className="mt-2 font-medium">{title}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            </li>
-          ))}
-        </ol>
-
-        <div className="mt-12">
-          <div>
-            <h3 className="text-2xl font-semibold tracking-tight">The models we run</h3>
-            <p className="mt-3 text-muted-foreground">
-              Two are production landmarkers, pinned by content hash so a silently swapped
-              model cannot shift a patient's baseline. Three are classifiers that are
-              honestly <strong>synthetic today</strong> — trained on generated fixtures
-              while dataset access is pending, and labelled that way in the repository, in
-              every model card, and here.
-            </p>
-            <table className="mt-5 w-full border-collapse text-sm">
-              <tbody>
-                {MODELS.map(([name, role, status]) => (
-                  <tr key={name} className="border-b border-line last:border-0">
-                    <td className="py-2.5 pr-3 font-medium">{name}</td>
-                    <td className="py-2.5 pr-3 text-muted-foreground">{role}</td>
-                    <td className="py-2.5 text-right text-xs text-muted-foreground">{status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- engine */}
-      <section id="engine" className="border-y border-line bg-surface/40">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <Kicker>03 · THE ENGINE</Kicker>
-          <h2 className="max-w-3xl text-4xl font-semibold tracking-tight">
-            Three gates. All three, or it is not an alert.
-          </h2>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {[
-              ["Persistence", "Two consecutive valid sessions. One bad morning is not a finding."],
-              ["Cross-modality", "Two independent domains above threshold. Agreement is the evidence."],
-              ["Laterality", "At least one persistent domain one-sided, sustained. A stroke has a side."],
-            ].map(([t, b]) => (
-              <div key={t} className="rounded-2xl border border-line bg-background p-6">
-                <p className="text-lg font-medium">{t}</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{b}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 rounded-2xl border border-line bg-background p-6">
-            <p className="font-medium">Symmetric change is reported, not alerted on.</p>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Slowed movement, quiet voice and reduced facial expression arriving together
-              on <em>both</em> sides is characteristic of a progressive movement disorder,
-              not a vascular event. Without the laterality gate that pattern would produce
-              this system's most confident alert — and the wrong referral. It is surfaced
-              as an atypical pattern instead, and the engine says so in plain language.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- awaaz (a feature) */}
-      <section id="awaaz" className="mx-auto max-w-6xl px-6 py-20">
-        <Kicker>04 · A CAPABILITY INSIDE THE ECOSYSTEM</Kicker>
-        <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr]">
-          <div>
-            <h2 className="text-4xl font-semibold tracking-tight">Awaaz — so they can be understood</h2>
-            <p className="mt-5 text-lg text-muted-foreground">
-              A communication board for survivors whose speech was affected. It shares the
-              ecosystem's measurements: the speech profile that decides how it behaves is
-              the same one the daily check-in produces.
-            </p>
-            <div className="mt-6 space-y-4 text-sm leading-relaxed">
-              <p className="rounded-xl border border-line p-4">
-                <strong>Dysarthria</strong> — the muscles are affected, the message is
-                intact. Recognised speech above the confidence threshold is spoken aloud
-                automatically.
-              </p>
-              <p className="rounded-xl border-2 border-accent/40 bg-accent/5 p-4">
-                <strong>Aphasia</strong> — the language system is affected and the intended
-                message may not exist in the words produced. The system only ever
-                <em> offers candidates</em>. Nothing is spoken until the patient taps one.
-                Putting words into a mouth that cannot veto them is the one thing this
-                feature must never do, and the rule is enforced on the server.
-              </p>
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-line">
-            <img src={IMG.hands} alt="Two people's hands, one holding the other"
-                 className="h-full w-full object-cover" loading="lazy" />
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- care network */}
-      <section id="care" className="border-t border-line bg-surface/40">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <Kicker>05 · THE CARE NETWORK</Kicker>
-          <h2 className="max-w-3xl text-4xl font-semibold tracking-tight">
-            Four people, four different views of the same day.
-          </h2>
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[
-              ["Survivor", "One button. A short session. Never a score, never a warning — that is not what they need from us each morning."],
-              ["Caregiver", "A band, a sentence about what changed, and what to do. Confounders printed, not hidden."],
-              ["Clinician", "A ranked roster, gate states, laterality, drift against a frozen reference, and an audit log."],
-              ["ASHA worker", "A household list with task-level due items, offline-first, syncing when the network returns."],
-            ].map(([who, what]) => (
-              <div key={who} className="rounded-2xl border border-line bg-background p-6">
-                <p className="font-medium">{who}</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{what}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_1.2fr]">
-            <div className="overflow-hidden rounded-2xl border border-line">
-              <img src={IMG.clinician} alt="A clinician in a white coat holding a phone" className="h-full w-full object-cover" loading="lazy" />
-            </div>
-            <div className="flex flex-col justify-center">
-              <h3 className="text-2xl font-semibold tracking-tight">Built for where the patients are</h3>
-              <p className="mt-3 text-muted-foreground">
-                English, Hindi and Punjabi throughout. The session completes in airplane
-                mode and syncs later. Nothing depends on a wearable, a clinic visit, or a
-                stable connection — because in the districts this is for, none of those
-                are reliable.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- cta */}
-      <section className="mx-auto max-w-6xl px-6 py-20 text-center">
-        <h2 className="text-4xl font-semibold tracking-tight">See the twenty-one day story</h2>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
-          The demo replays a real-shaped recovery: eighteen stable days, then two domains
-          drifting together, then the alert — with every gate shown.
-        </p>
-        <div className="mt-8 flex justify-center gap-3">
-          <Link to="/register" className="rounded-xl bg-foreground px-7 py-4 text-base font-medium text-background">
-            Open the demo →
-          </Link>
-          <Link to="/login" className="rounded-xl border border-line px-7 py-4 text-base">Log in</Link>
-        </div>
-      </section>
+          </Reveal>
+        </section>
+      </main>
 
       <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-xs text-muted-foreground">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-7 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Built for families in Punjab. Works offline. Nothing identifiable leaves the phone.</span>
-          <span className="font-mono">post-stroke recovery ecosystem · engine deterministic · seed 42</span>
+          <span className="font-mono tracking-wide">engine deterministic · seed 42 · not a medical device</span>
         </div>
       </footer>
     </div>

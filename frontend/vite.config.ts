@@ -40,7 +40,7 @@ export default defineConfig({
         name: "NeuroTrace",
         short_name: "NeuroTrace",
         description:
-          "A 45-second daily neurological check-in that runs entirely on your phone.",
+          "A 90-second daily neurological check-in that runs entirely on your phone.",
         theme_color: "#173a7a",
         background_color: "#f8fbff",
         display: "standalone",

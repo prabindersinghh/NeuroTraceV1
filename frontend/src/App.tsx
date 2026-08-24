@@ -1,22 +1,38 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
-import { CaregiverHome } from "@/routes/CaregiverHome";
-import { Clinic } from "@/routes/Clinic";
-import ClinicianReport from "@/routes/ClinicianReport";
-import { Dashboard } from "@/routes/Dashboard";
-import Diagnostics from "@/routes/Diagnostics";
 import Landing from "@/routes/Landing";
-import Enrol from "@/routes/Enrol";
-import Listen from "@/routes/Listen";
-import ReviewQueue from "@/routes/ReviewQueue";
 import Awaaz from "@/routes/Awaaz";
 import Onboarding from "@/routes/Onboarding";
 import { Exam, ExamPractice } from "@/routes/Exam";
 import { Login } from "@/routes/Login";
-import { PatientHome } from "@/routes/PatientHome";
-import { Register } from "@/routes/Register";
+
+/**
+ * Everything behind the sign-in wall is code-split.
+ *
+ * These were all static imports, which put the exam capture path, the MediaPipe wrapper,
+ * the recharts dashboard and every clinician surface into ONE chunk with the public
+ * landing page: a visitor who arrived to read about the product downloaded the entire
+ * clinical application before the hero painted. Splitting at the route is the correct
+ * seam because nothing outside a route references these modules.
+ *
+ * `Landing` and `Login` stay eager on purpose — they are the two first paints for a
+ * signed-out visitor, and deferring them would trade a large download for a blank frame
+ * plus a second round trip, which is worse on exactly the connections this is built for.
+ */
+const CaregiverHome = lazy(() => import("@/routes/CaregiverHome").then((m) => ({ default: m.CaregiverHome })));
+const Clinic = lazy(() => import("@/routes/Clinic").then((m) => ({ default: m.Clinic })));
+const ClinicianReport = lazy(() => import("@/routes/ClinicianReport"));
+const Dashboard = lazy(() => import("@/routes/Dashboard").then((m) => ({ default: m.Dashboard })));
+const Diagnostics = lazy(() => import("@/routes/Diagnostics"));
+const Awaaz = lazy(() => import("@/routes/Awaaz"));
+const Onboarding = lazy(() => import("@/routes/Onboarding"));
+const Exam = lazy(() => import("@/routes/Exam").then((m) => ({ default: m.Exam })));
+const ExamPractice = lazy(() => import("@/routes/Exam").then((m) => ({ default: m.ExamPractice })));
+const PatientHome = lazy(() => import("@/routes/PatientHome").then((m) => ({ default: m.PatientHome })));
+const Register = lazy(() => import("@/routes/Register").then((m) => ({ default: m.Register })));
 
 function LandingOrHome() {
   const { user, ready } = useAuth();
@@ -53,10 +69,6 @@ export default function App() {
       <Route path="/clinic" element={<RequireAuth><Clinic /></RequireAuth>} />
       <Route path="/report/:patientId" element={<RequireAuth><ClinicianReport /></RequireAuth>} />
       <Route path="/exam/:patientId" element={<RequireAuth><Exam /></RequireAuth>} />
-      {/* No auth guard: a listener link is opened by a stranger with no account. */}
-      <Route path="/listen/:token" element={<Listen />} />
-      <Route path="/enrol/:patientId" element={<RequireAuth><Enrol /></RequireAuth>} />
-      <Route path="/review/:patientId" element={<RequireAuth><ReviewQueue /></RequireAuth>} />
       <Route path="/awaaz/:patientId" element={<RequireAuth><Awaaz /></RequireAuth>} />
       <Route path="/onboarding/:patientId" element={<RequireAuth><Onboarding /></RequireAuth>} />
       <Route path="/exam/:patientId/practice" element={<RequireAuth><ExamPractice /></RequireAuth>} />

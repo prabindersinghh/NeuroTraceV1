@@ -5,6 +5,14 @@ export default {
   theme: {
     container: { center: true, padding: "1rem", screens: { "2xl": "1200px" } },
     extend: {
+      fontFamily: {
+        // "Inter var" is self-hosted in index.css; the rest is the platform stack it
+        // falls back to for Devanagari, Gurmukhi and the swap window.
+        sans: ['"Inter var"', "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI",
+               "Roboto", '"Noto Sans"', '"Noto Sans Devanagari"', '"Noto Sans Gurmukhi"',
+               "Helvetica Neue", "Arial", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         // `line` and `surface` are used across the app (TaskShell, FallRiskGate, the

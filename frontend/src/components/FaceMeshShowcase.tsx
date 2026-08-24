@@ -30,7 +30,7 @@ type Mode = "schematic" | "loading" | "live" | "unavailable";
 /** A readable subset of the FaceMesh topology: the contours a clinician would recognise. */
 const CONTOURS: number[][] = [
   [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
-   152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10],
+    152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10],
   [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61],
   [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78],
   [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33],
@@ -46,7 +46,7 @@ const CONTOURS: number[][] = [
 function Schematic() {
   return (
     <svg viewBox="0 0 320 380" className="h-full w-full" role="img"
-         aria-label="Diagram of the facial regions the examination measures">
+      aria-label="Diagram of the facial regions the examination measures">
       <g fill="none" stroke="currentColor" strokeWidth="1.25" className="text-accent/60">
         <ellipse cx="160" cy="190" rx="96" ry="126" />
         <path d="M84 150c14-12 40-12 54 0" /><path d="M182 150c14-12 40-12 54 0" />
@@ -68,7 +68,9 @@ function Schematic() {
 export function FaceMeshShowcase({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [mode, setMode] = useState<Mode>("schematic");
+  const hostRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [mode, setMode] = useState<Mode>("idle");
   const [count, setCount] = useState(0);
   const running = useRef(false);
 
@@ -101,13 +103,63 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
     setCount(pts.length);
   }, []);
 
-  const stop = useCallback(() => {
+  const runStill = useCallback(async () => {
+    setMode("loading");
+    try {
+      const landmarker = await loadFaceLandmarker();
+      const img = imgRef.current;
+      if (!img) return;
+      if (!img.complete) await new Promise((r) => { img.onload = r; img.onerror = r; });
+      // IMAGE mode for a still; the exam uses VIDEO mode on a live stream.
+      await landmarker.setOptions({ runningMode: "IMAGE" });
+      const res = landmarker.detect(img);
+      const pts = res.faceLandmarks?.[0] as Landmark[] | undefined;
+      if (!pts?.length) { setMode("unavailable"); return; }
+      setMode("still");
+      // Animate the point cloud in — it reads as "being measured", which is what it is.
+      let t = 0;
+      const step = () => {
+        t = Math.min(1, t + 0.04);
+        draw(pts, img.naturalWidth, img.naturalHeight, t);
+        if (t < 1) requestAnimationFrame(step);
+      };
+      step();
+    } catch {
+      // No model staged, no wasm, no SIMD — show the portrait alone rather than a fake.
+      setMode("unavailable");
+    }
+  }, [draw]);
+
+  // Lazy: nothing loads until the section is actually on screen.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || mode !== "idle") return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        void runStill();
+      }
+    }, { rootMargin: "200px" });
+    io.observe(host);
+    return () => io.disconnect();
+  }, [mode, runStill]);
+
+  /**
+   * Release the camera SYNCHRONOUSLY.
+   *
+   * This used to live inside the rAF loop: the loop saw `running.current === false` and
+   * stopped the tracks on its next tick. Two ways that leaves the camera on — the browser
+   * stops firing rAF entirely when the tab is hidden or the element unmounts, so the
+   * "next tick" may never come; and the early `if (!video) return` bailed out of
+   * `startCamera` while still holding a live stream nobody had a reference to any more.
+   * On a product whose whole argument is that nothing leaves the device, a camera that
+   * stays awake after the user pressed stop is the worst possible bug to ship.
+   */
+  const stopCamera = useCallback(() => {
     running.current = false;
-    const stream = videoRef.current?.srcObject as MediaStream | null;
-    stream?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
-    setMode("schematic");
-    setCount(0);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -118,14 +170,16 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 } }, audio: false,
       });
+      streamRef.current = stream;
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) { stopCamera(); return; }
       video.srcObject = stream;
       await video.play();
       setMode("live");
       running.current = true;
       let last = -1;
       const loop = () => {
+        if (!running.current) return;
         if (!running.current) return;
         const ts = Math.max(performance.now(), last + 1);
         last = ts;
@@ -138,21 +192,25 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
       };
       loop();
     } catch {
-      // No model, no wasm, or camera refused. Say so; never draw a pretend mesh.
+      stopCamera();
       setMode("unavailable");
     }
-  }, [draw]);
+  }, [draw, stopCamera]);
 
-  useEffect(() => () => { running.current = false; }, []);
+  useEffect(() => stopCamera, [stopCamera]);
 
   return (
-    <div className={className}>
-      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-line bg-surface">
-        {mode !== "live" && (
-          <div className="absolute inset-0 flex items-center justify-center p-6">
-            <Schematic />
-          </div>
-        )}
+    <div ref={hostRef} className={className}>
+      <div className="relative overflow-hidden rounded-2xl border border-line bg-slate-100">
+        <img
+          ref={imgRef}
+          src={src}
+          alt="A portrait with the face-landmark mesh drawn over it"
+          width={760}
+          height={1105}
+          crossOrigin="anonymous"
+          className={mode === "live" ? "hidden" : "block h-auto w-full"}
+        />
         <video
           ref={videoRef}
           muted playsInline
@@ -174,7 +232,7 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
               browser. No frame left your device.
             </p>
             <button type="button" onClick={stop}
-                    className="rounded-lg border border-line px-4 py-2 text-sm">
+              className="rounded-lg border border-line px-4 py-2 text-sm">
               Stop camera
             </button>
           </>
@@ -182,16 +240,25 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
           <p className="text-sm text-muted-foreground">
             The model could not run in this browser, so no mesh is drawn — we do not fake it.
           </p>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Diagram above. Run the real thing on your own face:
-            </p>
-            <button type="button" onClick={() => void startCamera()}
-                    className="rounded-lg border border-line px-4 py-2 text-sm">
-              Use my camera
-            </button>
-          </>
+        ) : null}
+
+        {mode !== "live" && mode !== "unavailable" && (
+          <button
+            type="button"
+            onClick={() => void startCamera()}
+            className="rounded-lg border border-line px-4 py-2 text-sm"
+          >
+            Use my camera
+          </button>
+        )}
+        {mode === "live" && (
+          <button
+            type="button"
+            onClick={() => { stopCamera(); setMode("still"); void runStill(); }}
+            className="rounded-lg border border-line px-4 py-2 text-sm"
+          >
+            Stop camera
+          </button>
         )}
       </div>
     </div>

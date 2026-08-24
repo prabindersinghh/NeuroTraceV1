@@ -170,27 +170,8 @@ Interactive docs at `/docs`.
 
 ## Deploy
 
-### Backend → Render
-
-1. Push to GitHub. Render → **New → Blueprint** → select the repo; it reads
-   [infra/render.yaml](../infra/render.yaml) and provisions the web service plus Postgres 15,
-   wiring `DATABASE_URL` and generating `JWT_SECRET`.
-2. The container runs `alembic upgrade head` at boot, so the schema converges by itself.
-3. Confirm `/health` returns `{"status":"ok","database":"up"}`.
-
-### Frontend → Vercel
-
-4. Vercel → **New Project** → same repo → **Root Directory** `frontend`.
-5. Set `VITE_API_URL` to the Render URL. Deploy.
-6. Back on Render, set `FRONTEND_ORIGIN` to the Vercel URL and redeploy. CORS is locked to
-   exactly that list.
-
-### Verify
-
-7. Open the Vercel URL → **Open the demo** → Ramesh's dashboard in ALERT.
-8. On a **phone**, run a full exam. Then enable airplane mode and run another — it must
-   still complete. Load the app once online first so the service worker caches the model.
-9. Set `DEMO_MODE=false` before any real data goes in.
+Backend on Railway, database on Neon, frontend on Vercel — the whole procedure, with
+the failure modes each step actually hit, is in [DEPLOY.md](DEPLOY.md).
 
 ---
 
