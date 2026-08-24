@@ -80,3 +80,6 @@ frontend/scratch/
 # Playwright MCP session artefacts + root-level screenshots
 .playwright-mcp/
 /*.png
+
+# Throwaway browser-sweep scripts written next to the app during debugging.
+frontend/*.mjs

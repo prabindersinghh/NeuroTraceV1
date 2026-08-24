@@ -14,7 +14,7 @@ BACKEND (sync + B2B dashboard only; the D2C core works without it)
   JWT access+refresh · bcrypt · role guards
   Stores FEATURE VECTORS AND SCORES ONLY — never raw media
 
-DEPLOY: backend Render/Railway · frontend Vercel (HTTPS required for camera/mic) · DB Supabase
+DEPLOY: backend Railway · frontend Vercel (HTTPS required for camera/mic) · DB Supabase
 
 ## 2. REPO
 neurotrace/
@@ -30,7 +30,7 @@ neurotrace/
     ml/            # authoritative feature extraction + scoring (Python)
     routers/ auth/ services/ models.py schemas.py
     ml/train/      # offline training + validation scripts
-  infra/ docs/
+  docs/
 
 ## 3. DATA MODEL
 users(id, email, pw_hash, role, lang, created_at)

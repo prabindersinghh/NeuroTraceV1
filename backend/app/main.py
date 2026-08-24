@@ -43,7 +43,7 @@ app = FastAPI(
     title=settings.app_name,
     version=__version__,
     description=(
-        "NeuroTrace — 45-second daily neurological check-in. Learns each patient's personal "
+        "NeuroTrace — 90-second daily neurological check-in. Learns each patient's personal "
         "baseline from voice, face and reaction time, and flags sustained multi-signal deviation."
     ),
     lifespan=lifespan,

@@ -4,6 +4,201 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-24 (later still) — Admin console, and a privilege-escalation hole closed
+
+*Merged with DEEPESH-845's frontend session below — this backend work and that
+frontend work happened independently the same day and landed via `git merge`.*
+
+### The hole
+`/auth/register` used the `role` from the request body. A stranger could sign up as a
+clinician and read `/clinic/patients`, which returns every patient's name and age across
+every caregiver. **Verified against the running app before fixing:** a freshly self-registered
+clinician got 200 and a real patient row belonging to an unrelated family.
+
+It survived because the frontend only ever offered caregiver and patient, so nothing in the
+product exercised it — and because a test named `test_register_accepts_every_role` asserted
+it as though it were intended. The passing test is what made it look deliberate. INV-6 says
+the UI is never the boundary; here the UI was the whole boundary.
+
+Registration is now caregiver/patient only. Clinician, ASHA worker and admin come from
+`POST /admin/users` (admin-only, audited) or the seed. `conftest.provision` creates them the
+way production does, so tests cannot route around the fix. D-040.
+
+Closing self-registration for `asha_worker` (correctly, alongside clinician and admin — it
+is just as privileged) broke `test_tiers_wearables_asha.py`, which self-registered ASHA
+workers via `/auth/register` in four places. A pre-push verification workflow caught it as
+a real pytest failure (`KeyError: 'tokens'`, because `/auth/register` now returns 403 for
+that role) rather than something noticed after merging. Fixed the same way as the clinician
+sites: through `conftest.provision`.
+
+### The console
+New `admin` role (migration 0011, `batch_alter_table` so it works on both dialects — the
+rendered Postgres SQL was checked against what 0001 and the asha_worker migration actually
+named the constraint, `ck_users_role_enum`, rather than assumed). `/admin` shows census, the
+three-gate funnel, baseline and band distributions, the identity flag rate, and the audit
+trail.
+
+It shows **no patient records**, by construction: counts and events only, patient references
+truncated to eight characters. `test_no_admin_response_contains_patient_identifying_data`
+creates a real patient and asserts their name, email and full id appear in no admin payload,
+so adding one fails the build. D-041.
+
+Demo login `admin@neurotrace.app` / `neurotrace-demo`, in the README with the others.
+
+### Onboarding
+The 7-step flow existed, was routed, and nothing navigated into it — including step 3, the
+scope disclosure the file itself calls a safety control. Creating a patient now enters it;
+an unfinished setup shows on the patient card and demotes the check-in button. Face
+enrolment moved into step 5, where the camera is already being set up.
+
+**Verified:** migration + privacy + invariants green; auth and admin suites green;
+frontend 18 passed, `tsc -b` and build exit 0; Postgres render of 0011 matches the
+constraint name in the deployed schema.
+
+---
+
+## 2026-08-24 (later) — Three bugs found by driving the app; and a rebase that broke it
+
+### GET /report/{id} was 500ing on any patient who had a session
+`Score.lateralised` does not exist. `lateralised` is a column on `Deviation` (per module);
+`Score` is per session. Both the clinician report and the caregiver review queue presented
+in the browser as **CORS failures**, which is the misleading part worth remembering: an
+unhandled exception bypasses `CORSMiddleware`, so the 500 arrives with no
+`Access-Control-Allow-Origin` header and the browser reports the missing header rather than
+the crash. Now derived from `lateralised_domains` — the list printed beside it — so the flag
+cannot contradict what the clinician is reading.
+
+Two tests already hit this endpoint and both stayed green, because both report on a patient
+who has never run a session: `body["sessions"]` was always `[]`, so the comprehension
+holding the bad attribute never executed. Added `test_the_report_renders_a_row_for_a_scored_session`,
+and **verified it fails with the old line and passes with the new one** rather than assuming.
+
+### Two frontend bugs
+`Diagnostics` appended "Storage quota" from an unguarded async `storage.estimate()`, and
+StrictMode runs effects twice in development — two rows, same React key. Guarded, and the
+append made idempotent. `StepRecall` called `useMemo` below the `mode === "encode"` early
+return, so the hook count changed with the prop; `ProtocolRunner` renders the two modes from
+different slots so it never fired, but it is a latent crash and it failed `npm run lint`.
+Hoisted.
+
+### The blank page, and what caused it
+`pull.rebase = true`, so `git pull` rebases — and **rebase drops merge commits**. The merge
+that integrated origin/main held both the conflict resolutions and unique work, so
+discarding it resurfaced every conflict. The rebase was then completed with resolutions
+that kept BOTH sides of each import conflict, leaving `App.tsx` declaring `Awaaz`,
+`Onboarding`, `Exam` and `ExamPractice` twice. In dev the browser evaluates that module as
+native ESM, so it is a SyntaxError, the module never evaluates, React never mounts, and
+`#root` has zero children — nothing rendered and nothing could.
+
+The same rebase reverted the motion work wholesale: `PipelineFlow.tsx` and
+`SymmetryDiagram.tsx` deleted outright, `index.css` stripped of the route-in, scroll-cue and
+narration keyframes, and NinetyDays, RunTimeline, GateBoard, Landing, button, card and
+states all returned to pre-animation versions. `frontend/src` was restored from the verified
+commit; nothing outside it had differed.
+
+`npm run typecheck` catches the duplicate immediately — confirmed by putting the broken file
+back and running it. It was simply never run after the rebase finished. **If a rebase
+touches this repo, run the verification before trusting the result**, and prefer
+`git config pull.rebase merges` so a merge commit is preserved rather than dropped.
+
+**Verified:** `tsc -b --force` clean · `vitest` 27/27 · `oxlint` 0 errors · `vite build`
+clean · backend `pytest` exit 0, 0 failures · landing mounts with 9/9 sections and zero
+console errors · 0 long tasks across a full-page scroll · the run section's `sticky` pins at
+top 0 through 20/50/80% with the day advancing 08 → 17 → 20 · no mobile overflow at 390px ·
+reduced motion leaves only the three intentionally-hidden elements · `/`, `/clinic`,
+`/dashboard`, `/report`, `/review`, `/enrol`, `/awaaz`, `/diagnostics` all render against a
+seeded backend with no page errors.
+
+---
+
+## 2026-08-24 — The landing page becomes the argument; scroll motion off the render path
+
+### The signed-out page was a feature list; it is now one argument
+The old landing stated the product in four card grids. What it never did was make the case,
+and the case has two turns in it that a visitor cannot reconstruct from a feature list:
+
+1. A population threshold cannot monitor a stroke survivor, because a survivor sits outside
+   the population's normal range on the day they come home and every day after. Set it to
+   catch deterioration and it fires every morning until someone mutes it; widen it until it
+   is quiet and it can no longer see what it was for.
+2. A personal baseline is still not enough. Three domains agreeing looks like overwhelming
+   evidence, and Parkinson's produces exactly that — persistently, in face, voice and hand.
+   So the deviation also has to have a side.
+
+The page is now those beats in order, carried by ONE visual primitive — a lane, a band, a
+trace — that changes state rather than being redrawn as a new kind of picture per section.
+The domain table, pipeline, care network, Awaaz and limits hang off the beats.
+
+Every figure comes from the README, `engine/gates.py` or `exam/registry.py`.
+`traceData.test.ts` runs the illustrated 21-day verdicts through the engine's own gate rules
+(9 assertions), so the seeded run cannot drift out of agreement with the story the page
+tells: edit the series and the test fails before the page can ship a claim the gates would
+not have produced.
+
+### Motion, and why there is no GSAP
+One `requestAnimationFrame` ticker in `lib/motion.ts`, running only while a scene is near
+the viewport. Scroll-linked effects write to the DOM or a canvas directly; `TraceLanes`
+takes its day and its focus column through an imperative handle. The naive version — scroll
+listener per effect, `setState` per frame — reconciled three paragraphs and a canvas sixty
+times a second in the 21-day section, and that is what made it feel cheap.
+
+Smooth scrolling is Lenis, dynamically imported so only the signed-out page pays the 5.4 kB,
+and **off on coarse pointers and under `prefers-reduced-motion`**. That exclusion is
+clinical, not aesthetic: this product measures vestibular function and its users have
+vertigo, so inertial scrolling and parallax stay on the marketing page.
+
+New teaching visuals, each carrying a specific claim: the ninety-day field fills in as you
+scroll (states the problem, then answers it); a symmetry diagram carries Gate 3 — the same
+three domains, matched sides against split; the on-device steps became a flow with a signal
+travelling down them; the gate board grew a marker that travels to the gate that stops the
+run.
+
+### Bugs found underneath it
+- **Every route was statically imported.** A visitor downloaded the exam, recharts and the
+  MediaPipe wrapper to read marketing copy — one 800 kB chunk. Route-split: the landing
+  entry is 225 kB, Dashboard/Exam/face are separate.
+- **`FaceMeshShowcase` released the camera from the rAF loop**, which stops firing once the
+  tab is hidden or the component unmounts, so navigating away mid-capture left the camera
+  on. Upstream's rewrite had the same shape (release only from the button handler); fixed in
+  both by holding the stream in a ref and releasing on unmount.
+- **The session length was wrong in every shipped string.** `DAILY_BUDGET_SECONDS` is 90 and
+  test-enforced; the HTML meta, PWA manifest, API description and frontend README all said
+  45.
+- **`--atypical` was declared twice** in `index.css`; the first pair was dead.
+- **`font-feature-settings: cv02 cv03 cv04 cv11`** named Inter's character variants with no
+  Inter loaded — four no-ops. Inter is now self-hosted (48 kB, latin), which is also why it
+  is not a `fonts.gstatic.com` link on a page whose argument is that we have no third-party
+  dependencies.
+- **Anchor jumps landed under the sticky header** — no `scroll-margin-top`.
+- **No `prefers-reduced-motion` support anywhere.**
+- **`text-${tone}` in the symmetry diagram** was a runtime-assembled Tailwind class, which
+  Tailwind cannot see. It rendered only because both literals happen to appear in other
+  files. Replaced with a lookup of literal names — the trap CLAUDE.md already documents.
+
+### Merged with origin/main
+Took upstream's landing decisions where they are the better call. **No stock portrait
+anywhere**: an identifiable person's face under a medical overlay, on a page about stroke,
+is a claim nobody in a photo library consented to. That also retired a vendored-JPEG problem
+this work had walked into — `*.jpg` is gitignored precisely because the working tree holds
+photographs of a real patient's records, and `test_no_source_image_is_tracked` fails the
+build on any tracked raster image. `FaceMeshShowcase` is upstream's labelled schematic plus
+opt-in camera; `App.tsx` keeps the route splitting and gained Enrol, Listen and ReviewQueue
+as lazy chunks.
+
+App-wide: a page transition that replays a CSS animation on a stable wrapper rather than
+keying the router outlet on pathname (which remounts and refetches); press feedback on
+`Button`; a loading state held back 200 ms so a fast lazy chunk does not flash a spinner.
+
+**Verified:** `npx tsc -b` clean · `npx vitest run` 27/27 · `npm run build` clean ·
+backend `pytest` exit 0, 0 failures · **0 long tasks (>50 ms) across a full-page scroll** ·
+`position: sticky` still pins with Lenis active (sticky top = 0) · no horizontal overflow at
+1440/1280/1024/768/390 · no console errors on any route · reduced motion leaves nothing
+hidden and drops the pin · anchor jumps clear the header (88px vs 65px header) · tab order
+starts at the skip link with focus rings on every stop · the gate board is operable by
+keyboard.
+
+---
+
 ## 2026-08-23 (later) — Neon boots for real; identity, listener UI, honest imagery
 
 ### Two dialect bugs that only a real Postgres could find
@@ -691,44 +886,3 @@ system's **highest-confidence ALERT** for a condition it does not monitor.
 **32 tests.** Migration 0003. Demo story preserved (still ALERT, now with Gate 3 satisfied).
 
 ---
-
-## 2026-08-24 — Admin console, and a privilege-escalation hole closed
-
-### The hole
-`/auth/register` used the `role` from the request body. A stranger could sign up as a
-clinician and read `/clinic/patients`, which returns every patient's name and age across
-every caregiver. **Verified against the running app before fixing:** a freshly self-registered
-clinician got 200 and a real patient row belonging to an unrelated family.
-
-It survived because the frontend only ever offered caregiver and patient, so nothing in the
-product exercised it — and because a test named `test_register_accepts_every_role` asserted
-it as though it were intended. The passing test is what made it look deliberate. INV-6 says
-the UI is never the boundary; here the UI was the whole boundary.
-
-Registration is now caregiver/patient only. Clinician, ASHA worker and admin come from
-`POST /admin/users` (admin-only, audited) or the seed. `conftest.provision` creates them the
-way production does, so tests cannot route around the fix. D-040.
-
-### The console
-New `admin` role (migration 0011, `batch_alter_table` so it works on both dialects — the
-rendered Postgres SQL was checked against what 0001 and the asha_worker migration actually
-named the constraint, `ck_users_role_enum`, rather than assumed). `/admin` shows census, the
-three-gate funnel, baseline and band distributions, the identity flag rate, and the audit
-trail.
-
-It shows **no patient records**, by construction: counts and events only, patient references
-truncated to eight characters. `test_no_admin_response_contains_patient_identifying_data`
-creates a real patient and asserts their name, email and full id appear in no admin payload,
-so adding one fails the build. D-041.
-
-Demo login `admin@neurotrace.app` / `neurotrace-demo`, in the README with the others.
-
-### Onboarding
-The 7-step flow existed, was routed, and nothing navigated into it — including step 3, the
-scope disclosure the file itself calls a safety control. Creating a patient now enters it;
-an unfinished setup shows on the patient card and demotes the check-in button. Face
-enrolment moved into step 5, where the camera is already being set up.
-
-**Verified:** migration + privacy + invariants green; auth and admin suites green;
-frontend 18 passed, `tsc -b` and build exit 0; Postgres render of 0011 matches the
-constraint name in the deployed schema.

@@ -2,7 +2,20 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-24 (later still) · **DEPLOYED ON NEON POSTGRES** — backend
+**Last updated:** 2026-08-24 (later still) · Two independent sessions landed the same day
+and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
+records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
+`clinician` and read every patient's name; registration is now caregiver/patient only,
+D-040/D-041) on the backend side; on the frontend, the **signed-out landing page rebuilt as
+the product's argument** with its own motion system (`frontend/src/lib/motion.ts`, one rAF
+ticker — no animation library, 0 long tasks across a full-page scroll), route-level code
+splitting (first chunk 800 kB → 225 kB), and three real bugs fixed by driving the app end to
+end (`GET /report/{id}` 500'd on any patient with a scored session — `Score.lateralised` is
+actually a column on `Deviation`; `Diagnostics` rendered duplicate React keys; `StepRecall`
+called a hook conditionally). **A `git pull` rebase during that session dropped a merge
+commit and briefly broke `App.tsx`** — see CHANGELOG 2026-08-24 (later); this merge used
+`git merge`, not rebase, precisely because of that incident. ·
+**DEPLOYED ON NEON POSTGRES** — backend
 `neurotracev1-production.up.railway.app` (`database: up`), frontend
 `neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The demo is seeded on Postgres and
 **survives redeploys**: `/clinic/patients` returns `Ramesh | band: ALERT` after a subsequent

@@ -193,14 +193,13 @@ NeuroTraceV1/
 │       ├── lib/           api · auth · i18n (EN/HI/PA) · capture · offline queue · speech synthesis
 │       ├── components/    FastCard · EmergencyButton · DomainChart · AppShell · ui/
 │       └── routes/        Login · CaregiverHome · PatientHome · Exam · Dashboard · Clinic
-├── infra/                 render.yaml, deployment env template
 └── docs/
     ├── CONTEXT_BRIEF.md   why this is being built and what wins
     ├── PRD.md · TRD.md    product and technical specs (v2)
     ├── DATASETS.md        data and model strategy
     ├── DEVELOPMENT.md     build, run, test, deploy
     ├── DEMO_SCRIPT.md     the 3-minute pitch walkthrough
-    └── V1_AUDIT.md        what the Streamlit prototype contributed, honestly
+    └── DEPLOY.md          Railway + Neon + Vercel, step by step
 ```
 
 ---

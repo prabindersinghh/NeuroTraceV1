@@ -344,3 +344,25 @@ names, no emails, no features, no free text.
 `test_no_admin_response_contains_patient_identifying_data` asserts the shape, so adding a
 name to any admin payload fails the build. If someone needs one patient's clinical data,
 that is a clinician's path, where it is authorised and logged.
+
+**D-038 · 2026-08-24 · The landing page argues; the product surfaces stay calm.**
+The signed-out page carries the immersive treatment — a scroll-scrubbed run, parallax, a
+smooth-scroll damper — and the clinical surfaces get none of it. Two reasons, and the second
+is the binding one. Identity is the landing page's job and legibility is the product's
+(D-034 revised). And this product measures vestibular function: inertial scrolling and
+parallax are a documented trigger for people with vertigo, who are exactly the users
+in scope. So `useSmoothScroll` is gated on `(pointer: coarse)` and
+`prefers-reduced-motion`, and lives only on `/` when signed out. Supersedes nothing; it
+scopes D-034.
+
+**D-039 · 2026-08-24 · Motion is one rAF ticker, not an animation library.**
+GSAP + ScrollTrigger is ~90 kB of transfer for effects that `IntersectionObserver`, CSS
+transitions and one `requestAnimationFrame` loop produce natively, on a page that shares a
+service worker with a clinical PWA precaching a 4 MB model. What the page DID need was to
+stop putting scroll position into React state: the 21-day section reconciled a canvas and
+three paragraphs sixty times a second. Scroll-linked effects now write to the DOM or the
+canvas directly and quantise anything React must see (the day number changes 20 times, not
+60 times a second). Measured: 0 long tasks over a full-page scroll. Lenis IS a dependency,
+for damped wheel scrolling only, dynamically imported — it is 5.4 kB gzipped and replacing
+it with hand-rolled wheel interception would break keyboard scrolling, scrollbar dragging
+and find-in-page, which is not a trade worth making to avoid one small package.

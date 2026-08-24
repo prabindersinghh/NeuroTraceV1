@@ -137,11 +137,11 @@ async def _patient(session, caregiver, *, tier=DeploymentTier.TIER_2_WATCH,
     return patient
 
 
-async def _token(client, role: str) -> tuple[str, dict]:
-    resp = await client.post("/auth/register", json={
-        "email": f"u-{uuid.uuid4().hex[:8]}@example.com",
-        "password": "a-real-password", "role": role})
-    token = resp.json()["tokens"]["access_token"]
+async def _token(client, provision, role: str) -> tuple[str, dict]:
+    """`asha_worker` is a privileged role now provisioned server-side, not self-registered
+    via `/auth/register` (D-040) — this delegates to the same `conftest.provision` fixture
+    every other privileged-role test uses, rather than routing around the fix."""
+    token, _ = await provision(client, f"u-{uuid.uuid4().hex[:8]}@example.com", role)
     return token, {"Authorization": f"Bearer {token}"}
 
 
@@ -271,8 +271,8 @@ async def test_a_fall_the_patient_dismissed_is_still_recorded(session, client):
 
 
 # --------------------------------------------------------------- ASHA
-async def test_an_asha_worker_sees_only_their_own_households(session, client):
-    token, headers = await _token(client, "asha_worker")
+async def test_an_asha_worker_sees_only_their_own_households(session, client, provision):
+    token, headers = await _token(client, provision, "asha_worker")
     worker = await session.scalar(select(User).where(User.role == Role.asha_worker))
 
     caregiver = await _caregiver(session)
@@ -287,8 +287,8 @@ async def test_an_asha_worker_sees_only_their_own_households(session, client):
     assert r.json()["total"] == 1
 
 
-async def test_the_household_list_says_what_the_visit_is_for(session, client):
-    token, headers = await _token(client, "asha_worker")
+async def test_the_household_list_says_what_the_visit_is_for(session, client, provision):
+    token, headers = await _token(client, provision, "asha_worker")
     worker = await session.scalar(select(User).where(User.role == Role.asha_worker))
     caregiver = await _caregiver(session)
     await _patient(session, caregiver, tier=DeploymentTier.TIER_3_ASHA, asha_id=worker.id)
@@ -307,10 +307,10 @@ async def test_a_caregiver_cannot_reach_the_asha_surface(session, client):
     assert (await client.get("/asha/households", headers=headers)).status_code == 403
 
 
-async def test_asha_sync_is_idempotent_across_a_retry(session, client):
+async def test_asha_sync_is_idempotent_across_a_retry(session, client, provision):
     """A worker on a bad connection will retry. Duplicates in a baseline silently reweight
     the median, so a retry must land on the same visit."""
-    token, headers = await _token(client, "asha_worker")
+    token, headers = await _token(client, provision, "asha_worker")
     worker = await session.scalar(select(User).where(User.role == Role.asha_worker))
     caregiver = await _caregiver(session)
     patient = await _patient(session, caregiver, tier=DeploymentTier.TIER_3_ASHA,
@@ -337,8 +337,8 @@ async def test_asha_sync_is_idempotent_across_a_retry(session, client):
     assert await session.scalar(select(func.count()).select_from(AshaVisit)) == 1
 
 
-async def test_an_asha_worker_cannot_submit_for_another_workers_household(session, client):
-    token, headers = await _token(client, "asha_worker")
+async def test_an_asha_worker_cannot_submit_for_another_workers_household(session, client, provision):
+    token, headers = await _token(client, provision, "asha_worker")
     caregiver = await _caregiver(session)
     not_mine = await _patient(session, caregiver, tier=DeploymentTier.TIER_3_ASHA)
 

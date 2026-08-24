@@ -105,8 +105,7 @@ cannot risk it, Neon's paid tier disables suspend.
    >     ├── .gitignore
    >     ├── CLINICAL_AMENDMENT_v3.md
    >     ├── FINAL_PRODUCT_SPEC_v4.md
-   >     ├── README.md
-   >     └── TASK_CLINICAL_SOURCE_REVIEW.md
+   >     └── README.md
    > Failed to build an image.
    > ```
    > That list is the whole diagnosis: Railway is looking at the repository **root**, where

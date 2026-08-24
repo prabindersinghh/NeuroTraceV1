@@ -55,7 +55,7 @@ function Schematic() {
         <path d="M112 268c26-16 70-16 96 0" /><path d="M112 268c26 20 70 20 96 0" />
         <path d="M64 190h192" strokeDasharray="3 7" className="text-accent/30" />
       </g>
-      <g className="fill-current text-muted-foreground" fontSize="10" fontFamily="ui-monospace, monospace">
+      <g className="fill-current text-muted-foreground [paint-order:stroke_fill] stroke-surface stroke-[4px] [stroke-linejoin:round]" fontSize="10" fontFamily="ui-monospace, monospace">
         <text x="14" y="146">BROW SYMMETRY</text>
         <text x="14" y="182">EYE APERTURE</text>
         <text x="14" y="274">MOUTH CORNER DROP</text>
@@ -68,6 +68,7 @@ function Schematic() {
 export function FaceMeshShowcase({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [mode, setMode] = useState<Mode>("schematic");
   const [count, setCount] = useState(0);
   const running = useRef(false);
@@ -101,10 +102,21 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
     setCount(pts.length);
   }, []);
 
+  /**
+   * Release the camera.
+   *
+   * `streamRef` rather than reading it back off the video element: `startCamera` can bail
+   * out at `if (!video) return` while already holding a live stream, and then nothing has
+   * a reference to it any more. And this has to run on UNMOUNT too — setting
+   * `running.current = false` only stops the rAF loop, and the browser stops firing rAF
+   * entirely once the element is gone, so a visitor who navigates away mid-capture used to
+   * leave the camera light on. On a product whose whole argument is that nothing leaves
+   * the device, that is the worst bug on the page.
+   */
   const stop = useCallback(() => {
     running.current = false;
-    const stream = videoRef.current?.srcObject as MediaStream | null;
-    stream?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setMode("schematic");
     setCount(0);
@@ -118,8 +130,9 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 } }, audio: false,
       });
+      streamRef.current = stream;
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) { stop(); return; }
       video.srcObject = stream;
       await video.play();
       setMode("live");
@@ -139,11 +152,13 @@ export function FaceMeshShowcase({ className }: { className?: string }) {
       loop();
     } catch {
       // No model, no wasm, or camera refused. Say so; never draw a pretend mesh.
+      stop();
       setMode("unavailable");
     }
-  }, [draw]);
+  }, [draw, stop]);
 
-  useEffect(() => () => { running.current = false; }, []);
+  // Unmount must release the hardware, not just stop the loop.
+  useEffect(() => stop, [stop]);
 
   return (
     <div className={className}>
