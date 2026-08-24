@@ -13,7 +13,7 @@
  */
 import { useId, useState } from "react";
 
-import { DURATION, EASE } from "@/lib/motion";
+import { DURATION, EASE, usePrefersReducedMotion } from "@/lib/motion";
 
 interface Row { label: string; note: string; deviating: boolean[]; sided: boolean }
 
@@ -104,8 +104,12 @@ const BAND_STYLE = {
 
 export function GateBoard() {
   const [active, setActive] = useState(0);
+  const reduced = usePrefersReducedMotion();
   const scenario = SCENARIOS[active];
   const id = useId();
+  // Where the run stops: the first gate that fails, or past the end when all three pass.
+  const stopAt = scenario.gates.findIndex((g) => !g);
+  const reached = stopAt === -1 ? GATE_NAMES.length - 1 : stopAt;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-10">
@@ -164,7 +168,11 @@ export function GateBoard() {
                             : scenario.band === "ATYPICAL" ? "hsl(var(--atypical))"
                             : "hsl(var(--watch))")
                           : "transparent",
-                        transition: `background-color ${DURATION.fast}ms ${EASE.standard}, border-color ${DURATION.fast}ms ${EASE.standard}`,
+                        transform: hit ? "scaleY(1)" : "scaleY(0.86)",
+                        transition: reduced ? undefined
+                          : `background-color ${DURATION.fast}ms ${EASE.standard} ${i * 55}ms,`
+                            + ` border-color ${DURATION.fast}ms ${EASE.standard} ${i * 55}ms,`
+                            + ` transform ${DURATION.fast}ms ${EASE.spring} ${i * 55}ms`,
                       }}
                     >
                       {hit && row.sided && (
@@ -188,10 +196,27 @@ export function GateBoard() {
 
       {/* ------------------------------------------------------------- the verdict */}
       <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${active}`}>
-        <h3 className="text-2xl font-semibold tracking-tight sm:text-[28px]">{scenario.title}</h3>
-        <p className="mt-3 text-[17px] leading-relaxed text-muted-foreground">{scenario.body}</p>
+        <div key={`${scenario.id}-brief`} className="run-narration">
+          <h3 className="text-2xl font-semibold tracking-tight sm:text-[28px]">{scenario.title}</h3>
+          <p className="mt-3 text-[17px] leading-relaxed text-muted-foreground">{scenario.body}</p>
+        </div>
 
-        <div className="mt-6 space-y-px overflow-hidden rounded-xl border border-line">
+        <div className="relative mt-6 overflow-hidden rounded-xl border border-line">
+          {/* The run travels down the gates and halts at the one that refuses it. Making
+              that a moving marker rather than three static ticks is the difference between
+              "here are three checks" and "here is where this one was stopped". */}
+          <span
+            aria-hidden
+            className="absolute left-0 top-0 z-10 w-[3px] rounded-r"
+            style={{
+              height: 56,
+              background: scenario.band === "ALERT" ? "hsl(var(--alert))"
+                : scenario.band === "ATYPICAL" ? "hsl(var(--atypical))" : "hsl(var(--watch))",
+              transform: `translate3d(0, ${reached * 56}px, 0)`,
+              transition: reduced ? undefined
+                : `transform ${DURATION.slow}ms ${EASE.inOut}, background-color ${DURATION.medium}ms ${EASE.standard}`,
+            }}
+          />
           {GATE_NAMES.map((name, i) => {
             const passed = scenario.gates[i];
             // The first gate that fails is the one doing the work — say so, once.
@@ -199,8 +224,12 @@ export function GateBoard() {
             return (
               <div
                 key={name}
-                className="flex items-center gap-3 bg-background px-4 py-3"
-                style={{ boxShadow: "inset 0 -1px 0 hsl(var(--border))" }}
+                className="flex h-14 items-center gap-3 bg-background px-4"
+                style={{
+                  boxShadow: "inset 0 -1px 0 hsl(var(--border))",
+                  opacity: i <= reached ? 1 : 0.5,
+                  transition: reduced ? undefined : `opacity ${DURATION.medium}ms ${EASE.out} ${i * 90}ms`,
+                }}
               >
                 <span
                   aria-hidden
@@ -208,7 +237,10 @@ export function GateBoard() {
                   style={{
                     background: passed ? "hsl(var(--stable))" : decisive ? "hsl(var(--foreground))" : "hsl(var(--muted))",
                     color: passed || decisive ? "#fff" : "hsl(var(--muted-foreground))",
-                    transition: `background-color ${DURATION.fast}ms ${EASE.standard}`,
+                    transform: passed || decisive ? "scale(1)" : "scale(0.85)",
+                    transition: reduced ? undefined
+                      : `background-color ${DURATION.fast}ms ${EASE.standard} ${i * 90}ms,`
+                        + ` transform ${DURATION.medium}ms ${EASE.spring} ${i * 90}ms`,
                   }}
                 >
                   {passed ? "✓" : "✕"}
@@ -222,7 +254,7 @@ export function GateBoard() {
           })}
         </div>
 
-        <div className="mt-5 flex items-start gap-3">
+        <div key={`${scenario.id}-verdict`} className="run-narration mt-5 flex items-start gap-3">
           <span
             aria-hidden
             className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${BAND_STYLE[scenario.band].dot}`}

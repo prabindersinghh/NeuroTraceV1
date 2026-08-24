@@ -337,33 +337,6 @@ export function useTween(target: number, duration: number = DURATION.cinematic):
 }
 
 /**
- * A number that counts up to `target` the first time it is seen.
- *
- * Only for figures where the count itself is the point — the four incidence statistics.
- * Returns the ref to attach and the current value.
- */
-export function useCountUp(target: number, duration = 1400) {
-  const reduced = usePrefersReducedMotion();
-  const { ref, inView } = useInView<HTMLElement>({ rootMargin: "0px 0px -15% 0px" });
-  const [value, setValue] = useState(reduced ? target : 0);
-
-  useEffect(() => {
-    if (!inView || reduced) { if (reduced) setValue(target); return; }
-    const start = performance.now();
-    let raf = requestAnimationFrame(function step(now) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(target * eased);
-      if (t < 1) raf = requestAnimationFrame(step);
-      else setValue(target);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [inView, target, duration, reduced]);
-
-  return { ref, value };
-}
-
-/**
  * A damped follower for a value the user is steering (a hovered node, a pointer position).
  *
  * Exponential, so it never quite arrives and that is the point — it always looks like it

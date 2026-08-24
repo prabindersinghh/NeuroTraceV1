@@ -11,12 +11,8 @@
  *   definition. So compare them to themselves — and then refuse to raise an alarm unless
  *   the change persists, appears in more than one system, and has a side.
  *
- * Everything else on the page — the domain table, the pipeline, the care network, Awaaz,
- * the limits — hangs off those beats rather than competing with them, and every block is
- * written to be read at a glance: two short sentences, plain words, the technical term
- * only where it is load-bearing. The earlier draft said the same things in twice as many
- * words and was correspondingly harder to follow. Length is the enemy on this page, not
- * detail.
+ * Everything else — the domain table, the pipeline, the care network, Awaaz, the limits —
+ * hangs off those beats rather than competing with them.
  *
  * WHAT IT MAY NOT DO
  * ------------------
@@ -26,42 +22,34 @@
  *
  * MOTION
  * ------
- * IntersectionObserver, CSS transitions and two canvases. No animation library — see the
- * note at the top of `lib/motion.ts`. Every effect has a reduced-motion end state.
+ * Every scroll-linked effect on this page runs off the single rAF ticker in `lib/motion`
+ * and writes to the DOM or a canvas directly, so scrubbing twenty-one days does not
+ * reconcile a React tree sixty times a second. Smooth scrolling is Lenis, loaded only
+ * here, and off on touch and under reduced motion — see that file for why the touch
+ * exclusion is a clinical decision rather than a preference. Every effect has a
+ * reduced-motion end state.
  */
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { GateBoard } from "@/components/landing/GateBoard";
 import { LandingNav } from "@/components/landing/LandingNav";
 import { NinetyDays } from "@/components/landing/NinetyDays";
+import { PipelineFlow } from "@/components/landing/PipelineFlow";
 import { PopulationBand } from "@/components/landing/PopulationBand";
 import { RunTimeline } from "@/components/landing/RunTimeline";
-import { TraceLanes } from "@/components/landing/TraceLanes";
+import { SymmetryDiagram } from "@/components/landing/SymmetryDiagram";
+import { TraceLanes, type TraceLanesHandle } from "@/components/landing/TraceLanes";
 import { DOMAINS, NON_GATING, buildRun } from "@/components/landing/traceData";
 import { LineReveal, Reveal } from "@/components/motion/Reveal";
-import { useTween } from "@/lib/motion";
-
-/**
- * The portrait the mesh runs on.
- *
- * Hotlinked from Unsplash under their licence, with their documented CDN parameters, and
- * NOT vendored into the repository — `*.jpg` is gitignored and `test_no_source_image_is_tracked`
- * fails the build on any tracked raster image, because the working tree also contains
- * photographs of a real patient's records. Punching an exception through that rule to save
- * one request on a marketing page is not a trade worth making.
- *
- * An external request is acceptable HERE and nowhere else in the product: this page has no
- * offline promise and no patient on it. The exam never loads a third-party asset. If the
- * fetch fails, `FaceMeshShowcase` draws nothing rather than faking a mesh.
- */
-const PORTRAIT =
-  "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=760&q=70";
+import {
+  useParallax, usePrefersReducedMotion, useScrollScene, useSmoothScroll,
+} from "@/lib/motion";
 
 /**
  * The mesh pulls in the MediaPipe wrapper. Splitting it out of the landing chunk is the
  * difference between a marketing page that costs 800 kB and one that costs a fifth of
- * that; the model itself was already deferred to intersection, the code loading it was not.
+ * that; the model itself only loads when the visitor asks for their camera.
  */
 const FaceMeshShowcase = lazy(() =>
   import("@/components/FaceMeshShowcase").then((m) => ({ default: m.FaceMeshShowcase })),
@@ -81,17 +69,51 @@ function Rule({ n, label, dark = false }: { n: string; label: string; dark?: boo
 const H2 = "text-[clamp(1.75rem,3.4vw,2.6rem)] font-semibold leading-[1.1] tracking-[-0.025em]";
 const LEAD = "text-[16px] leading-relaxed text-muted-foreground sm:text-[17px]";
 
+/** Hero entrance: eighteen quiet days drawn once, imperatively, with no React in the loop. */
+function useHeroEntrance(lanes: React.RefObject<TraceLanesHandle>, label: React.RefObject<HTMLSpanElement>) {
+  const reduced = usePrefersReducedMotion();
+  useEffect(() => {
+    const write = (d: number) => {
+      lanes.current?.setDay(d);
+      if (label.current) label.current.textContent = String(Math.round(d)).padStart(2, "0");
+    };
+    if (reduced) { write(18); return; }
+    const start = performance.now() + 240;
+    let raf = requestAnimationFrame(function step(now) {
+      const t = Math.min(1, Math.max(0, (now - start) / 2400));
+      // Expo-out, the numeric twin of EASE.out. Lands exactly on 18 rather than creeping
+      // toward day 19 and giving away the ending.
+      write(1 + (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)) * 17);
+      if (t < 1) raf = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [lanes, label, reduced]);
+}
+
 export default function Landing() {
   const series = useMemo(() => buildRun(42), []);
+  useSmoothScroll();
 
-  // The hero plate draws the eighteen quiet days and stops. It does not show the alert —
-  // that is the payoff further down, and spending it here would flatten the page.
-  const [heroTarget, setHeroTarget] = useState(1);
-  useEffect(() => {
-    const t = window.setTimeout(() => setHeroTarget(18), 260);
-    return () => window.clearTimeout(t);
+  const heroLanes = useRef<TraceLanesHandle>(null);
+  const heroDay = useRef<HTMLSpanElement>(null);
+  const heroCue = useRef<HTMLDivElement>(null);
+  useHeroEntrance(heroLanes, heroDay);
+
+  const plateParallax = useParallax<HTMLDivElement>(0.1);
+
+  // The hero plate is inspectable: run the pointer along it and each lane marks that
+  // morning. It is the cheapest possible demonstration that these are seven readings of
+  // one day, which is the thing the whole page goes on to argue.
+  const onPlateMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    heroLanes.current?.setFocus((e.clientX - rect.left) / rect.width);
   }, []);
-  const heroDay = useTween(heroTarget, 2400);
+  const onPlateLeave = useCallback(() => heroLanes.current?.setFocus(null), []);
+
+  // The scroll cue retires once the visitor has taken the hint.
+  const cueScene = useScrollScene<HTMLDivElement>((p) => {
+    if (heroCue.current) heroCue.current.style.opacity = String(Math.max(0, 1 - p * 6));
+  }, "pin");
 
   return (
     <div id="top" className="min-h-screen bg-background text-foreground">
@@ -106,7 +128,7 @@ export default function Landing() {
 
       <main id="main">
         {/* ══════════════════════════════════════════════════════════ 01 · HERO */}
-        <section className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-14 lg:pb-24">
+        <section ref={cueScene} className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-14 lg:pb-24">
           <div className="grid items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
             <div>
               <Reveal>
@@ -136,14 +158,14 @@ export default function Landing() {
               <Reveal step={5} className="mt-8 flex flex-wrap items-center gap-3">
                 <Link
                   to="/register"
-                  className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-6 py-3.5 text-[15px] font-medium text-background"
+                  className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-6 py-3.5 text-[15px] font-medium text-background transition-transform duration-300 ease-out hover:-translate-y-0.5"
                 >
                   Open the demo
                   <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
                 </Link>
                 <a
                   href="#gates"
-                  className="focus-ring rounded-xl border border-line px-6 py-3.5 text-[15px] transition-colors hover:border-foreground/40"
+                  className="focus-ring rounded-xl border border-line px-6 py-3.5 text-[15px] transition-colors duration-300 hover:border-foreground/40"
                 >
                   See how it decides
                 </a>
@@ -161,22 +183,36 @@ export default function Landing() {
             {/* The instrument. Dark because it is an instrument inside a light page, not a
                 second theme: the product surfaces stay light for patients in daylight. */}
             <Reveal step={3} y={24}>
-              <div className="rounded-2xl border border-white/10 bg-[#0A121C] p-4 sm:p-5">
-                <div className="flex items-baseline justify-between gap-3 pb-3">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
-                    SEVEN DOMAINS · ONE PERSON
-                  </p>
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
-                    DAY {String(Math.round(heroDay)).padStart(2, "0")}
-                  </p>
+              <div ref={plateParallax}>
+                <div
+                  className="rounded-2xl border border-white/10 bg-[#0A121C] p-4 sm:p-5"
+                  onPointerMove={onPlateMove}
+                  onPointerLeave={onPlateLeave}
+                >
+                  <div className="flex items-baseline justify-between gap-3 pb-3">
+                    <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
+                      SEVEN DOMAINS · ONE PERSON
+                    </p>
+                    <p className="font-mono text-[10px] tracking-[0.2em] text-white/45">
+                      DAY <span ref={heroDay}>01</span>
+                    </p>
+                  </div>
+                  <TraceLanes ref={heroLanes} series={series} laneHeight={30} />
                 </div>
-                <TraceLanes series={series} day={heroDay} laneHeight={30} />
+                <p className="mt-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
+                  Seeded demo run · run your pointer across it to inspect one morning
+                </p>
               </div>
-              <p className="mt-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
-                Seeded demo run · the band is this person's own normal, and it does not exist
-                until twelve sessions have built it
-              </p>
             </Reveal>
+          </div>
+
+          <div ref={heroCue} className="mt-14 hidden justify-center lg:flex">
+            <a href="#problem" className="focus-ring group flex flex-col items-center gap-2 rounded p-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                The argument
+              </span>
+              <span aria-hidden className="scroll-cue block h-8 w-px bg-line" />
+            </a>
           </div>
         </section>
 
@@ -200,10 +236,7 @@ export default function Landing() {
               </div>
 
               <Reveal step={2}>
-                <NinetyDays measured={false} />
-                <p className="mt-3.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  ■ examined&nbsp;&nbsp;·&nbsp;&nbsp;□ not observed
-                </p>
+                <NinetyDays />
               </Reveal>
             </div>
 
@@ -216,7 +249,7 @@ export default function Landing() {
                 ["11–41%", "develop post-stroke depression"],
                 ["1 in 4", "has a second stroke"],
               ].map(([stat, label], i) => (
-                <Reveal key={stat} step={i} className="bg-background p-5">
+                <Reveal key={stat} step={i} y={22} className="bg-background p-5">
                   <p className="text-[27px] font-semibold tracking-[-0.02em] tabular-nums">{stat}</p>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">{label}</p>
                 </Reveal>
@@ -256,7 +289,7 @@ export default function Landing() {
               { p: 0, label: "AGAINST A POPULATION", note: "Flagged every single day. Useless by the end of the first week." },
               { p: 1, label: "AGAINST THEMSELVES", note: "Flat for eighteen days, then days 19–21 move. Same data, different reference." },
             ].map((panel, i) => (
-              <Reveal key={panel.label} step={i}>
+              <Reveal key={panel.label} step={i} y={26}>
                 <div className="rounded-2xl border border-white/10 bg-[#0A121C] p-4">
                   <p className="pb-3 font-mono text-[10px] tracking-[0.2em] text-white/45">{panel.label}</p>
                   <PopulationBand progress={panel.p} />
@@ -268,33 +301,39 @@ export default function Landing() {
         </section>
 
         {/* ══════════════════════════════════════════════ 04 · THE SECOND PROBLEM */}
-        <section className="border-y border-line bg-surface/50">
-          <div className="mx-auto max-w-3xl px-6 py-16 text-center lg:py-20">
-            <Reveal>
-              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                The second problem
-              </p>
-            </Reveal>
-            {/* The forced line breaks are sized for the narrowest viewport: a "line" that
-                wraps again inside its own mask produces a ragged centred block on a phone. */}
-            <h2 className="mt-6 text-[clamp(1.6rem,3.6vw,2.6rem)] font-semibold leading-[1.12] tracking-[-0.028em]">
-              <LineReveal
-                lines={[
-                  "Three domains agreeing",
-                  "looks like overwhelming",
-                  "evidence.",
-                  <span key="k" className="text-muted-foreground">Sometimes it is evidence</span>,
-                  <span key="l" className="text-muted-foreground">of the wrong thing.</span>,
-                ]}
-              />
-            </h2>
-            <Reveal step={5} className="mx-auto mt-7 max-w-xl">
-              <p className={LEAD}>
-                Parkinson's slows the hand, quietens the voice and flattens the face — all at
-                once, and it is common in the age band we monitor. Persistence and
-                corroboration alone would make it our most confident alert, for a condition
-                this product does not monitor and cannot help with.
-              </p>
+        <section id="laterality" className="border-y border-line bg-surface/50">
+          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+            <div className="mx-auto max-w-3xl text-center">
+              <Reveal>
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                  The second problem
+                </p>
+              </Reveal>
+              {/* The forced line breaks are sized for the narrowest viewport: a "line" that
+                  wraps again inside its own mask produces a ragged centred block. */}
+              <h2 className="mt-6 text-[clamp(1.6rem,3.6vw,2.6rem)] font-semibold leading-[1.12] tracking-[-0.028em]">
+                <LineReveal
+                  lines={[
+                    "Three domains agreeing",
+                    "looks like overwhelming",
+                    "evidence.",
+                    <span key="k" className="text-muted-foreground">Sometimes it is evidence</span>,
+                    <span key="l" className="text-muted-foreground">of the wrong thing.</span>,
+                  ]}
+                />
+              </h2>
+              <Reveal step={5} className="mx-auto mt-7 max-w-xl">
+                <p className={LEAD}>
+                  Parkinson's slows the hand, quietens the voice and flattens the face — all
+                  at once, and it is common in the age band we monitor. Persistence and
+                  corroboration alone would make it our most confident alert, for a condition
+                  this product does not monitor and cannot help with.
+                </p>
+              </Reveal>
+            </div>
+
+            <Reveal className="mt-10">
+              <SymmetryDiagram />
             </Reveal>
           </div>
         </section>
@@ -341,68 +380,49 @@ export default function Landing() {
         </section>
 
         {/* ════════════════════════════════════════════════════════ 07 · ON DEVICE */}
-        <section id="device">
-          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
-            <Reveal><Rule n="05" label="On the phone" /></Reveal>
-            <div className="mt-7 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
-              <div>
-                <h2 className={H2}>
-                  <LineReveal lines={["The server has no endpoint", "that accepts a recording."]} />
-                </h2>
-                <Reveal step={2} className="mt-5 max-w-xl space-y-4">
-                  <p className={LEAD}>
-                    Landmarks and audio features are computed in the browser and the frames
-                    are dropped in the same tick. What syncs is a dictionary of numbers.
-                  </p>
-                  <p className={LEAD}>
-                    This is not a policy someone has to remember. There is no upload route for
-                    audio, video or images anywhere in the API, and no column in the database
-                    that could hold one — so a deployment mistake cannot leak a recording that
-                    was never sent.
-                  </p>
-                  <p className={LEAD}>
-                    The session completes in airplane mode and syncs later, because the model
-                    is served from our own origin and precached.
-                  </p>
-                </Reveal>
-
-                <div className="mt-8 space-y-px overflow-hidden rounded-2xl border border-line">
-                  {[
-                    ["Capture", "The camera and microphone run a task. Nothing is written to disk."],
-                    ["Extract, on device", "MediaPipe landmarks and audio DSP turn the signal into numbers, in the browser."],
-                    ["Compare to their own history", "Twelve sessions of their own past. Never a population average."],
-                    ["Three gates", "Persistence, then corroboration, then a side."],
-                    ["Say it in their language", "One guardrailed sentence in English, Hindi or Punjabi: what changed, and what to do."],
-                  ].map(([title, body], i) => (
-                    <Reveal key={title} step={i} className="bg-background px-5 py-3.5">
-                      <div className="flex gap-4">
-                        <span className="mt-0.5 font-mono text-[11px] tabular-nums text-accent">
-                          {String(i + 1).padStart(2, "0")}
-                        </span>
-                        <div>
-                          <p className="text-[15px] font-medium">{title}</p>
-                          <p className="mt-1 text-[14px] leading-relaxed text-muted-foreground">{body}</p>
-                        </div>
-                      </div>
-                    </Reveal>
-                  ))}
-                </div>
-              </div>
-
-              <Reveal step={2}>
-                <Suspense
-                  fallback={
-                    <div className="aspect-[3/4] w-full max-w-[360px] animate-pulse rounded-2xl border border-line bg-background" />
-                  }
-                >
-                  <FaceMeshShowcase src={PORTRAIT} className="max-w-[360px]" />
-                </Suspense>
-                <p className="mt-3 max-w-[360px] text-[13px] leading-relaxed text-muted-foreground">
-                  Not an illustration — the same pinned face model the daily check-in uses,
-                  running in your browser. If it cannot run here, nothing is drawn.
+        <section id="device" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <Reveal><Rule n="05" label="On the phone" /></Reveal>
+          <div className="mt-7 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
+            <div>
+              <h2 className={H2}>
+                <LineReveal lines={["The server has no endpoint", "that accepts a recording."]} />
+              </h2>
+              <Reveal step={2} className="mt-5 max-w-xl space-y-4">
+                <p className={LEAD}>
+                  Landmarks and audio features are computed in the browser and the frames are
+                  dropped in the same tick. What syncs is a dictionary of numbers.
+                </p>
+                <p className={LEAD}>
+                  This is not a policy someone has to remember. There is no upload route for
+                  audio, video or images anywhere in the API, and no column in the database
+                  that could hold one — so a deployment mistake cannot leak a recording that
+                  was never sent.
+                </p>
+                <p className={LEAD}>
+                  The session completes in airplane mode and syncs later, because the model is
+                  served from our own origin and precached.
                 </p>
               </Reveal>
+
+              <PipelineFlow />
             </div>
+
+            <Reveal step={2}>
+              <Suspense
+                fallback={
+                  <div className="aspect-[4/5] w-full max-w-[360px] animate-pulse rounded-2xl border border-line bg-surface" />
+                }
+              >
+                <FaceMeshShowcase className="max-w-[360px]" />
+              </Suspense>
+              <p className="mt-3 max-w-[360px] text-[13px] leading-relaxed text-muted-foreground">
+                The panel above is a labelled diagram, and says so. Turn on your camera and it
+                is replaced by the real landmarker — the same pinned model the daily check-in
+                loads — running on your face, in your browser. There is no stock portrait here
+                on purpose: a real person's face under a medical overlay, on a page about
+                stroke, is a claim nobody in a photo library consented to.
+              </p>
+            </Reveal>
           </div>
         </section>
 
@@ -428,6 +448,7 @@ export default function Landing() {
                 <Reveal
                   key={domain.key}
                   step={i}
+                  y={14}
                   className="grid grid-cols-1 gap-1.5 border-b border-line px-5 py-3.5 last:border-0 sm:grid-cols-[minmax(150px,0.85fr)_minmax(0,2.4fr)_auto] sm:items-baseline sm:gap-6"
                 >
                   <p className="text-[15px] font-medium">{domain.label}</p>
@@ -435,8 +456,9 @@ export default function Landing() {
                   <div className="flex items-center gap-3 sm:justify-end">
                     <span className="font-mono text-[11px] text-muted-foreground">{domain.modules}</span>
                     <span
-                      className={`rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wider ${domain.lateral ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
-                        }`}
+                      className={`rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wider ${
+                        domain.lateral ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
+                      }`}
                     >
                       {domain.lateral ? "HAS A SIDE" : "NO SIDE"}
                     </span>
@@ -475,7 +497,7 @@ export default function Landing() {
               ["Clinician", "A ranked roster, gate states, laterality, drift against a frozen reference, and an audit log."],
               ["ASHA worker", "A household list with due items. Offline-first, and safe to sync twice."],
             ].map(([who, what], i) => (
-              <Reveal key={who} step={i} className="bg-background p-5">
+              <Reveal key={who} step={i} y={20} className="bg-background p-5">
                 <p className="text-[15px] font-medium">{who}</p>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">{what}</p>
               </Reveal>
@@ -513,7 +535,9 @@ export default function Landing() {
         </section>
 
         {/* ═══════════════════════════════════════════ 10 · WHAT WE DO NOT CLAIM */}
-        <section id="limits" className="bg-[#0A121C] text-white">
+        {/* A chapter break, not a band of colour: the dark plate rides up over the page on
+            its own rounded edge, so the tone change reads as deliberate. */}
+        <section id="limits" className="relative -mt-6 rounded-t-[1.75rem] bg-[#0A121C] text-white">
           <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
             <Reveal><Rule n="08" label="What we do not claim" dark /></Reveal>
             <h2 className={`mt-7 max-w-2xl ${H2}`}>
@@ -529,19 +553,19 @@ export default function Landing() {
             <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 md:grid-cols-2">
               {[
                 ["It does not diagnose, and it does not detect stroke.",
-                  "It measures findings against a person's own history and reports what changed. Every trained model publishes its metrics and a limitations note."],
+                 "It measures findings against a person's own history and reports what changed. Every trained model publishes its metrics and a limitations note."],
                 ["Three of the five models are trained on synthetic data today.",
-                  "Labelled synthetic in the repository, in each model card, and here, while dataset access is pending. The face and pose landmarkers are production models, pinned by content hash."],
+                 "Labelled synthetic in the repository, in each model card, and here, while dataset access is pending. The face and pose landmarkers are production models, pinned by content hash."],
                 ["It cannot see an acute stroke.",
-                  "So the FAST card renders after every session and on every dashboard — always, not only when the band is high. An acute symptom report bypasses the engine entirely."],
+                 "So the FAST card renders after every session and on every dashboard — always, not only when the band is high. An acute symptom report bypasses the engine entirely."],
                 ["Nothing may assert wellness.",
-                  "“You are fine”, “all clear”, “nothing to worry about” are forbidden in three languages, enforced by a test that sweeps the shipped source."],
+                 "“You are fine”, “all clear”, “nothing to worry about” are forbidden in three languages, enforced by a test that sweeps the shipped source."],
                 ["It is for one population, deliberately.",
-                  "Anterior-circulation ischemic stroke, three or more months post-discharge, clinically stable, living at home. Enrolment below three months is refused in one place, so no other route can bypass it."],
+                 "Anterior-circulation ischemic stroke, three or more months post-discharge, clinically stable, living at home. Enrolment below three months is refused in one place, so no other route can bypass it."],
                 ["Nothing has run on a physical phone yet.",
-                  "Camera framing and pose scaling at 1.5 m are desktop-browser only so far. It is the largest untested surface in the product, and it is written down as such."],
+                 "Camera framing and pose scaling at 1.5 m are desktop-browser only so far. It is the largest untested surface in the product, and it is written down as such."],
               ].map(([head, body], i) => (
-                <Reveal key={head} step={i % 2} className="bg-[#0A121C] p-6">
+                <Reveal key={head} step={i % 2} y={18} className="bg-[#0A121C] p-6">
                   <p className="text-[16px] font-medium leading-snug">{head}</p>
                   <p className="mt-2 text-[14px] leading-relaxed text-white/55">{body}</p>
                 </Reveal>
@@ -563,17 +587,26 @@ export default function Landing() {
           <Reveal step={4} className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               to="/register"
-              className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-7 py-4 text-[15px] font-medium text-background"
+              className="focus-ring group inline-flex items-center gap-2 rounded-xl bg-foreground px-7 py-4 text-[15px] font-medium text-background transition-transform duration-300 ease-out hover:-translate-y-0.5"
             >
               Open the demo
               <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">→</span>
             </Link>
             <Link
               to="/login"
-              className="focus-ring rounded-xl border border-line px-7 py-4 text-[15px] transition-colors hover:border-foreground/40"
+              className="focus-ring rounded-xl border border-line px-7 py-4 text-[15px] transition-colors duration-300 hover:border-foreground/40"
             >
               Log in
             </Link>
+          </Reveal>
+
+          {/* The ninety days again, all of them measured. The page opened on this picture
+              with one square lit; closing on the finished one is the argument, resolved. */}
+          <Reveal step={6} className="mx-auto mt-14 max-w-lg">
+            <NinetyDays complete />
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              ninety mornings · ninety seconds each · nothing leaves the phone
+            </p>
           </Reveal>
         </section>
       </main>

@@ -45,6 +45,8 @@ const INK = {
 export interface TraceLanesHandle {
   /** Draw the run up to `day`. Fractional for a continuous sweep. */
   setDay: (day: number) => void;
+  /** Inspect one morning across all seven lanes. `x` is 0..1 across the plate, or null. */
+  setFocus: (x: number | null) => void;
 }
 
 export interface TraceLanesProps {
@@ -55,21 +57,18 @@ export interface TraceLanesProps {
   laneHeight?: number;
   /** Draw the domain name in the left gutter. Off on the narrowest plates. */
   labels?: boolean;
-  /** Pointer x in 0..1 across the plate, or null. Lights the nearest day column. */
-  focus?: number | null;
   className?: string;
 }
 
 export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function TraceLanes(
-  { series, day = 1, laneHeight = 32, labels = true, focus = null, className },
+  { series, day = 1, laneHeight = 32, labels = true, className },
   handleRef,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const dayRef = useRef(day);
-  const focusRef = useRef(focus);
+  const focusRef = useRef<number | null>(null);
   const paintRef = useRef<() => void>(() => {});
-  focusRef.current = focus;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -278,13 +277,15 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
     return () => ro.disconnect();
   }, [series, laneHeight, labels]);
 
-  // Repaint when the pointer column changes; the day comes through the handle instead.
-  useEffect(() => { paintRef.current(); }, [focus]);
-
   useImperativeHandle(handleRef, () => ({
     setDay: (next: number) => {
       if (next === dayRef.current) return;
       dayRef.current = next;
+      paintRef.current();
+    },
+    setFocus: (x: number | null) => {
+      if (x === focusRef.current) return;
+      focusRef.current = x;
       paintRef.current();
     },
   }), []);
