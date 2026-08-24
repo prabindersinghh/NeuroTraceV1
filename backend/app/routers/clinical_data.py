@@ -159,7 +159,11 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
              # laterality requirement is the one that separates a stroke pattern from a
              # symmetric progressive one.
              "gate1": s.gate1_passed, "gate2": s.gate2_passed, "gate3": s.gate3_passed,
-             "lateralised": s.lateralised,
+             # Derived, not read off the Score: `lateralised` is a column on Deviation
+             # (per MODULE), and Score is per SESSION — so `s.lateralised` was an
+             # AttributeError that 500'd this whole endpoint. Deriving it from the list
+             # printed on the next line also means the flag can never disagree with it.
+             "lateralised": bool(s.lateralised_domains),
              "lateralised_domains": s.lateralised_domains or [],
              "confidence": s.confidence,
              "confounders": (s.confounders_json or {}).get("active", []),

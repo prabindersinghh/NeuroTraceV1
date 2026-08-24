@@ -362,6 +362,31 @@ async def test_the_report_states_all_three_gates_not_just_two(client):
         assert "lateralised_domains" in row
 
 
+async def test_the_report_renders_a_row_for_a_scored_session(client):
+    """The two tests above report on a patient who has never run a session.
+
+    `body["sessions"]` was therefore always `[]`, the row comprehension that builds it never
+    executed, and a field on that row which does not exist could not fail. That is exactly
+    how `s.lateralised` — a column on Deviation (per module), not on Score (per session) —
+    500'd this endpoint in a browser while the suite stayed green. An assertion about a
+    row's shape is only worth anything against a report that actually has a row.
+    """
+    token, _ = await register(client)
+    patient = await make_patient(client, token)
+    await run_session(client, token, patient["id"], make_rng(42))
+
+    resp = await client.get(f"/report/{patient['id']}", headers=auth(token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["sessions"], "a scored session must appear in the report"
+
+    row = body["sessions"][0]
+    assert {"gate1", "gate2", "gate3", "lateralised", "lateralised_domains"} <= row.keys()
+    assert isinstance(row["lateralised"], bool)
+    # The flag is derived from the list printed beside it, so it cannot contradict it.
+    assert row["lateralised"] is bool(row["lateralised_domains"])
+
+
 async def test_a_reference_trace_is_refused_before_the_baseline_locks(client):
     """409, not a substituted earliest-ever capture.
 

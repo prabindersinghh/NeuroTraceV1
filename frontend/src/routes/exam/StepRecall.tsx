@@ -99,6 +99,17 @@ export function StepRecall({ mode, seconds, onDone }: Props) {
     );
   }, [onDone, picked, started, words]);
 
+  // Hoisted above the `encode` early-return on purpose. React counts hooks per render, so a
+  // `useMemo` reached only on the recall branch changes the hook count when `mode` changes —
+  // "rendered more hooks than during the previous render". Today the two modes are rendered
+  // from two different slots in ProtocolRunner, so the component unmounts in between and the
+  // violation never fires; it fires the moment anyone renders both from one slot, or adds a
+  // toggle. Computing the option list on the encode pass costs one sort of eight strings.
+  const options = useMemo(
+    () => [...words.shown, ...words.lures].sort((a, b) => a.localeCompare(b)),
+    [words],
+  );
+
   if (mode === "encode") {
     return (
       <div className="flex flex-col items-center gap-6">
@@ -111,11 +122,6 @@ export function StepRecall({ mode, seconds, onDone }: Props) {
       </div>
     );
   }
-
-  const options = useMemo(
-    () => [...words.shown, ...words.lures].sort((a, b) => a.localeCompare(b)),
-    [words],
-  );
 
   return (
     <div className="flex flex-col gap-4">

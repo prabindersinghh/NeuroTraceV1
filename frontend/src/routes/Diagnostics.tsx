@@ -40,6 +40,11 @@ export default function Diagnostics() {
   const startedAt = useRef(new Date().toISOString());
 
   useEffect(() => {
+    // StrictMode runs effects twice in development. Without this guard the async storage
+    // probe below appends "Storage quota" once per run, so the row rendered twice with the
+    // same React key — and in production the same thing happens if the effect is ever
+    // re-run, or fires setState after the page has been left.
+    let cancelled = false;
     const nav = navigator as Navigator & { deviceMemory?: number };
     const out: Probe[] = [
       { label: "User agent", value: navigator.userAgent, verdict: "info" },
@@ -76,9 +81,10 @@ export default function Diagnostics() {
     setProbes(out);
 
     navigator.storage?.estimate?.().then((e) => {
+      if (cancelled) return;
       const quotaMb = Math.round((e.quota ?? 0) / 1e6);
       setProbes((p) => [
-        ...p,
+        ...p.filter((existing) => existing.label !== "Storage quota"),
         {
           label: "Storage quota",
           // The precache is ~40 MB, most of it the face model and wasm.
@@ -87,6 +93,8 @@ export default function Diagnostics() {
         },
       ]);
     }).catch(() => undefined);
+
+    return () => { cancelled = true; };
   }, []);
 
   const run = useCallback(async () => {
