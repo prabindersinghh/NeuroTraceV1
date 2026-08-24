@@ -2,7 +2,12 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-23 (later) · **DEPLOYED ON NEON POSTGRES** — backend
+**Last updated:** 2026-08-24 · The **signed-out landing page** is now the product's
+argument rather than a feature list, with a motion system (`frontend/src/lib/motion.ts`)
+built on one rAF ticker: scroll-linked effects write to the DOM or a canvas instead of React
+state, and measure 0 long tasks across a full-page scroll. Smooth scrolling is Lenis, landing
+only, off on touch and under reduced motion — a vestibular decision, see CHANGELOG 2026-08-24.
+Route-splitting took the first chunk from 800 kB to 225 kB. · **DEPLOYED ON NEON POSTGRES** — backend
 `neurotracev1-production.up.railway.app` (`database: up`), frontend
 `neuro-trace-v1.vercel.app`, `verify_deploy.sh` 7/7. The demo is seeded on Postgres and
 **survives redeploys**, which is the whole reason for leaving SQLite: `/clinic/patients`

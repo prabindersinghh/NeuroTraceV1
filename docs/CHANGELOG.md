@@ -4,6 +4,94 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-24 — The landing page becomes the argument; scroll motion off the render path
+
+### The signed-out page was a feature list; it is now one argument
+The old landing stated the product in four card grids. What it never did was make the case,
+and the case has two turns in it that a visitor cannot reconstruct from a feature list:
+
+1. A population threshold cannot monitor a stroke survivor, because a survivor sits outside
+   the population's normal range on the day they come home and every day after. Set it to
+   catch deterioration and it fires every morning until someone mutes it; widen it until it
+   is quiet and it can no longer see what it was for.
+2. A personal baseline is still not enough. Three domains agreeing looks like overwhelming
+   evidence, and Parkinson's produces exactly that — persistently, in face, voice and hand.
+   So the deviation also has to have a side.
+
+The page is now those beats in order, carried by ONE visual primitive — a lane, a band, a
+trace — that changes state rather than being redrawn as a new kind of picture per section.
+The domain table, pipeline, care network, Awaaz and limits hang off the beats.
+
+Every figure comes from the README, `engine/gates.py` or `exam/registry.py`.
+`traceData.test.ts` runs the illustrated 21-day verdicts through the engine's own gate rules
+(9 assertions), so the seeded run cannot drift out of agreement with the story the page
+tells: edit the series and the test fails before the page can ship a claim the gates would
+not have produced.
+
+### Motion, and why there is no GSAP
+One `requestAnimationFrame` ticker in `lib/motion.ts`, running only while a scene is near
+the viewport. Scroll-linked effects write to the DOM or a canvas directly; `TraceLanes`
+takes its day and its focus column through an imperative handle. The naive version — scroll
+listener per effect, `setState` per frame — reconciled three paragraphs and a canvas sixty
+times a second in the 21-day section, and that is what made it feel cheap.
+
+Smooth scrolling is Lenis, dynamically imported so only the signed-out page pays the 5.4 kB,
+and **off on coarse pointers and under `prefers-reduced-motion`**. That exclusion is
+clinical, not aesthetic: this product measures vestibular function and its users have
+vertigo, so inertial scrolling and parallax stay on the marketing page.
+
+New teaching visuals, each carrying a specific claim: the ninety-day field fills in as you
+scroll (states the problem, then answers it); a symmetry diagram carries Gate 3 — the same
+three domains, matched sides against split; the on-device steps became a flow with a signal
+travelling down them; the gate board grew a marker that travels to the gate that stops the
+run.
+
+### Bugs found underneath it
+- **Every route was statically imported.** A visitor downloaded the exam, recharts and the
+  MediaPipe wrapper to read marketing copy — one 800 kB chunk. Route-split: the landing
+  entry is 225 kB, Dashboard/Exam/face are separate.
+- **`FaceMeshShowcase` released the camera from the rAF loop**, which stops firing once the
+  tab is hidden or the component unmounts, so navigating away mid-capture left the camera
+  on. Upstream's rewrite had the same shape (release only from the button handler); fixed in
+  both by holding the stream in a ref and releasing on unmount.
+- **The session length was wrong in every shipped string.** `DAILY_BUDGET_SECONDS` is 90 and
+  test-enforced; the HTML meta, PWA manifest, API description and frontend README all said
+  45.
+- **`--atypical` was declared twice** in `index.css`; the first pair was dead.
+- **`font-feature-settings: cv02 cv03 cv04 cv11`** named Inter's character variants with no
+  Inter loaded — four no-ops. Inter is now self-hosted (48 kB, latin), which is also why it
+  is not a `fonts.gstatic.com` link on a page whose argument is that we have no third-party
+  dependencies.
+- **Anchor jumps landed under the sticky header** — no `scroll-margin-top`.
+- **No `prefers-reduced-motion` support anywhere.**
+- **`text-${tone}` in the symmetry diagram** was a runtime-assembled Tailwind class, which
+  Tailwind cannot see. It rendered only because both literals happen to appear in other
+  files. Replaced with a lookup of literal names — the trap CLAUDE.md already documents.
+
+### Merged with origin/main
+Took upstream's landing decisions where they are the better call. **No stock portrait
+anywhere**: an identifiable person's face under a medical overlay, on a page about stroke,
+is a claim nobody in a photo library consented to. That also retired a vendored-JPEG problem
+this work had walked into — `*.jpg` is gitignored precisely because the working tree holds
+photographs of a real patient's records, and `test_no_source_image_is_tracked` fails the
+build on any tracked raster image. `FaceMeshShowcase` is upstream's labelled schematic plus
+opt-in camera; `App.tsx` keeps the route splitting and gained Enrol, Listen and ReviewQueue
+as lazy chunks.
+
+App-wide: a page transition that replays a CSS animation on a stable wrapper rather than
+keying the router outlet on pathname (which remounts and refetches); press feedback on
+`Button`; a loading state held back 200 ms so a fast lazy chunk does not flash a spinner.
+
+**Verified:** `npx tsc -b` clean · `npx vitest run` 27/27 · `npm run build` clean ·
+backend `pytest` exit 0, 0 failures · **0 long tasks (>50 ms) across a full-page scroll** ·
+`position: sticky` still pins with Lenis active (sticky top = 0) · no horizontal overflow at
+1440/1280/1024/768/390 · no console errors on any route · reduced motion leaves nothing
+hidden and drops the pin · anchor jumps clear the header (88px vs 65px header) · tab order
+starts at the skip link with focus rings on every stop · the gate board is operable by
+keyboard.
+
+---
+
 ## 2026-08-23 (later) — Neon boots for real; identity, listener UI, honest imagery
 
 ### Two dialect bugs that only a real Postgres could find
