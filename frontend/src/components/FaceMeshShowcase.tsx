@@ -55,7 +55,7 @@ function Schematic() {
         <path d="M112 268c26-16 70-16 96 0" /><path d="M112 268c26 20 70 20 96 0" />
         <path d="M64 190h192" strokeDasharray="3 7" className="text-accent/30" />
       </g>
-      <g className="fill-current text-muted-foreground [paint-order:stroke_fill] stroke-surface stroke-[4px] stroke-linejoin-round" fontSize="10" fontFamily="ui-monospace, monospace">
+      <g className="fill-current text-muted-foreground [paint-order:stroke_fill] stroke-surface stroke-[4px] [stroke-linejoin:round]" fontSize="10" fontFamily="ui-monospace, monospace">
         <text x="14" y="146">BROW SYMMETRY</text>
         <text x="14" y="182">EYE APERTURE</text>
         <text x="14" y="274">MOUTH CORNER DROP</text>
