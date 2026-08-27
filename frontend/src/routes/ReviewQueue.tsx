@@ -1,10 +1,9 @@
 /**
  * The caregiver's evening review — `/review/:patientId`.
  *
- * WHAT THIS ACTUALLY IS: the only source of labelled training data this product will ever
- * have for a specific person's speech. Every correction is one (heard → meant) pair for
- * their personalised adapter. There is no dataset for a 67-year-old Punjabi speaker with
- * post-stroke dysarthria; there is only the family, five minutes an evening.
+ * WHAT THIS ACTUALLY IS: a short queue where a caregiver verifies what the person meant.
+ * The saved text labels can support future personalisation, but this screen does not
+ * pretend a text-only correction is already an audio training pair.
  *
  * WHY IT IS SHORT AND WORST-FIRST
  * The server orders by lowest confidence and caps the list. A caregiver who does only
@@ -35,9 +34,9 @@ interface ReviewItem {
 const COPY = {
   title: { en: "This evening's review", hi: "आज शाम की जाँच", pa: "ਅੱਜ ਸ਼ਾਮ ਦੀ ਜਾਂਚ" },
   intro: {
-    en: "We were unsure about these. Correcting one teaches the app their voice — nothing else can.",
-    hi: "इनके बारे में हमें ठीक से पता नहीं चला। एक भी सुधारने से ऐप उनकी आवाज़ सीखता है।",
-    pa: "ਇਹਨਾਂ ਬਾਰੇ ਸਾਨੂੰ ਠੀਕ ਪਤਾ ਨਹੀਂ ਲੱਗਾ। ਇੱਕ ਵੀ ਸੁਧਾਰਨ ਨਾਲ ਐਪ ਉਹਨਾਂ ਦੀ ਆਵਾਜ਼ ਸਿੱਖਦਾ ਹੈ।",
+    en: "We were unsure about these. Each correction saves a verified label for future personalisation.",
+    hi: "इनके बारे में हमें ठीक से पता नहीं चला। हर सुधार भविष्य में निजी बनाने के लिए एक सत्यापित लेबल सहेजता है।",
+    pa: "ਇਹਨਾਂ ਬਾਰੇ ਸਾਨੂੰ ਠੀਕ ਪਤਾ ਨਹੀਂ ਲੱਗਾ। ਹਰ ਸੋਧ ਭਵਿੱਖ ਦੇ ਨਿੱਜੀਕਰਨ ਲਈ ਇੱਕ ਪੁਸ਼ਟੀ ਕੀਤਾ ਲੇਬਲ ਸੰਭਾਲਦੀ ਹੈ।",
   },
   heard: { en: "We heard", hi: "हमने सुना", pa: "ਅਸੀਂ ਸੁਣਿਆ" },
   meant: { en: "They meant", hi: "उनका मतलब था", pa: "ਉਹਨਾਂ ਦਾ ਮਤਲਬ ਸੀ" },
@@ -45,14 +44,19 @@ const COPY = {
   right: { en: "That was right", hi: "यह सही था", pa: "ਇਹ ਸਹੀ ਸੀ" },
   save: { en: "Save", hi: "सहेजें", pa: "ਸੰਭਾਲੋ" },
   empty: {
-    en: "Nothing to review tonight. The app understood them.",
-    hi: "आज कुछ जाँचने को नहीं। ऐप उन्हें समझ पाया।",
-    pa: "ਅੱਜ ਕੁਝ ਜਾਂਚਣ ਨੂੰ ਨਹੀਂ। ਐਪ ਉਹਨਾਂ ਨੂੰ ਸਮਝ ਸਕਿਆ।",
+    en: "Nothing needs review tonight.",
+    hi: "आज किसी सुधार की ज़रूरत नहीं है।",
+    pa: "ਅੱਜ ਕਿਸੇ ਸੋਧ ਦੀ ਲੋੜ ਨਹੀਂ ਹੈ।",
   },
   done: {
-    en: "Done. That is one more thing the app knows about their voice.",
-    hi: "हो गया। ऐप ने उनकी आवाज़ के बारे में एक और बात सीखी।",
-    pa: "ਹੋ ਗਿਆ। ਐਪ ਨੇ ਉਹਨਾਂ ਦੀ ਆਵਾਜ਼ ਬਾਰੇ ਇੱਕ ਹੋਰ ਗੱਲ ਸਿੱਖੀ।",
+    en: "Done. That correction was saved.",
+    hi: "हो गया। सुधार सहेज लिया गया।",
+    pa: "ਹੋ ਗਿਆ। ਸੋਧ ਸੰਭਾਲੀ ਗਈ।",
+  },
+  failed: {
+    en: "That correction was not saved. It is still here — check the connection and try again.",
+    hi: "यह सुधार सहेजा नहीं गया। यह अभी यहीं है — कनेक्शन जाँचकर फिर कोशिश करें।",
+    pa: "ਇਹ ਸੁਧਾਰ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ। ਇਹ ਹਾਲੇ ਇੱਥੇ ਹੀ ਹੈ — ਕਨੈਕਸ਼ਨ ਜਾਂਚ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
 } as const;
 
@@ -64,6 +68,8 @@ export default function ReviewQueue() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [savedCount, setSavedCount] = useState(0);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -77,12 +83,21 @@ export default function ReviewQueue() {
   useEffect(() => { void load(); }, [load]);
 
   const submit = useCallback(async (id: string, corrected: string) => {
-    await api.awaazLabel(id, corrected).catch(() => undefined);
-    setEditing(null);
-    setDraft("");
-    setSavedCount((n) => n + 1);
-    setItems((prev) => (prev ?? []).filter((i) => i.id !== id));
-  }, []);
+    setSavingId(id);
+    setSaveError(null);
+    try {
+      await api.awaazLabel(id, corrected);
+      setEditing(null);
+      setDraft("");
+      setSavedCount((n) => n + 1);
+      setItems((prev) => (prev ?? []).filter((i) => i.id !== id));
+    } catch {
+      // Keep the item and the draft. A failed label is a retry, never a training pair.
+      setSaveError(COPY.failed[lang]);
+    } finally {
+      setSavingId(null);
+    }
+  }, [lang]);
 
   if (error) return <AppShell><ErrorState message={error} onRetry={load} /></AppShell>;
   if (!items) return <AppShell><LoadingState /></AppShell>;
@@ -98,6 +113,12 @@ export default function ReviewQueue() {
         {savedCount > 0 && (
           <p className="rounded-xl border border-stable/40 bg-stable-soft p-4 text-sm">
             {COPY.done[lang]}
+          </p>
+        )}
+
+        {saveError && (
+          <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-sm text-alert">
+            {saveError}
           </p>
         )}
 
@@ -123,7 +144,7 @@ export default function ReviewQueue() {
                   <div className="flex gap-2">
                     <Button
                       className="min-h-12 flex-1"
-                      disabled={!draft.trim()}
+                      disabled={!draft.trim() || savingId === item.id}
                       onClick={() => void submit(item.id, draft.trim())}
                     >
                       {COPY.save[lang]}
@@ -131,6 +152,7 @@ export default function ReviewQueue() {
                     <button
                       type="button"
                       onClick={() => { setEditing(null); setDraft(""); }}
+                      disabled={savingId === item.id}
                       className="min-h-12 rounded-xl border border-line px-4 text-sm"
                     >
                       ✕
@@ -141,15 +163,16 @@ export default function ReviewQueue() {
                 <div className="mt-4 flex gap-2">
                   <button
                     type="button"
+                    disabled={savingId === item.id}
                     onClick={() => { setEditing(item.id); setDraft(item.text); }}
                     className="min-h-12 flex-1 rounded-xl border-2 border-accent/40 px-4 text-base"
                   >
                     {COPY.correct[lang]}
                   </button>
-                  {/* "That was right" is also a label — a confirmed positive is training
-                      data too, and marking it clears the item honestly. */}
+                  {/* "That was right" is also a verified text label and clears the item. */}
                   <button
                     type="button"
+                    disabled={savingId === item.id}
                     onClick={() => void submit(item.id, item.text)}
                     className="min-h-12 flex-1 rounded-xl border border-line px-4 text-base"
                   >

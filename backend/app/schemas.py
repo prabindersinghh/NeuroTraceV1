@@ -621,6 +621,10 @@ class AwaazSpeakRequest(BaseModel):
     candidates: list[str] = Field(default_factory=list, max_length=8)
     lang: str = Field(default="en", max_length=8)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    #: True only after the person taps one of the offered candidates. This is distinct from
+    #: a model returning the same text twice: the tap is the consent event that makes it safe
+    #: to speak and the audit fact INV-9 needs to retain.
+    confirmed_candidate: bool = False
 
 
 class AwaazSpeakResult(BaseModel):
@@ -641,8 +645,9 @@ class AwaazEmergencyResult(BaseModel):
     spoken_text: str
     lang: str
     location: dict | None
+    #: True only after a delivery provider accepts the caregiver notification.
     caregiver_notified: bool
-    #: Always True — the audio is pre-rendered and cached on the device.
+    #: True only when a pre-rendered phrase is available without network access.
     works_offline: bool
     #: Always False. A person in crisis is the least intelligible they will ever be.
     used_speech_recognition: bool

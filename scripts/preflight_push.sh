@@ -53,8 +53,19 @@ hist=$(git rev-list --objects --all 2>/dev/null | awk '{print $2}' | grep -icE '
   || bad "images exist in history — rewrite required, not just a delete"
 
 step "5 · privacy invariants pass (INV-11)"
-if (cd backend && ./.venv/Scripts/python.exe -m pytest tests/test_privacy.py -q \
-      -p no:logging --tb=line >/dev/null 2>&1); then
+python_bin="${NEUROTRACE_PYTHON:-}"
+if [ -z "$python_bin" ] && [ -x "backend/.venv/bin/python" ]; then
+  python_bin="backend/.venv/bin/python"
+elif [ -z "$python_bin" ] && [ -x "backend/.venv/Scripts/python.exe" ]; then
+  python_bin="backend/.venv/Scripts/python.exe"
+fi
+
+if [ -z "$python_bin" ]; then
+  bad "privacy tests not run — create backend/.venv or set NEUROTRACE_PYTHON"
+elif NUMBA_CACHE_DIR="${TMPDIR:-/tmp}/neurotrace-numba" \
+     TEST_DATABASE_URL="sqlite+aiosqlite:///${TMPDIR:-/tmp}/neurotrace-preflight.sqlite3" \
+     "$python_bin" -m pytest backend/tests/test_privacy.py -q \
+       -p no:logging -p no:cacheprovider --tb=line >/dev/null 2>&1; then
   ok "tests/test_privacy.py green"
 else
   bad "privacy invariants FAILING — do not push"

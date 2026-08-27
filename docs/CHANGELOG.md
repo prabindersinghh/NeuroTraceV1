@@ -4,6 +4,33 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz contract foundation
+
+The aphasia confirmation flow now has an explicit second-step contract: the candidate tap
+is sent as `confirmed_candidate`, the server records one confirmed utterance, and the UI
+speaks only after that acknowledgement. Previously it spoke locally and sent the same
+candidate request again, which produced another confirmation prompt and no audit row.
+
+Listener capabilities now exclude every utterance from before link creation. Transient
+poll failures retain the last confirmed view instead of falsely declaring the link expired.
+Caregiver review saves are retryable and no longer remove an item after an API failure.
+Phrase-card icon identifiers now render as accessible Lucide symbols instead of literal
+words such as “water” and “toilet.”
+
+Emergency responses no longer claim that a caregiver was notified or that speech works
+offline when neither delivery provider nor pre-rendered audio exists. The UI speaks its
+fixed local phrase first and explicitly tells the family to call directly when delivery is
+unavailable. Living docs now mark D1–D5 partial instead of done.
+
+Verified: full backend suite **878 collected / 875 passed / 3 skipped / 0 failed**; frontend
+**30 tests passed**, TypeScript and oxlint passed, and a production Vite/PWA bundle built.
+
+The rendered-app pass then found a migration-only regression the model-created test schema
+could not expose: revisions 0005/0011 left the original three-role CHECK beside the widened
+one on SQLite, so a fresh database rejected `asha_worker` and `admin`. Revision 0012 now
+replaces every stale role check with one canonical constraint, and the migration test inserts
+every role emitted by the ORM.
+
 ## 2026-08-24 (later still) — Admin console, and a privilege-escalation hole closed
 
 *Merged with DEEPESH-845's frontend session below — this backend work and that

@@ -396,6 +396,16 @@ export interface AwaazBoard {
   cards: AwaazCard[];
 }
 
+export interface AwaazSpeakPayload {
+  card_id?: string;
+  text?: string;
+  candidates?: string[];
+  lang?: string;
+  confidence?: number;
+  /** Set only after the person taps a candidate that was offered for confirmation. */
+  confirmed_candidate?: boolean;
+}
+
 export interface AwaazSpeakResult {
   patient_id: string;
   text: string | null;
@@ -405,4 +415,15 @@ export interface AwaazSpeakResult {
   candidates: string[];
   reason: string;
   requires_confirmation: boolean;
+}
+
+export interface AwaazEmergencyResult {
+  patient_id: string;
+  spoken_text: string;
+  lang: string;
+  location: { lat: number; lon: number } | null;
+  caregiver_notified: boolean;
+  works_offline: boolean;
+  used_speech_recognition: boolean;
+  message: string;
 }

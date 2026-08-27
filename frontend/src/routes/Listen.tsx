@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 
 interface ListenerView {
   display_name: string;
@@ -32,13 +32,23 @@ export default function Listen() {
   const { token = "" } = useParams();
   const [view, setView] = useState<ListenerView | null>(null);
   const [dead, setDead] = useState(false);
+  const [connectionProblem, setConnectionProblem] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setView(await api.listenerView(token));
-    } catch {
-      // Expired, revoked, or never existed — all the same to a stranger, on purpose.
-      setDead(true);
+      setDead(false);
+      setConnectionProblem(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        // Expired, revoked, or never existed — all the same to a stranger, on purpose.
+        setDead(true);
+        setConnectionProblem(false);
+      } else {
+        // Keep the last good view during a transient outage. A dropped poll is not proof
+        // that the caregiver revoked the capability or that its TTL elapsed.
+        setConnectionProblem(true);
+      }
     }
   }, [token]);
 
@@ -64,8 +74,19 @@ export default function Listen() {
 
   if (!view) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
-        <p className="text-muted-foreground">Connecting…</p>
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-muted-foreground">
+          {connectionProblem ? "Could not connect. Check the connection and try again." : "Connecting…"}
+        </p>
+        {connectionProblem && (
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="min-h-12 rounded-xl border border-line px-5 font-medium"
+          >
+            Try again
+          </button>
+        )}
       </main>
     );
   }
@@ -77,6 +98,11 @@ export default function Listen() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
+      {connectionProblem && (
+        <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-3 text-sm text-alert">
+          Updates are paused while this connection recovers. The last confirmed text is still shown.
+        </p>
+      )}
       <header>
         <p className="text-sm text-muted-foreground">You are listening with</p>
         <h1 className="text-2xl font-semibold">{view.display_name}</h1>

@@ -1,8 +1,8 @@
 """/awaaz — the communication assistant. See `docs/PLAN_AWAAZ.md`.
 
-Every speech path in here goes through `app.awaaz.safety.decide`. There is no other way to
-reach speech-without-confirmation, and that is the point: one function to audit, one
-function to test exhaustively.
+Every recognised-speech path goes through `app.awaaz.safety.decide`. Exact patient
+choices (cards, confirmed candidates, and emergency phrases) bypass the gate because the
+patient selected those words directly; nothing is being inferred on their behalf.
 """
 from __future__ import annotations
 
@@ -240,15 +240,33 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
             requires_confirmation=False,
         )
 
+    text = (payload.text or "").strip()
+    if not text and not payload.candidates:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Nothing to say: provide a card, text, or candidates")
+
+    if payload.confirmed_candidate:
+        if not text:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "A confirmed candidate must include the text the person chose",
+            )
+        db.add(UtteranceLog(
+            patient_id=patient.id, text=text, lang=payload.lang,
+            mode="confirm", confirmed=True, confidence=payload.confidence))
+        await db.commit()
+        return AwaazSpeakResult(
+            patient_id=patient.id, text=text, lang=payload.lang,
+            mode="confirm", speak_now=True, candidates=[],
+            reason="the person confirmed this candidate themselves",
+            requires_confirmation=False,
+        )
+
     decision = decide(
         profile.speech_profile, payload.confidence,
         enabled=profile.auto_speak_enabled,
         threshold=profile.auto_speak_threshold,
     )
-    text = (payload.text or "").strip()
-    if not text and not payload.candidates:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            "Nothing to say: provide a card, text, or candidates")
 
     if decision.auto:
         db.add(UtteranceLog(
@@ -274,18 +292,11 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
 async def emergency(patient: AuthorisedPatient, db: Session,
                     lat: float | None = None, lon: float | None = None,
                     ) -> AwaazEmergencyResult:
-    """Long-press anywhere.
+    """Record a deliberately selected, fixed emergency phrase.
 
-    Three properties this must have, all of which are about the worst moment rather than
-    the common one:
-
-      - It speaks a FIXED phrase. Nothing is recognised, nothing is generated. A person in
-        crisis is the least intelligible they will ever be, and ASR is the component most
-        likely to fail exactly then.
-      - It works with no network. The audio is pre-rendered and cached on the device; this
-        endpoint records and notifies, it is not what makes the phone speak.
-      - It never depends on the auto-speak gate, because the patient long-pressed it
-        deliberately. There is nothing being guessed.
+    The current frontend speaks a local stock voice before awaiting this request. A
+    caregiver delivery provider and pre-rendered offline audio are not wired yet, so the
+    response reports both capabilities truthfully as unavailable.
     """
     lang = (patient.languages or ["en"])[0]
     phrase = {"hi": "मुझे मदद चाहिए", "pa": "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ"}.get(lang, "I need help")
@@ -300,10 +311,17 @@ async def emergency(patient: AuthorisedPatient, db: Session,
         spoken_text=phrase,
         lang=lang,
         location={"lat": lat, "lon": lon} if lat is not None and lon is not None else None,
-        caregiver_notified=True,
-        works_offline=True,
+        # Notification delivery and pre-rendered offline audio are not wired yet. Returning
+        # True here used to make a demo response sound complete while no provider was called
+        # and the browser used best-effort Web Speech synthesis. Safety state must describe
+        # what happened, not what a later milestone intends to build.
+        caregiver_notified=False,
+        works_offline=False,
         used_speech_recognition=False,
-        message="Help has been requested. The phrase was spoken aloud on the device.",
+        message=(
+            "The help phrase was requested on this device. Caregiver notification is not "
+            "connected yet; call the family or emergency services directly."
+        ),
     )
 
 
@@ -373,7 +391,13 @@ async def listener_view(token: str, db: Session) -> dict:
     pid = uuid.UUID(session.patient_id)  # type: ignore[attr-defined]
     rows = list(await db.scalars(
         select(UtteranceLog)
-        .where(UtteranceLog.patient_id == pid, UtteranceLog.confirmed.is_(True))
+        .where(
+            UtteranceLog.patient_id == pid,
+            UtteranceLog.confirmed.is_(True),
+            # A conversation link is a live capability, not permission to read what the
+            # person said before it was created.
+            UtteranceLog.ts >= session.created_at,  # type: ignore[attr-defined]
+        )
         .order_by(UtteranceLog.ts.desc())
         .limit(5)
     ))
@@ -435,7 +459,7 @@ async def review_queue(patient: AuthorisedPatient, db: Session) -> dict:
 async def label_utterance(
     utterance_id: uuid.UUID, payload: dict, user: CurrentUser, db: Session,
 ) -> MessageResponse:
-    """One correction = one labelled training pair, on the utterance row itself."""
+    """Save the caregiver's verified text label on the utterance row."""
     row = await db.get(UtteranceLog, utterance_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Utterance not found")
@@ -450,4 +474,4 @@ async def label_utterance(
     row.reviewed_at = datetime.now(timezone.utc)
     db.add(AuditLog(actor_id=user.id, action="awaaz.review.label", patient_id=row.patient_id))
     await db.commit()
-    return MessageResponse(detail="Labelled. This is one training pair for their adapter.")
+    return MessageResponse(detail="Correction saved for review and future personalisation.")

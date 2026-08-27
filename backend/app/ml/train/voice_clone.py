@@ -29,9 +29,9 @@ D-014) — single-purpose, separately consented, deleted after use — not a hol
 
 THE PRODUCT DOES NOT DEPEND ON IT
 ---------------------------------
-Until a clone exists the board speaks in a stock voice and works completely. The clone is an
-upgrade, never a prerequisite. A patient whose family has no pre-stroke recording — which
-will be common, and correlates with being poorer — must not get a worse product.
+Until a clone exists the board can use a stock browser voice. The clone is an upgrade,
+never a prerequisite. Pre-rendered offline speech is a separate delivery milestone; this
+planning script does not produce audio assets.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class CloneSpec:
     clip_seconds: float
     provenance: str
     seed: int = SEED
-    #: Pre-rendered so the emergency phrase never waits on synthesis, and works offline.
+    #: Phrases a production pipeline must pre-render before claiming offline support.
     prerender_phrases: tuple[str, ...] = (
         "I need help", "Water", "Toilet", "I am in pain", "I am fine",
     )
@@ -152,8 +152,8 @@ def main() -> None:
             "Source audio is destroyed after training; the deletion is timestamped "
             "(VoiceSample.audio_deleted_at).",
             "A clone is permanently deletable on request - no archived copy.",
-            "Emergency phrases are pre-rendered and cached, so the board speaks with no "
-            "network and never waits on synthesis.",
+            "Emergency phrases must be pre-rendered and cached before the product reports "
+            "offline speech support.",
         ],
         "limitations": [
             "This is impersonation technology. A cloned voice can say anything and the "
@@ -181,7 +181,7 @@ def main() -> None:
     print(f"  language    {spec.lang}")
     print(f"  backend     {spec.backend}  ({backend['note']})")
     print(f"  clip        {spec.clip_seconds:.0f}s from '{spec.provenance}'")
-    print(f"  prerender   {len(spec.prerender_phrases)} phrases for offline emergency use")
+    print(f"  planned     {len(spec.prerender_phrases)} phrases need offline pre-rendering")
     print("\nwrote", path)
 
 

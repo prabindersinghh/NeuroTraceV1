@@ -69,6 +69,26 @@ const STRINGS = {
     pa: "ਜੋ ਕਹਿਣਾ ਹੈ ਉਸ 'ਤੇ ਟੈਪ ਕਰੋ। ਚੁਣਨ ਤੋਂ ਪਹਿਲਾਂ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਜਾਵੇਗਾ।",
   },
   awaazNone: { en: "None of these", hi: "इनमें से कोई नहीं", pa: "ਇਹਨਾਂ ਵਿੱਚੋਂ ਕੋਈ ਨਹੀਂ" },
+  awaazNotSaved: {
+    en: "It was spoken on this phone, but could not be saved. Check the connection.",
+    hi: "यह फ़ोन पर बोल दिया गया, लेकिन सहेजा नहीं जा सका। कनेक्शन जाँचें।",
+    pa: "ਇਹ ਫ਼ੋਨ 'ਤੇ ਬੋਲ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਸੰਭਾਲਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ।",
+  },
+  awaazConfirmFailed: {
+    en: "Nothing was spoken because confirmation could not be saved. Please try again.",
+    hi: "पुष्टि सहेजी नहीं जा सकी, इसलिए कुछ नहीं बोला गया। फिर कोशिश करें।",
+    pa: "ਪੁਸ਼ਟੀ ਸੰਭਾਲੀ ਨਹੀਂ ਜਾ ਸਕੀ, ਇਸ ਲਈ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਗਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  awaazEmergencyDeliveryMissing: {
+    en: "The phrase was spoken here, but caregiver alerts are not connected yet. Call family or 108 directly.",
+    hi: "संदेश यहाँ बोल दिया गया, लेकिन देखभालकर्ता अलर्ट अभी जुड़ा नहीं है। परिवार या 108 को सीधे कॉल करें।",
+    pa: "ਸੁਨੇਹਾ ਇੱਥੇ ਬੋਲ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਹਾਲੇ ਜੁੜਿਆ ਨਹੀਂ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+  },
+  awaazListenerFailed: {
+    en: "The listening link could not be created. Check the connection and try again.",
+    hi: "सुनने वाला लिंक नहीं बन सका। कनेक्शन जाँचकर फिर कोशिश करें।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਨਹੀਂ ਬਣ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
   awaazAphasiaNote: {
     en: "This board only ever offers choices. It never speaks for you without your tap.",
     hi: "यह बोर्ड सिर्फ़ विकल्प देता है। आपके टैप के बिना कभी आपकी ओर से नहीं बोलता।",

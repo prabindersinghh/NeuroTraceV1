@@ -249,6 +249,47 @@ async def test_unclear_speech_is_confirmed_even_for_a_dysarthric_patient(session
     assert r.json()["speak_now"] is False
 
 
+async def test_a_confirmed_candidate_is_spoken_and_logged_as_confirmed(session, client):
+    """The candidate tap is the consent event, so the second request must complete rather
+    than returning the same confirmation prompt again."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    await client.patch(f"/awaaz/{patient.id}/profile",
+                       json={"speech_profile": "aphasia_dominant"}, headers=headers)
+
+    offered = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "Please call my daughter",
+        "confidence": 0.42,
+        "candidates": ["Please call my daughter", "Please call my doctor"],
+    }, headers=headers)
+    assert offered.json()["requires_confirmation"] is True
+
+    chosen = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "Please call my daughter",
+        "confidence": 0.42,
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert chosen.status_code == 200, chosen.text
+    assert chosen.json()["speak_now"] is True
+    assert chosen.json()["requires_confirmation"] is False
+    assert chosen.json()["text"] == "Please call my daughter"
+
+    rows = list(await session.scalars(
+        select(UtteranceLog).where(UtteranceLog.patient_id == patient.id)))
+    assert len(rows) == 1
+    assert rows[0].mode == "confirm"
+    assert rows[0].confirmed is True
+
+
+async def test_a_confirmed_candidate_requires_text(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    r = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert r.status_code == 400
+
+
 async def test_every_utterance_is_logged_with_whether_it_was_confirmed(session, client):
     """The audit trail for INV-9 — it must be possible to show, after the fact, that
     nothing was ever spoken unconfirmed on an aphasic patient's behalf."""
@@ -275,8 +316,10 @@ async def test_emergency_never_uses_speech_recognition(session, client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["used_speech_recognition"] is False
-    assert body["works_offline"] is True
-    assert body["caregiver_notified"] is True
+    # These stay false until pre-rendered audio and a real delivery provider exist. Returning
+    # an aspirational True here would be more dangerous than an incomplete feature.
+    assert body["works_offline"] is False
+    assert body["caregiver_notified"] is False
     assert body["spoken_text"] == "I need help"
 
 
@@ -350,6 +393,41 @@ def test_the_listener_link_does_not_carry_the_enrolled_name():
     s = create_listener_session("patient-1", "my father")
     assert s.display_name == "my father"
     assert "patient-1" not in s.display_name
+
+
+async def test_listener_link_never_reveals_utterances_from_before_it_was_minted(
+    session, client,
+):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    session.add(UtteranceLog(
+        patient_id=patient.id,
+        text="This was said yesterday",
+        lang="en",
+        mode="confirm",
+        confirmed=True,
+        ts=NOW,
+    ))
+    await session.commit()
+
+    minted = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "en", "ttl_minutes": 30,
+    }, headers=headers)
+    assert minted.status_code == 200, minted.text
+    token = minted.json()["token"]
+
+    spoken = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "This is part of this conversation",
+        "lang": "en",
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert spoken.status_code == 200, spoken.text
+
+    view = await client.get(f"/awaaz/listen/{token}")
+    assert view.status_code == 200, view.text
+    assert [row["text"] for row in view.json()["recent"]] == [
+        "This is part of this conversation",
+    ]
 
 
 def test_coaching_tells_the_listener_to_wait_during_a_long_pause():

@@ -1,6 +1,8 @@
 # PLAN_AWAAZ — the communication assistant
 
-Second product inside the same platform. **Status: PLANNED — D1 building now.**
+Second product inside the same platform. **Status: IN PROGRESS — the board, confirmation
+contract, listener capability, and text-review queue exist; ASR, audio-backed learning,
+caregiver delivery, and pre-rendered offline emergency audio are not connected.**
 
 ---
 
@@ -34,7 +36,7 @@ This becomes **INV-9**.
 
 ---
 
-## D1 — phrase board + voice (a complete product on its own)
+## D1 — phrase board + voice (PARTIAL)
 
 ### Data model (additive)
 
@@ -59,7 +61,7 @@ POST   /awaaz/{pid}/cards            add/edit a card
 DELETE /awaaz/cards/{card_id}
 POST   /awaaz/{pid}/speak            resolve a card to speech; returns whether it may
                                      auto-speak or must be confirmed
-POST   /awaaz/{pid}/emergency        emergency phrase + location; works offline
+POST   /awaaz/{pid}/emergency        record emergency phrase + optional location
 GET    /awaaz/{pid}/profile
 PATCH  /awaaz/{pid}/profile          set speech profile (clinician or caregiver)
 ```
@@ -89,7 +91,7 @@ one-tap family call.
 
 ---
 
-## D2 — listener mode (BUILT — backend + `Listen.tsx` at `/listen/:token`)
+## D2 — listener mode (PARTIAL — capability + `Listen.tsx`; no live ASR source yet)
 Shareable browser link, no install, showing live cleaned text of what the survivor is
 saying, plus one line of listener coaching: *"Give him 10 extra seconds. Don't finish his
 sentences. Ask yes/no questions if he's stuck."*
@@ -108,14 +110,14 @@ mechanism.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
-## D4 — passive learning loop (BUILT — backend + `ReviewQueue.tsx` at `/review/:patientId`)
+## D4 — passive learning loop (PARTIAL — text review exists; audio pairs do not)
 Never ask a tired stroke survivor for 500 phrases up front — that is why Project Relate
 stalls. Instead: when the patient taps a card, silently record what they also said aloud →
 a free audio/target pair. Caregiver's 2-minute evening task replays unclear utterances and
 asks what they meant. Framed as *"help Papa's app understand him better"* — caregivers
 mostly feel helpless, and this gives them something useful to do.
 
-## D5 — convergence with monitoring (planned)
+## D5 — convergence with monitoring (algorithm scaffold; no production audio path)
 Every utterance is also a speech sample. Route articulation rate, pause structure, voice
 quality, word-finding latency and vocabulary diversity into the **same** feature pipeline
 the monitoring engine uses — monitoring data at conversational density, zero adherence

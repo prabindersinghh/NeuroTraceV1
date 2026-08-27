@@ -664,7 +664,7 @@ class PhraseCard(Base):
     slot: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
     #: Cards sort by use, so what matters surfaces without the patient hunting for it.
     use_count: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
-    #: Emergency cards are pre-rendered and cached, and never reordered away.
+    #: Emergency cards stay pinned; pre-rendered offline audio is a separate pending asset.
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
@@ -720,8 +720,8 @@ class UtteranceLog(Base):
     confirmed: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     confidence: Mapped[float | None] = mapped_column(sa.Float)
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
-    #: The caregiver's evening correction (D4). (text -> corrected_text) IS the labelled
-    #: training pair for the personalised adapter; nothing else stores it.
+    #: The caregiver's verified text label (D4). It becomes a training target only after
+    #: an audio capture is associated with this utterance; this table currently stores none.
     corrected_text: Mapped[str | None] = mapped_column(sa.String(500))
     reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     ts: Mapped[datetime] = mapped_column(

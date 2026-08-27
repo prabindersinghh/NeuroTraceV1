@@ -2,7 +2,13 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-24 (later still) · Two independent sessions landed the same day
+**Last updated:** 2026-08-28 · The first Awaaz foundation slice repairs the candidate
+confirmation handshake, prevents listener links from exposing pre-link utterances, retains
+failed caregiver corrections, and reports emergency delivery/offline capability honestly.
+The full backend suite and frontend checks pass. Awaaz remains partial: there is no patient
+speech ASR, audio-backed learning pair, adapter deployment, caregiver notification provider,
+or pre-rendered offline emergency audio yet. Previous project history follows. ·
+2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
 `clinician` and read every patient's name; registration is now caregiver/patient only,
@@ -175,18 +181,18 @@ and with the facial weakness the product measures. Flags a session, never blocks
 unenrolled is stored as verified. Threshold calibrated on synthetic geometry only and says
 so in the source. D-015, D-017.
 
-### Awaaz — D1 through D5
-- **D1** phrase board, emergency mode, auto-speak gate (INV-9).
-- **D2** listener mode: expiring revocable link, display name only, context-aware coaching
-  in three languages. **Screen built** — `Listen.tsx` at `/listen/:token`, no auth because
-  the unguessable token is the capability, and no name, band or history for a stranger.
-- **D4** passive learning: card taps give free labelled pairs; caregiver evening queue is
-  worst-first and capped at 12. **Screen built** — `ReviewQueue.tsx` at `/review/:patientId`;
-  "nothing to review" is shown as success, not emptiness. Both screens were unreachable
-  until Awaaz got quiet caregiver entry points below the speaking surface.
-- **D5** convergence: conversational features route into M4/M5; prompted-only features
-  (DDK, sustained phonation) are deliberately *not* inferred from free speech. Frozen
-  day-30 adapter catches decline the live adapter hides.
+### Awaaz — partial foundation across D1 through D5
+- **D1** phrase board and the INV-9 server gate exist. Candidate taps now complete a
+  distinct confirmation request and audit row. Emergency uses a fixed phrase without ASR,
+  but caregiver delivery and true offline/pre-rendered audio remain unbuilt.
+- **D2** expiring revocable listener capability and public screen exist. A link now sees
+  only confirmed utterances created after it was minted. There is no live patient-speech
+  recognition source yet.
+- **D3** adapter pipeline is synthetic scaffolding only; no model runs in the product.
+- **D4** worst-first text review exists and keeps failed saves retryable. It stores verified
+  text labels, not audio/target training pairs.
+- **D5** feature-routing and frozen-adapter drift algorithms exist as tested scaffolding;
+  there is no production audio ingestion or adapter lifecycle behind them.
 
 ### Frontend
 `CcgTrace` (clinical CCG layout), `DhiForm`, `VertigoLog`, `WearableLanes`, `AshaHome`
@@ -197,12 +203,12 @@ so in the source. D-015, D-017.
 
 ## Pending
 
-*(Awaaz D2–D5 and the ASHA / wearable / CCG / DHI / vertigo frontend surfaces were listed
-here and are now built — see the sections above. Left as a note because a Pending list that
-never shrinks is a list nobody reads.)*
-
 - **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
   but does not train a voice.
+- **Awaaz ASR and learning loop** — no patient-speech recognition, audio association,
+  consented retention path, adapter training/deployment, or production inference exists.
+- **Awaaz emergency completion** — add pre-rendered offline phrases and a real caregiver
+  delivery provider before either capability may be reported as successful.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
   per model, and the model cards are generated from the artifact metrics so they cannot
   quietly claim otherwise. Three datasets need a human to request access.

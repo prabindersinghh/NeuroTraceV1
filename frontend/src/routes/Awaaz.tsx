@@ -15,11 +15,27 @@
  * anything is voiced — `speak_now` or a `candidates` list requiring a tap. CARDS are
  * always spoken on tap: the patient chose those exact words themselves.
  *
- * Cards are big, icon-first, and ordered by the server (frequency-ranked). Tapping one is
- * also a labelled training pair for the personalisation loop (D4) — the server logs it;
- * this screen just uses the board.
+ * Cards are big, icon-first, and ordered by the server (frequency-ranked). The server
+ * logs a tap as a confirmed communication event; audio-backed personalisation is a later
+ * milestone and is not implied by that text-only audit row.
  */
-import { AlertTriangle, Volume2 } from "lucide-react";
+import {
+  Accessibility,
+  AlertTriangle,
+  Bath,
+  Check,
+  CircleCheck,
+  Gauge,
+  GlassWater,
+  Hand,
+  HeartPulse,
+  MessageSquare,
+  Phone,
+  Users,
+  Volume2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -27,8 +43,29 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { confirmedCandidatePayload, emergencyPhrase } from "@/lib/awaaz";
 import { useI18n } from "@/lib/i18n";
 import type { AwaazBoard, AwaazSpeakResult } from "@/lib/types";
+
+const CARD_ICONS: Record<string, LucideIcon> = {
+  alert: AlertTriangle,
+  water: GlassWater,
+  toilet: Bath,
+  pain: HeartPulse,
+  phone: Phone,
+  ok: CircleCheck,
+  yes: Check,
+  no: X,
+  company: Users,
+  slow: Gauge,
+  wait: Hand,
+  accessibility: Accessibility,
+};
+
+function PhraseIcon({ name }: { name: string | null }) {
+  const Icon = (name && CARD_ICONS[name]) || MessageSquare;
+  return <Icon className="h-8 w-8 text-accent" aria-hidden />;
+}
 
 function voice(text: string, lang: string) {
   try {
@@ -49,6 +86,8 @@ export default function Awaaz() {
   const [candidates, setCandidates] = useState<string[]>([]);
   const [lastSpoken, setLastSpoken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [emergencyWarning, setEmergencyWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -59,15 +98,22 @@ export default function Awaaz() {
   }, [patientId]);
 
   const speakCard = useCallback(async (cardId: string, text: string, cardLang: string) => {
+    setActionError(null);
     voice(text, cardLang); // voiced immediately — the patient chose these exact words
     setLastSpoken(text);
-    api.awaazSpeak(patientId, { card_id: cardId, lang: cardLang }).catch(() => undefined);
-  }, [patientId]);
+    try {
+      await api.awaazSpeak(patientId, { card_id: cardId, lang: cardLang });
+    } catch {
+      // Communication still works locally, but never claim its audit record was saved.
+      setActionError(t("awaazNotSaved"));
+    }
+  }, [patientId, t]);
 
   const submitFree = useCallback(async () => {
     if (!freeText.trim()) return;
     setBusy(true);
     setCandidates([]);
+    setActionError(null);
     try {
       const res: AwaazSpeakResult = await api.awaazSpeak(patientId, {
         text: freeText.trim(), lang,
@@ -82,32 +128,50 @@ export default function Awaaz() {
         setCandidates(res.candidates.length ? res.candidates : [freeText.trim()]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setActionError(e instanceof Error ? e.message : t("awaazNotSaved"));
     } finally {
       setBusy(false);
     }
-  }, [freeText, lang, patientId]);
+  }, [freeText, lang, patientId, t]);
 
-  const confirmCandidate = useCallback((text: string) => {
-    voice(text, lang);
-    setLastSpoken(text);
-    setCandidates([]);
-    setFreeText("");
-    api.awaazSpeak(patientId, { text, lang, candidates: [text] }).catch(() => undefined);
-  }, [lang, patientId]);
+  const confirmCandidate = useCallback(async (text: string) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await api.awaazSpeak(
+        patientId,
+        confirmedCandidatePayload(text, lang),
+      );
+      if (!res.speak_now || !res.text) throw new Error("Candidate was not accepted");
+      // The server has now retained the tap as the confirmation event. Only this response
+      // completes the candidate path; sending the same candidate list again would loop.
+      voice(res.text, res.lang);
+      setLastSpoken(res.text);
+      setCandidates([]);
+      setFreeText("");
+    } catch {
+      setActionError(t("awaazConfirmFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }, [lang, patientId, t]);
 
   const emergency = useCallback(async () => {
-    // Pre-rendered path: voiced locally FIRST, then the server notifies the caregiver.
-    // A person in crisis must not wait on a network round trip to be heard.
-    const msg = {
-      en: "I need help. Please come now.",
-      hi: "मुझे मदद चाहिए। अभी आइए।",
-      pa: "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ। ਹੁਣੇ ਆਓ।",
-    }[lang] ?? "I need help. Please come now.";
+    // Voice locally first so a network round trip is never on the critical path. This is
+    // best-effort stock browser synthesis until pre-rendered offline audio is connected.
+    const msg = emergencyPhrase(board, lang);
     voice(msg, lang);
     setLastSpoken(msg);
-    api.awaazEmergency(patientId).catch(() => undefined);
-  }, [lang, patientId]);
+    setEmergencyWarning(null);
+    try {
+      const result = await api.awaazEmergency(patientId);
+      if (!result.caregiver_notified) {
+        setEmergencyWarning(t("awaazEmergencyDeliveryMissing"));
+      }
+    } catch {
+      setEmergencyWarning(t("awaazEmergencyDeliveryMissing"));
+    }
+  }, [board, lang, patientId, t]);
 
   const [listenerLink, setListenerLink] = useState<string | null>(null);
 
@@ -122,6 +186,7 @@ export default function Awaaz() {
       return;
     }
     try {
+      setActionError(null);
       const res = await api.awaazMintListener(patientId, {
         display_name: t("awaazListenerDefaultName"),
         lang, ttl_minutes: 30,
@@ -130,7 +195,7 @@ export default function Awaaz() {
       setListenerLink(url);
       await navigator.clipboard?.writeText(url).catch(() => undefined);
     } catch {
-      // A failed mint is not worth an error screen over the speaking surface.
+      setActionError(t("awaazListenerFailed"));
     }
   }, [lang, listenerLink, patientId, t]);
 
@@ -158,6 +223,18 @@ export default function Awaaz() {
           </p>
         )}
 
+        {emergencyWarning && (
+          <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-base text-alert">
+            {emergencyWarning}
+          </p>
+        )}
+
+        {actionError && (
+          <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-base text-alert">
+            {actionError}
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           {board.cards.map((c) => (
             <button
@@ -166,7 +243,7 @@ export default function Awaaz() {
               onClick={() => void speakCard(c.id, c.text, c.lang)}
               className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-2xl border-2 border-line p-3 text-xl active:border-accent"
             >
-              {c.icon && <span className="text-3xl" aria-hidden>{c.icon}</span>}
+              <PhraseIcon name={c.icon} />
               <span>{c.text}</span>
             </button>
           ))}
@@ -192,7 +269,8 @@ export default function Awaaz() {
             <div className="mt-4 flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">{t("awaazPickOne")}</p>
               {candidates.map((c) => (
-                <button key={c} type="button" onClick={() => confirmCandidate(c)}
+                <button key={c} type="button" disabled={busy}
+                  onClick={() => void confirmCandidate(c)}
                   className="min-h-14 rounded-xl border-2 border-accent/50 px-4 text-left text-xl">
                   {c}
                 </button>

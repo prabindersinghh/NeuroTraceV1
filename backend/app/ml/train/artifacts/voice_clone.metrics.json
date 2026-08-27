@@ -58,7 +58,7 @@
     "Consent is recorded against the sample (VoiceSample.consent_by).",
     "Source audio is destroyed after training; the deletion is timestamped (VoiceSample.audio_deleted_at).",
     "A clone is permanently deletable on request - no archived copy.",
-    "Emergency phrases are pre-rendered and cached, so the board speaks with no network and never waits on synthesis."
+    "Emergency phrases must be pre-rendered and cached before the product reports offline speech support."
   ],
   "limitations": [
     "SYNTHETIC RUN. No voice sample was present; this exercises the pipeline and produces no voice.",
