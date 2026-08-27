@@ -87,8 +87,11 @@ patient hunting.
 ### Emergency mode
 The persistent red control speaks *"I need help"* from a caregiver-recorded WAV held in
 origin-scoped IndexedDB. Setup includes a visible playback self-test and explicit deletion.
-Long-press-anywhere, location capture, one-tap family calling, and delivery remain future
-work and are not claimed by the current UI.
+Holding non-interactive space for 1.2 seconds activates the same path; finger movement
+cancels it so scrolling cannot fire an alert. Exact location is opt-in and requested only
+for an emergency. A configured SMTP provider can notify the owning caregiver and reports
+success only after their address is accepted; deployments without credentials stay false.
+One-tap calling remains future work.
 
 **Two hard requirements:**
 - Works **fully offline after setup**. The phrase audio is recorded once and loaded from

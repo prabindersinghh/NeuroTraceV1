@@ -460,10 +460,43 @@ async def test_emergency_reports_and_audits_a_local_playback_receipt(session, cl
     ))
     assert audit is not None
     assert audit.actor_id == caregiver.id
-    assert audit.meta_json == {
-        "offline_audio_played": True,
-        "used_speech_recognition": False,
-    }
+    assert audit.meta_json["offline_audio_played"] is True
+    assert audit.meta_json["used_speech_recognition"] is False
+    assert audit.meta_json["location_shared"] is False
+    assert uuid.UUID(audit.meta_json["event_id"])
+
+
+async def test_emergency_reports_caregiver_delivery_only_after_provider_acceptance(
+    session, client, monkeypatch,
+):
+    from app.services.emergency_notifications import EmergencyDelivery
+
+    seen = {}
+
+    async def accept(**kwargs):
+        seen.update(kwargs)
+        return EmergencyDelivery(True, "smtp", "accepted")
+
+    monkeypatch.setattr("app.routers.awaaz.deliver_emergency", accept)
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    event_id = uuid.uuid4()
+    body = (await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"event_id": str(event_id)},
+        headers=headers,
+    )).json()
+
+    assert body["caregiver_notified"] is True
+    assert seen["recipient"] == caregiver.email
+    assert seen["patient_name"] == patient.name
+    assert seen["event_id"] == event_id
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.emergency",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit.meta_json["notification_provider"] == "smtp"
+    assert audit.meta_json["caregiver_notified"] is True
 
 
 async def test_emergency_speaks_the_patients_own_language(session, client):
@@ -492,6 +525,36 @@ async def test_emergency_records_location_when_offered(session, client):
     body = (await client.post(
         f"/awaaz/{patient.id}/emergency?lat=30.9&lon=75.85", headers=headers)).json()
     assert body["location"] == {"lat": 30.9, "lon": 75.85}
+
+
+async def test_emergency_accepts_only_explicitly_consented_body_location(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    body = (await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={
+            "location_consent": True,
+            "lat": 30.9,
+            "lon": 75.85,
+            "location_accuracy_m": 24.5,
+        },
+        headers=headers,
+    )).json()
+    assert body["location"] == {"lat": 30.9, "lon": 75.85, "accuracy_m": 24.5}
+
+    no_consent = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"lat": 30.9, "lon": 75.85},
+        headers=headers,
+    )
+    assert no_consent.status_code == 422
+
+    incomplete = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"location_consent": True, "lat": 30.9},
+        headers=headers,
+    )
+    assert incomplete.status_code == 422
 
 
 # ------------------------------------------------------------------ endpointing

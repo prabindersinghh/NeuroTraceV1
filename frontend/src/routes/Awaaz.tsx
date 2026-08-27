@@ -40,7 +40,14 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
@@ -63,6 +70,16 @@ import {
   startEmergencyPlayback,
   type LocalEmergencyAudio,
 } from "@/lib/awaazEmergencyAudio";
+import {
+  EMERGENCY_LONG_PRESS_MS,
+  getEmergencyLocation,
+  isEmergencyHoldTarget,
+  movedBeyondEmergencyHold,
+  readEmergencyLocationConsent,
+  writeEmergencyLocationConsent,
+  type EmergencyLocation,
+  type PointerPoint,
+} from "@/lib/awaazEmergency";
 import {
   advanceEndpoint,
   startEndpointState,
@@ -127,6 +144,7 @@ export default function Awaaz() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [emergencyWarning, setEmergencyWarning] = useState<string | null>(null);
+  const [emergencyDeliveryStatus, setEmergencyDeliveryStatus] = useState<string | null>(null);
   const [captureConsent, setCaptureConsent] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingLevel, setRecordingLevel] = useState(0);
@@ -141,6 +159,10 @@ export default function Awaaz() {
   const [isEmergencyRecording, setIsEmergencyRecording] = useState(false);
   const [emergencySelfTestPassed, setEmergencySelfTestPassed] = useState(false);
   const [emergencySetupStatus, setEmergencySetupStatus] = useState<string | null>(null);
+  const [shareEmergencyLocation, setShareEmergencyLocation] = useState(false);
+  const [emergencyLocation, setEmergencyLocation] = useState<EmergencyLocation | null>(null);
+  const [locationStatus, setLocationStatus] = useState<string | null>(null);
+  const [longPressArmed, setLongPressArmed] = useState(false);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const emergencyRecorderRef = useRef<AudioRecorder | null>(null);
   const emergencyStopTimerRef = useRef<number | null>(null);
@@ -148,6 +170,8 @@ export default function Awaaz() {
   const meterTimerRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const emergencyStoppingRef = useRef(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressOriginRef = useRef<PointerPoint | null>(null);
 
   const currentBoard = board?.patient_id === patientId ? board : null;
   const currentEmergencyAudio = emergencyAudio?.patient_id === patientId
@@ -175,6 +199,12 @@ export default function Awaaz() {
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
     return () => { live = false; };
+  }, [patientId]);
+
+  useEffect(() => {
+    setShareEmergencyLocation(readEmergencyLocationConsent(patientId));
+    setEmergencyLocation(null);
+    setLocationStatus(null);
   }, [patientId]);
 
   useEffect(() => {
@@ -224,6 +254,7 @@ export default function Awaaz() {
     if (emergencyStopTimerRef.current !== null) {
       window.clearTimeout(emergencyStopTimerRef.current);
     }
+    if (longPressTimerRef.current !== null) window.clearTimeout(longPressTimerRef.current);
     recorderRef.current?.cancel();
     emergencyRecorderRef.current?.cancel();
   }, []);
@@ -463,6 +494,22 @@ export default function Awaaz() {
     }
   }, [patientId, t]);
 
+  const updateLocationSharing = useCallback(async (enabled: boolean) => {
+    setShareEmergencyLocation(enabled);
+    writeEmergencyLocationConsent(patientId, enabled);
+    setEmergencyLocation(null);
+    if (!enabled) {
+      setLocationStatus(t("awaazEmergencyLocationOff"));
+      return;
+    }
+    setLocationStatus(t("awaazEmergencyLocationRequesting"));
+    const location = await getEmergencyLocation();
+    setEmergencyLocation(location);
+    setLocationStatus(location
+      ? t("awaazEmergencyLocationReady")
+      : t("awaazEmergencyLocationUnavailable"));
+  }, [patientId, t]);
+
   const submitFree = useCallback(async () => {
     if (!freeText.trim()) return;
     setBusy(true);
@@ -521,23 +568,85 @@ export default function Awaaz() {
     if (!offlineAudioPlayed) voice(emergencyText, emergencyLang);
     setLastSpoken(emergencyText);
     setEmergencyWarning(null);
+    setEmergencyDeliveryStatus(null);
+    let location = emergencyLocation;
+    if (shareEmergencyLocation && !location) {
+      // Never let a slow GPS fix hold the alert for long. The local phrase has already
+      // started; after 1.5 seconds the request proceeds without coordinates.
+      location = await getEmergencyLocation(1_500);
+      if (location) setEmergencyLocation(location);
+    }
     try {
       const result = await api.awaazEmergency(patientId, {
+        event_id: crypto.randomUUID(),
         offline_audio_played: offlineAudioPlayed,
+        location_consent: shareEmergencyLocation,
+        ...(location ? {
+          lat: location.lat,
+          lon: location.lon,
+          location_accuracy_m: location.accuracy_m,
+        } : {}),
       });
       const warnings = [
         ...(!result.works_offline ? [t("awaazEmergencyOfflineMissing")] : []),
         ...(!result.caregiver_notified ? [t("awaazEmergencyDeliveryMissing")] : []),
       ];
       setEmergencyWarning(warnings.length ? warnings.join(" ") : null);
+      setEmergencyDeliveryStatus(result.caregiver_notified
+        ? t("awaazEmergencyDelivered")
+        : null);
     } catch {
       const warnings = [
         ...(!offlineAudioPlayed ? [t("awaazEmergencyOfflineMissing")] : []),
         t("awaazEmergencyDeliveryMissing"),
       ];
       setEmergencyWarning(warnings.join(" "));
+      setEmergencyDeliveryStatus(null);
     }
-  }, [emergencyAudioReady, emergencyAudioUrl, emergencyLang, emergencyText, patientId, t]);
+  }, [
+    emergencyAudioReady,
+    emergencyAudioUrl,
+    emergencyLang,
+    emergencyLocation,
+    emergencyText,
+    patientId,
+    shareEmergencyLocation,
+    t,
+  ]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressOriginRef.current = null;
+    setLongPressArmed(false);
+  }, []);
+
+  const beginLongPress = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0 || !isEmergencyHoldTarget(event.target)) return;
+    cancelLongPress();
+    longPressOriginRef.current = { x: event.clientX, y: event.clientY };
+    setLongPressArmed(true);
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      longPressOriginRef.current = null;
+      setLongPressArmed(false);
+      try { navigator.vibrate?.(80); } catch { /* vibration is best effort */ }
+      void emergency();
+    }, EMERGENCY_LONG_PRESS_MS);
+  }, [cancelLongPress, emergency]);
+
+  const moveLongPress = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const origin = longPressOriginRef.current;
+    if (origin && movedBeyondEmergencyHold(origin, { x: event.clientX, y: event.clientY })) {
+      cancelLongPress();
+    }
+  }, [cancelLongPress]);
+
+  const suppressHoldMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (longPressArmed && isEmergencyHoldTarget(event.target)) event.preventDefault();
+  }, [longPressArmed]);
 
   const [listenerLink, setListenerLink] = useState<string | null>(null);
 
@@ -568,7 +677,15 @@ export default function Awaaz() {
   if (error && !currentBoard) {
     return (
       <AppShell>
-        <div className="mx-auto flex max-w-xl flex-col gap-4">
+        <div
+          className="mx-auto flex max-w-xl flex-col gap-4"
+          onPointerDown={beginLongPress}
+          onPointerMove={moveLongPress}
+          onPointerUp={cancelLongPress}
+          onPointerCancel={cancelLongPress}
+          onPointerLeave={cancelLongPress}
+          onContextMenu={suppressHoldMenu}
+        >
           <button
             type="button"
             onClick={() => void emergency()}
@@ -576,6 +693,9 @@ export default function Awaaz() {
           >
             <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
           </button>
+          <p className="-mt-2 text-center text-xs text-muted-foreground">
+            {longPressArmed ? t("awaazEmergencyHolding") : t("awaazEmergencyHoldHint")}
+          </p>
           <p className="rounded-xl border border-line bg-secondary p-4 text-sm">
             {emergencyAudioReady
               ? t("awaazEmergencyOfflineReady")
@@ -592,6 +712,11 @@ export default function Awaaz() {
               {emergencyWarning}
             </p>
           )}
+          {emergencyDeliveryStatus && (
+            <p aria-live="polite" className="rounded-xl border border-stable/40 bg-stable-soft p-4">
+              {emergencyDeliveryStatus}
+            </p>
+          )}
           <ErrorState message={t("awaazBoardOfflineUnavailable")} />
         </div>
       </AppShell>
@@ -603,7 +728,15 @@ export default function Awaaz() {
 
   return (
     <AppShell>
-      <div className="mx-auto flex max-w-xl flex-col gap-5">
+      <div
+        className="mx-auto flex max-w-xl flex-col gap-5"
+        onPointerDown={beginLongPress}
+        onPointerMove={moveLongPress}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onContextMenu={suppressHoldMenu}
+      >
         {/* Emergency is first, biggest, and always the same place. */}
         <button
           type="button"
@@ -612,6 +745,9 @@ export default function Awaaz() {
         >
           <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
         </button>
+        <p className="-mt-3 text-center text-xs text-muted-foreground">
+          {longPressArmed ? t("awaazEmergencyHolding") : t("awaazEmergencyHoldHint")}
+        </p>
 
         {lastSpoken && (
           <p className="flex items-center gap-2 rounded-xl border border-line bg-secondary p-4 text-xl">
@@ -623,6 +759,12 @@ export default function Awaaz() {
         {emergencyWarning && (
           <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-base text-alert">
             {emergencyWarning}
+          </p>
+        )}
+
+        {emergencyDeliveryStatus && (
+          <p aria-live="polite" className="rounded-xl border border-stable/40 bg-stable-soft p-4 text-base">
+            {emergencyDeliveryStatus}
           </p>
         )}
 
@@ -849,6 +991,26 @@ export default function Awaaz() {
             <p className="mt-2 rounded-lg bg-secondary p-3 text-lg font-medium">
               “{emergencyText}”
             </p>
+
+            <label className="mt-3 flex min-h-12 items-start gap-3 rounded-lg border border-line p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={shareEmergencyLocation}
+                onChange={(event) => void updateLocationSharing(event.target.checked)}
+                className="mt-0.5 h-5 w-5 accent-accent"
+              />
+              <span>
+                <span className="block font-medium">{t("awaazEmergencyLocationLabel")}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("awaazEmergencyLocationHelp")}
+                </span>
+              </span>
+            </label>
+            {locationStatus && (
+              <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">
+                {locationStatus}
+              </p>
+            )}
 
             {emergencyAudioReady && (
               <p className="mt-3 text-xs text-muted-foreground">

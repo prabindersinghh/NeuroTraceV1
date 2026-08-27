@@ -80,9 +80,14 @@ const STRINGS = {
     pa: "ਪੁਸ਼ਟੀ ਸੰਭਾਲੀ ਨਹੀਂ ਜਾ ਸਕੀ, ਇਸ ਲਈ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਗਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
   awaazEmergencyDeliveryMissing: {
-    en: "Caregiver alerts are not connected yet. Call family or 108 directly.",
-    hi: "देखभालकर्ता अलर्ट अभी जुड़ा नहीं है। परिवार या 108 को सीधे कॉल करें।",
-    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਹਾਲੇ ਜੁੜਿਆ ਨਹੀਂ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+    en: "A caregiver alert was not accepted for delivery. Call family or 108 directly.",
+    hi: "देखभालकर्ता अलर्ट भेजने के लिए स्वीकार नहीं हुआ। परिवार या 108 को सीधे कॉल करें।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਭੇਜਣ ਲਈ ਸਵੀਕਾਰ ਨਹੀਂ ਹੋਇਆ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+  },
+  awaazEmergencyDelivered: {
+    en: "Caregiver alert accepted for delivery.",
+    hi: "देखभालकर्ता अलर्ट भेजने के लिए स्वीकार हुआ।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਭੇਜਣ ਲਈ ਸਵੀਕਾਰ ਹੋਇਆ।",
   },
   awaazEmergencyOfflineMissing: {
     en: "The saved offline phrase did not play. A browser voice was attempted; set up and test the offline phrase below.",
@@ -93,6 +98,16 @@ const STRINGS = {
     en: "The saved emergency phrase is ready on this device without internet.",
     hi: "सहेजा हुआ आपातकालीन संदेश इस डिवाइस पर बिना इंटरनेट तैयार है।",
     pa: "ਸੰਭਾਲਿਆ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਤਿਆਰ ਹੈ।",
+  },
+  awaazEmergencyHoldHint: {
+    en: "Or press and hold empty space for 1.2 seconds",
+    hi: "या खाली जगह को 1.2 सेकंड दबाकर रखें",
+    pa: "ਜਾਂ ਖਾਲੀ ਥਾਂ ਨੂੰ 1.2 ਸਕਿੰਟ ਦਬਾ ਕੇ ਰੱਖੋ",
+  },
+  awaazEmergencyHolding: {
+    en: "Keep holding for emergency…",
+    hi: "आपातकाल के लिए दबाए रखें…",
+    pa: "ਐਮਰਜੈਂਸੀ ਲਈ ਦਬਾਈ ਰੱਖੋ…",
   },
   awaazBoardOfflineUnavailable: {
     en: "The rest of the communication board needs a connection right now. Emergency voice remains available above.",
@@ -118,6 +133,36 @@ const STRINGS = {
     en: "A caregiver should record this exact phrase once. It stays only on this device and plays before any network request.",
     hi: "देखभालकर्ता इस संदेश को एक बार ठीक इसी तरह रिकॉर्ड करें। यह केवल इस डिवाइस पर रहता है और किसी नेटवर्क अनुरोध से पहले चलता है।",
     pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲਾ ਇਹੀ ਸੁਨੇਹਾ ਇੱਕ ਵਾਰ ਰਿਕਾਰਡ ਕਰੇ। ਇਹ ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਰਹਿੰਦਾ ਹੈ ਅਤੇ ਕਿਸੇ ਨੈੱਟਵਰਕ ਬੇਨਤੀ ਤੋਂ ਪਹਿਲਾਂ ਚੱਲਦਾ ਹੈ।",
+  },
+  awaazEmergencyLocationLabel: {
+    en: "Share location on an emergency tap",
+    hi: "आपातकालीन टैप पर स्थान साझा करें",
+    pa: "ਐਮਰਜੈਂਸੀ ਟੈਪ 'ਤੇ ਟਿਕਾਣਾ ਸਾਂਝਾ ਕਰੋ",
+  },
+  awaazEmergencyLocationHelp: {
+    en: "Optional. Exact coordinates are requested only for an emergency and sent to the caregiver provider when connected.",
+    hi: "वैकल्पिक। सटीक स्थान केवल आपातकाल में माँगा जाता है और सेवा जुड़ी होने पर देखभालकर्ता को भेजा जाता है।",
+    pa: "ਵਿਕਲਪਿਕ। ਸਹੀ ਟਿਕਾਣਾ ਸਿਰਫ਼ ਐਮਰਜੈਂਸੀ ਵੇਲੇ ਮੰਗਿਆ ਜਾਂਦਾ ਹੈ ਅਤੇ ਸੇਵਾ ਜੁੜੀ ਹੋਣ 'ਤੇ ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਨੂੰ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।",
+  },
+  awaazEmergencyLocationRequesting: {
+    en: "Requesting this device's location…",
+    hi: "इस डिवाइस का स्थान माँगा जा रहा है…",
+    pa: "ਇਸ ਡਿਵਾਈਸ ਦਾ ਟਿਕਾਣਾ ਮੰਗਿਆ ਜਾ ਰਿਹਾ ਹੈ…",
+  },
+  awaazEmergencyLocationReady: {
+    en: "Location is ready for the next emergency tap.",
+    hi: "अगले आपातकालीन टैप के लिए स्थान तैयार है।",
+    pa: "ਅਗਲੇ ਐਮਰਜੈਂਸੀ ਟੈਪ ਲਈ ਟਿਕਾਣਾ ਤਿਆਰ ਹੈ।",
+  },
+  awaazEmergencyLocationUnavailable: {
+    en: "Location is unavailable. Emergency speech still works; check browser permission if you want to share it.",
+    hi: "स्थान उपलब्ध नहीं है। आपातकालीन आवाज़ फिर भी काम करती है; साझा करने के लिए ब्राउज़र अनुमति जाँचें।",
+    pa: "ਟਿਕਾਣਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼ ਫਿਰ ਵੀ ਕੰਮ ਕਰਦੀ ਹੈ; ਸਾਂਝਾ ਕਰਨ ਲਈ ਬ੍ਰਾਊਜ਼ਰ ਇਜਾਜ਼ਤ ਜਾਂਚੋ।",
+  },
+  awaazEmergencyLocationOff: {
+    en: "Emergency location sharing is off.",
+    hi: "आपातकालीन स्थान साझा करना बंद है।",
+    pa: "ਐਮਰਜੈਂਸੀ ਟਿਕਾਣਾ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਹੈ।",
   },
   awaazEmergencyTestRecorded: {
     en: "The last self-test started successfully.",

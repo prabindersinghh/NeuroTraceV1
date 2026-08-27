@@ -11,6 +11,10 @@ import {
   startEmergencyPlayback,
   type LocalEmergencyAudio,
 } from "./awaazEmergencyAudio";
+import {
+  EMERGENCY_LONG_PRESS_MOVE_PX,
+  movedBeyondEmergencyHold,
+} from "./awaazEmergency";
 
 describe("Awaaz dysarthria-aware endpointing", () => {
   it("never treats pre-speech thinking time as end-of-utterance silence", () => {
@@ -73,5 +77,18 @@ describe("Awaaz offline emergency playback receipt", () => {
     expect(isEmergencyAudioCurrent(phrase, "patient-2", "I need help", "en")).toBe(false);
     expect(isEmergencyAudioCurrent(phrase, "patient-1", "Help me now", "en")).toBe(false);
     expect(isEmergencyAudioCurrent(phrase, "patient-1", "I need help", "pa")).toBe(false);
+  });
+});
+
+describe("Awaaz emergency long press", () => {
+  it("ignores finger jitter but cancels when the person starts scrolling", () => {
+    expect(movedBeyondEmergencyHold({ x: 20, y: 20 }, {
+      x: 20 + EMERGENCY_LONG_PRESS_MOVE_PX,
+      y: 20,
+    })).toBe(false);
+    expect(movedBeyondEmergencyHold({ x: 20, y: 20 }, {
+      x: 21 + EMERGENCY_LONG_PRESS_MOVE_PX,
+      y: 20,
+    })).toBe(true);
   });
 });

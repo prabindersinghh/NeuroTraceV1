@@ -8,9 +8,12 @@ taps. The API receives metadata receipts only, retries are idempotent, deletion 
 and optional silence auto-stop honours a patient-set 0.5–4.0 s pause. The fixed emergency
 phrase can now be caregiver-recorded, self-tested, and deleted locally; it starts before the
 network request, stays reachable on an offline boot with the last authenticated local identity,
-and the server records only the actual playback result. Awaaz remains partial:
+and the server records only the actual playback result. Long-press activation now ignores
+controls and scrolling, location is explicitly opt-in, and a configured-only SMTP adapter
+reports caregiver delivery only after provider acceptance. Production remains unconfigured
+until real SMTP credentials are installed and field-tested. Awaaz remains partial:
 there is no patient-speech ASR, reviewed-speech audio path, adapter deployment, or caregiver
-notification provider. Previous project
+notification deployment. Previous project
 history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
@@ -189,7 +192,9 @@ so in the source. D-015, D-017.
 - **D1** phrase board and the INV-9 server gate exist. Candidate taps now complete a
   distinct confirmation request and audit row. Emergency uses a fixed phrase without ASR;
   a caregiver-recorded local WAV, visible self-test, deletion, and playback receipt now make
-  speech offline after setup. Caregiver alert delivery remains unbuilt.
+  speech offline after setup. A 1.2-second blank-space hold reaches the same path, scroll
+  movement cancels it, and exact location is opt-in. A configured SMTP adapter reports true
+  only after acceptance; the deployed provider still needs credentials and a field test.
 - **D2** expiring revocable listener capability and public screen exist. A link now sees
   only confirmed utterances created after it was minted. There is no live patient-speech
   recognition source yet.
@@ -214,8 +219,9 @@ so in the source. D-015, D-017.
 - **Awaaz ASR and learning loop** — card-tap audio association and consented local retention
   now exist. Patient-speech recognition, caregiver-reviewed audio association, adapter
   training/deployment, and production inference do not.
-- **Awaaz emergency completion** — connect a real caregiver delivery provider. Offline
-  playback is now reported successful only when the local WAV actually starts.
+- **Awaaz emergency completion** — configure and field-test the SMTP caregiver provider,
+  then add one-tap calling. Offline playback and provider delivery are reported successful
+  only when the local WAV starts and SMTP accepts the recipient respectively.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
   per model, and the model cards are generated from the artifact metrics so they cannot
   quietly claim otherwise. Three datasets need a human to request access.

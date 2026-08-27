@@ -4,6 +4,30 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz emergency activation and provider boundary
+
+Holding non-interactive space for 1.2 seconds now activates the same fixed emergency path
+as the red button. Interactive controls are excluded, finger movement beyond 14 px cancels
+the timer, and the gesture is also available on the emergency-only offline screen, so
+scrolling and ordinary taps cannot silently become alerts.
+
+Location sharing is explicit, per-patient local consent. A location fix is requested only
+after opt-in, kept in memory, bounded to 1.5 seconds on the critical path, and sent in the
+emergency body with accuracy metadata; the audit stores only that it was shared. The server
+rejects partial or unconsented body coordinates.
+
+A configured SMTP adapter now emails the owning caregiver and sets `caregiver_notified`
+only after the relay accepts that recipient. Missing configuration, provider failure, or
+recipient refusal stay false. The old unused WhatsApp mock can no longer report success.
+No recipient, patient name, message body, coordinates, or provider exception is logged.
+
+Verified: backend **892 collected / 889 passed / 3 expected skips / 0 failed**; frontend
+**40 tests passed**; TypeScript and oxlint passed; the production PWA bundle built; and the
+rendered Awaaz route exposed the long-press guidance and explicit location gate, reported
+an unconfigured provider truthfully, and logged no browser errors. Real-device location
+permission and live SMTP delivery remain deployment field tests requiring user consent and
+provider credentials.
+
 ## 2026-08-28 — Awaaz offline emergency voice
 
 The persistent emergency control now starts a patient-specific WAV from IndexedDB before

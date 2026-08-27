@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     # anything holding real data.
     demo_mode: bool = True
 
+    # --- Awaaz emergency caregiver delivery ---
+    # Deliberately disabled unless both host and sender are configured. No mock transport
+    # may report caregiver delivery as successful.
+    emergency_smtp_host: str | None = None
+    emergency_smtp_port: int = Field(default=587, ge=1, le=65535)
+    emergency_smtp_from: str | None = None
+    emergency_smtp_username: str | None = None
+    emergency_smtp_password: str | None = None
+    emergency_smtp_security: str = Field(default="starttls", pattern="^(starttls|ssl|none)$")
+    emergency_smtp_timeout_seconds: float = Field(default=5.0, ge=1.0, le=15.0)
+
     # No media settings, deliberately.
     #
     # v1 accepted audio and video uploads and deleted them after extraction, which needed a

@@ -375,3 +375,17 @@ target, consent actor/time and deletion state. Manual push-to-talk is the defaul
 silence auto-stop honours 0.5–4.0 seconds and cannot fire before speech. The person can
 delete every local recording, and the receipt records that revocation. This produces real
 card/audio pairs on one device without claiming cross-device review, ASR, or training.
+
+**D-043 · 2026-08-28 · Emergency delivery is a provider result, never an intention.**
+The old WhatsApp helper logged a message and returned `True` without contacting a provider.
+It was unused, but wiring it would make the most safety-critical boolean in the product a
+lie. It now always returns `False`. Awaaz uses a configured-only SMTP adapter instead and
+sets `caregiver_notified` only after the relay accepts the caregiver's address. Host or
+sender missing means unconfigured and false; provider exceptions are PII-free failures,
+not 500s. SMTP acceptance still does not prove a human read the message, so deployment
+credentials and a real-device field test remain a release gate.
+
+Location follows the same discipline. The caregiver/patient explicitly enables it; exact
+coordinates are requested only for an emergency, kept in browser memory, included in the
+provider message, returned to the initiating client, and not written to the audit log.
+The audit retains only whether location was shared and which contract supplied it.

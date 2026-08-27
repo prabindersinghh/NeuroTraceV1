@@ -438,6 +438,13 @@ export interface AwaazEmergencyResult {
 }
 
 export interface AwaazEmergencyPayload {
+  /** Client-generated correlation id for this deliberate activation. */
+  event_id: string;
   /** True only after a patient-specific WAV stored on this device started playing. */
   offline_audio_played: boolean;
+  /** Coordinates are present only after the person explicitly enables location sharing. */
+  location_consent: boolean;
+  lat?: number;
+  lon?: number;
+  location_accuracy_m?: number;
 }

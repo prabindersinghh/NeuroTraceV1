@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from .models import (
     Band, BaselineState, DeploymentTier, Instrument, Role, SessionType, StrokeSide,
@@ -667,6 +667,20 @@ class AwaazEmergencyResult(BaseModel):
 
 
 class AwaazEmergencyRequest(BaseModel):
+    event_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     #: Set by the client only after a patient-specific local WAV starts playing. This is a
     #: playback receipt, not a claim that the server itself can provide offline speech.
     offline_audio_played: bool = False
+    location_consent: bool = False
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    location_accuracy_m: float | None = Field(default=None, ge=0, le=100_000)
+
+    @model_validator(mode="after")
+    def location_is_complete_and_consented(self):
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("lat and lon must be provided together")
+        if (self.lat is not None or self.location_accuracy_m is not None) \
+                and not self.location_consent:
+            raise ValueError("location_consent must be true when location is provided")
+        return self

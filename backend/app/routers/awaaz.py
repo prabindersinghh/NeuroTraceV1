@@ -22,7 +22,8 @@ from ..awaaz.safety import (
     decide,
 )
 from ..db import get_session
-from ..models import AuditLog, AwaazProfile, Patient, PhraseCard, UtteranceLog
+from ..models import AuditLog, AwaazProfile, Patient, PhraseCard, User, UtteranceLog
+from ..services.emergency_notifications import deliver_emergency
 from ..schemas import (
     AwaazBoard,
     AwaazCardCreate,
@@ -418,7 +419,32 @@ async def emergency(patient: AuthorisedPatient, db: Session,
     lang = (patient.languages or ["en"])[0]
     phrase = {"hi": "मुझे मदद चाहिए", "pa": "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ"}.get(lang, "I need help")
 
-    offline_audio_played = bool(payload and payload.offline_audio_played)
+    request = payload or AwaazEmergencyRequest()
+    offline_audio_played = request.offline_audio_played
+    if request.location_consent and request.lat is not None and request.lon is not None:
+        resolved_lat, resolved_lon = request.lat, request.lon
+        accuracy_m = request.location_accuracy_m
+        location_source = "consented_body"
+    else:
+        # Backward compatibility for callers that used the original query contract. New
+        # clients use the consent-bearing body above.
+        resolved_lat, resolved_lon = lat, lon
+        accuracy_m = None
+        location_source = "legacy_query" if lat is not None and lon is not None else None
+    location_payload = (
+        {"lat": resolved_lat, "lon": resolved_lon}
+        | ({"accuracy_m": accuracy_m} if accuracy_m is not None else {})
+    ) if resolved_lat is not None and resolved_lon is not None else None
+
+    caregiver = await db.get(User, patient.caregiver_id)
+    delivery = await deliver_emergency(
+        recipient=caregiver.email if caregiver is not None else "",
+        patient_name=patient.name,
+        lang=caregiver.lang if caregiver is not None else lang,
+        event_id=request.event_id,
+        location=location_payload,
+    ) if caregiver is not None else None
+    caregiver_notified = bool(delivery and delivery.accepted)
     db.add(UtteranceLog(
         patient_id=patient.id, text=phrase, lang=lang,
         mode="auto", confirmed=True, is_emergency=True))
@@ -427,8 +453,13 @@ async def emergency(patient: AuthorisedPatient, db: Session,
         action="awaaz.emergency",
         patient_id=patient.id,
         meta_json={
+            "event_id": str(request.event_id),
             "offline_audio_played": offline_audio_played,
             "used_speech_recognition": False,
+            "location_shared": resolved_lat is not None and resolved_lon is not None,
+            "location_source": location_source,
+            "caregiver_notified": caregiver_notified,
+            "notification_provider": delivery.provider if delivery else "unavailable",
         },
     ))
     await db.commit()
@@ -437,15 +468,16 @@ async def emergency(patient: AuthorisedPatient, db: Session,
         patient_id=patient.id,
         spoken_text=phrase,
         lang=lang,
-        location={"lat": lat, "lon": lon} if lat is not None and lon is not None else None,
-        caregiver_notified=False,
+        location=location_payload,
+        caregiver_notified=caregiver_notified,
         works_offline=offline_audio_played,
         used_speech_recognition=False,
         message=(
             ("The on-device help phrase started playing. " if offline_audio_played else
              "No on-device help phrase was played. ")
-            + "Caregiver notification is not connected yet; call the family or emergency "
-            "services directly."
+            + ("The caregiver alert was accepted for delivery. " if caregiver_notified else
+               "Caregiver delivery was not accepted; call the family directly. ")
+            + "Call emergency services directly if there may be immediate danger."
         ),
     )
 
