@@ -404,3 +404,16 @@ instead of silently orphaning or relabelling the recording. Text-only review rem
 default and keeps working without microphone permission. This closes reviewed-repeat
 pairing; it does not claim the original unclear conversation was recorded, uploaded, or
 recoverable, and it does not claim ASR or adapter training.
+
+**D-045 · 2026-08-28 · Training handoff is an explicit verified download, not an upload.**
+Local audio pairs cannot train the existing server-side scaffold while they are trapped in
+one browser, but adding a media API would silently reverse INV-1. The interim boundary is a
+user-initiated POSIX tar: before download the browser recomputes every WAV's SHA-256, then
+packages a versioned manifest, the consented WAVs, and a sensitive-data README. One corrupt
+pair aborts the whole export instead of producing an incomplete training corpus.
+
+The control appears only when local pairs exist and remains disabled until the user
+acknowledges that patient voice and labels will leave protected app storage, that the file
+cannot be revoked from NeuroTrace, and that it must go only to an authorised workflow. The
+app does not upload or transmit it. This enables a deliberate offline handoff; it does not
+provide an importer, trainer, registry, deployment channel, or personalised model claim.

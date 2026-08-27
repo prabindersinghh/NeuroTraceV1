@@ -16,7 +16,9 @@ explicitly consented fresh patient repeat: the 16 kHz WAV is previewable and ret
 in local IndexedDB, its verified label is locked across retry, and the API receives only a
 complete integrity/consent receipt. Awaaz remains partial: there is no patient-speech ASR,
 original conversational-audio capture, adapter deployment, provider field test, or one-tap
-calling. Previous project
+calling. Consented local pairs can now be SHA-256 verified into a versioned tar only after
+the user acknowledges that the voice archive leaves protected app storage; NeuroTrace does
+not upload it. Previous project
 history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient

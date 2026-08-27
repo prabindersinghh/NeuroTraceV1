@@ -2,8 +2,9 @@
 
 Second product inside the same platform. **Status: IN PROGRESS — the board, confirmation
 contract, listener capability, and consented on-device card/audio and caregiver-reviewed
-repeat pairs exist. A caregiver can also record and self-test the fixed emergency phrase as
-a local WAV that starts before any network request. Patient-speech ASR, original
+repeat pairs exist. Those pairs can be integrity-verified into an explicitly acknowledged
+local training archive; the app never uploads it. A caregiver can also record and self-test
+the fixed emergency phrase as a local WAV that starts before any network request. Patient-speech ASR, original
 conversational-audio capture, adapter training/deployment, live provider field testing, and
 one-tap calling remain incomplete.**
 
@@ -123,6 +124,9 @@ mechanism.
   0.5–4.0 s and applies it to optional silence auto-stop; push-to-talk/manual stop remains
   the default. Endpointing never starts its silence clock before speech is detected.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
+- A versioned local tar now provides a human-controlled, integrity-checked handoff of
+  consented pairs. No importer, trainer service, model registry, or adapter shipment is yet
+  connected, so this is training input—not a deployed personalised ASR system.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
 ## D4 — passive learning loop (PARTIAL — local card + reviewed-repeat pairs)
@@ -133,8 +137,11 @@ duration, SHA-256/size, target, consent actor/time and deletion state. Retention
 deletable, bounded to 30 seconds, and retry-safe. During the caregiver's short review, a
 text correction stays text-only unless the patient explicitly agrees to say the verified
 words again. That fresh repeat is previewable, locally retained, label-locked across retry,
-and registered through the same metadata-only receipt. Original conversational audio is
-not captured or reconstructable; that still depends on a consented patient-speech ASR path.
+and registered through the same metadata-only receipt. A separate explicit export verifies
+each WAV and downloads a versioned tar containing labels and media; the UI warns that this
+sensitive file leaves protected app storage and cannot be remotely revoked. Nothing is
+uploaded by the app. Original conversational audio is not captured or reconstructable; that
+still depends on a consented patient-speech ASR path.
 
 ## D5 — convergence with monitoring (algorithm scaffold; no production audio path)
 Every utterance is also a speech sample. Route articulation rate, pause structure, voice

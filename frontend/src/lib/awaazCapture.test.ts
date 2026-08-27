@@ -6,6 +6,7 @@ import {
   startEndpointState,
 } from "./awaazCapture";
 import { isLocalReviewPairFor, sha256Blob, type LocalAudioPair } from "./awaazAudioVault";
+import { buildLocalTrainingArchive, trainingArchiveFilename } from "./awaazTrainingExport";
 import {
   isEmergencyAudioCurrent,
   startEmergencyPlayback,
@@ -112,5 +113,61 @@ describe("Awaaz caregiver-reviewed local audio", () => {
     expect(isLocalReviewPairFor(pair, "patient-2", "utterance-1")).toBe(false);
     expect(isLocalReviewPairFor({ ...pair, source: "card_tap" },
       "patient-1", "utterance-1")).toBe(false);
+  });
+});
+
+describe("Awaaz local training export", () => {
+  const audio = new Blob(["abc"], { type: "audio/wav" });
+  const pair: LocalAudioPair = {
+    capture_id: "11111111-1111-4111-8111-111111111111",
+    patient_id: "patient-12345678",
+    source: "caregiver_review",
+    utterance_id: "utterance-1",
+    target_text: "Water",
+    lang: "en",
+    duration_seconds: 1.2,
+    sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    created_at: "2026-08-28T00:00:00.000Z",
+    audio,
+  };
+
+  it("builds an integrity-checked tar with a manifest and the local WAV", async () => {
+    const createdAt = new Date("2026-08-28T02:30:00.000Z");
+    const archive = await buildLocalTrainingArchive([pair], createdAt);
+    const bytes = new Uint8Array(await archive.arrayBuffer());
+    const decoder = new TextDecoder();
+    const entries = new Map<string, Uint8Array>();
+    for (let offset = 0; offset < bytes.length - 1_024;) {
+      const name = decoder.decode(bytes.slice(offset, offset + 100)).replace(/\0.*$/, "");
+      if (!name) break;
+      const sizeText = decoder.decode(bytes.slice(offset + 124, offset + 136))
+        .replace(/\0.*$/, "").trim();
+      const size = Number.parseInt(sizeText, 8);
+      const start = offset + 512;
+      entries.set(name, bytes.slice(start, start + size));
+      offset = start + Math.ceil(size / 512) * 512;
+    }
+    expect(archive.type).toBe("application/x-tar");
+    expect(bytes.length % 512).toBe(0);
+    expect([...entries.keys()]).toEqual([
+      "README.txt",
+      "manifest.json",
+      "audio/11111111-1111-4111-8111-111111111111.wav",
+    ]);
+    const manifest = JSON.parse(decoder.decode(entries.get("manifest.json")!));
+    expect(manifest.media_uploaded_by_app).toBe(false);
+    expect(manifest.pairs[0]).toMatchObject({ target_text: "Water" });
+    expect(decoder.decode(entries.get(
+      "audio/11111111-1111-4111-8111-111111111111.wav",
+    )!)).toBe("abc");
+    expect(bytes.slice(-1_024).every((byte) => byte === 0)).toBe(true);
+    expect(trainingArchiveFilename(pair.patient_id, createdAt)).toBe(
+      "awaaz-learning-patient1-2026-08-28T02-30-00-000Z.tar",
+    );
+  });
+
+  it("refuses to export a WAV that no longer matches its registered hash", async () => {
+    await expect(buildLocalTrainingArchive([{ ...pair, sha256: "00".repeat(32) }]))
+      .rejects.toThrow("integrity check failed");
   });
 });

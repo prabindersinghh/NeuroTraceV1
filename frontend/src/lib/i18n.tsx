@@ -302,9 +302,9 @@ const STRINGS = {
   awaazSavePause: { en: "Save pause time", hi: "विराम समय सहेजें", pa: "ਵਿਰਾਮ ਸਮਾਂ ਸੰਭਾਲੋ" },
   awaazPauseSaved: { en: "Pause time saved.", hi: "विराम समय सहेजा गया।", pa: "ਵਿਰਾਮ ਸਮਾਂ ਸੰਭਾਲਿਆ ਗਿਆ।" },
   awaazLocalPairs: {
-    en: "practice recordings stored on this device",
-    hi: "अभ्यास रिकॉर्डिंग इस डिवाइस पर सहेजी गईं",
-    pa: "ਅਭਿਆਸ ਰਿਕਾਰਡਿੰਗਾਂ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲੀਆਂ ਗਈਆਂ",
+    en: "learning recordings stored on this device",
+    hi: "सीखने की रिकॉर्डिंग इस डिवाइस पर सहेजी गईं",
+    pa: "ਸਿੱਖਣ ਵਾਲੀਆਂ ਰਿਕਾਰਡਿੰਗਾਂ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲੀਆਂ ਗਈਆਂ",
   },
   awaazDeleteRecordings: {
     en: "Delete all local recordings",
@@ -325,6 +325,41 @@ const STRINGS = {
     en: "The recordings were deleted here, but the server receipt could not be updated. The audio is no longer on this device.",
     hi: "रिकॉर्डिंग यहाँ मिटा दी गईं, लेकिन सर्वर रसीद अपडेट नहीं हो सकी। ऑडियो अब इस डिवाइस पर नहीं है।",
     pa: "ਰਿਕਾਰਡਿੰਗਾਂ ਇੱਥੇ ਮਿਟਾ ਦਿੱਤੀਆਂ ਗਈਆਂ, ਪਰ ਸਰਵਰ ਰਸੀਦ ਅੱਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕੀ। ਆਡੀਓ ਹੁਣ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਨਹੀਂ ਹੈ।",
+  },
+  awaazExportTitle: {
+    en: "Export for an authorised training workflow",
+    hi: "अधिकृत प्रशिक्षण प्रक्रिया के लिए निर्यात",
+    pa: "ਅਧਿਕਾਰਤ ਟ੍ਰੇਨਿੰਗ ਪ੍ਰਕਿਰਿਆ ਲਈ ਐਕਸਪੋਰਟ",
+  },
+  awaazExportHelp: {
+    en: "This verifies every WAV and downloads a local archive. Nothing is uploaded by NeuroTrace. The file contains patient voice and verified words; after download it is outside protected app storage and cannot be revoked here.",
+    hi: "यह हर WAV की जाँच करके एक स्थानीय संग्रह डाउनलोड करता है। न्यूरोट्रेस कुछ अपलोड नहीं करता। फ़ाइल में रोगी की आवाज़ और सत्यापित शब्द होते हैं; डाउनलोड के बाद यह सुरक्षित ऐप स्टोरेज से बाहर होगी और यहाँ से वापस नहीं ली जा सकती।",
+    pa: "ਇਹ ਹਰ WAV ਦੀ ਜਾਂਚ ਕਰਕੇ ਇੱਕ ਲੋਕਲ ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਕਰਦਾ ਹੈ। ਨਿਊਰੋਟ੍ਰੇਸ ਕੁਝ ਅੱਪਲੋਡ ਨਹੀਂ ਕਰਦਾ। ਫਾਈਲ ਵਿੱਚ ਮਰੀਜ਼ ਦੀ ਆਵਾਜ਼ ਅਤੇ ਪੁਸ਼ਟੀ ਕੀਤੇ ਸ਼ਬਦ ਹੁੰਦੇ ਹਨ; ਡਾਊਨਲੋਡ ਤੋਂ ਬਾਅਦ ਇਹ ਸੁਰੱਖਿਅਤ ਐਪ ਸਟੋਰੇਜ ਤੋਂ ਬਾਹਰ ਹੋਵੇਗੀ ਅਤੇ ਇੱਥੋਂ ਵਾਪਸ ਨਹੀਂ ਲਈ ਜਾ ਸਕਦੀ।",
+  },
+  awaazExportConsent: {
+    en: "I understand this sensitive voice archive leaves protected app storage when downloaded",
+    hi: "मैं समझता/समझती हूँ कि डाउनलोड होने पर यह संवेदनशील आवाज़ संग्रह सुरक्षित ऐप स्टोरेज से बाहर चला जाएगा",
+    pa: "ਮੈਂ ਸਮਝਦਾ/ਸਮਝਦੀ ਹਾਂ ਕਿ ਡਾਊਨਲੋਡ ਹੋਣ 'ਤੇ ਇਹ ਸੰਵੇਦਨਸ਼ੀਲ ਆਵਾਜ਼ ਆਰਕਾਈਵ ਸੁਰੱਖਿਅਤ ਐਪ ਸਟੋਰੇਜ ਤੋਂ ਬਾਹਰ ਚਲਾ ਜਾਵੇਗਾ",
+  },
+  awaazExportButton: {
+    en: "Download verified archive",
+    hi: "सत्यापित संग्रह डाउनलोड करें",
+    pa: "ਜਾਂਚਿਆ ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਕਰੋ",
+  },
+  awaazExporting: {
+    en: "Verifying recordings…",
+    hi: "रिकॉर्डिंग की जाँच हो रही है…",
+    pa: "ਰਿਕਾਰਡਿੰਗਾਂ ਦੀ ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ…",
+  },
+  awaazExportDone: {
+    en: "Archive downloaded. Store it securely; deleting recordings here cannot delete that file.",
+    hi: "संग्रह डाउनलोड हो गया। इसे सुरक्षित रखें; यहाँ रिकॉर्डिंग मिटाने से वह फ़ाइल नहीं मिटेगी।",
+    pa: "ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਹੋ ਗਿਆ। ਇਸਨੂੰ ਸੁਰੱਖਿਅਤ ਰੱਖੋ; ਇੱਥੇ ਰਿਕਾਰਡਿੰਗਾਂ ਮਿਟਾਉਣ ਨਾਲ ਉਹ ਫਾਈਲ ਨਹੀਂ ਮਿਟੇਗੀ।",
+  },
+  awaazExportFailed: {
+    en: "The archive was not created. A recording may have failed its integrity check; nothing was uploaded.",
+    hi: "संग्रह नहीं बना। किसी रिकॉर्डिंग की सत्यापन जाँच विफल हो सकती है; कुछ भी अपलोड नहीं हुआ।",
+    pa: "ਆਰਕਾਈਵ ਨਹੀਂ ਬਣਿਆ। ਕਿਸੇ ਰਿਕਾਰਡਿੰਗ ਦੀ ਜਾਂਚ ਅਸਫਲ ਹੋ ਸਕਦੀ ਹੈ; ਕੁਝ ਵੀ ਅੱਪਲੋਡ ਨਹੀਂ ਹੋਇਆ।",
   },
   balanceFraming: {
     en: "Prop the phone about 1.5 metres away, so the whole body is in the frame.",

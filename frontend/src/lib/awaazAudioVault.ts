@@ -106,6 +106,21 @@ export async function listLocalAudioPairIds(patientId: string): Promise<string[]
   }
 }
 
+/** Export is an explicit action, so loading this patient's WAVs into memory is intentional. */
+export async function listLocalAudioPairs(patientId: string): Promise<LocalAudioPair[]> {
+  const db = await openVault();
+  try {
+    const transaction = db.transaction(STORE, "readonly");
+    const request = transaction.objectStore(STORE).index(PATIENT_INDEX).getAll(patientId);
+    return await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as LocalAudioPair[]);
+      request.onerror = () => reject(request.error ?? new Error("Could not read audio storage"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export function isLocalReviewPairFor(
   pair: LocalAudioPair,
   patientId: string,

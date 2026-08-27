@@ -4,6 +4,24 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz verified local training export
+
+Consented card and caregiver-reviewed-repeat pairs can now leave IndexedDB only through an
+explicit local download. The control is hidden when no pairs exist and disabled until the
+user acknowledges that the archive contains patient voice and verified words, leaves
+protected app storage, and cannot be revoked by deleting the in-app copy.
+
+Before building the POSIX tar, the browser recomputes every WAV's SHA-256 and refuses the
+entire export on any mismatch. The archive contains a sensitive-data README, a versioned
+manifest with source/label/integrity metadata, and the local WAVs. NeuroTrace performs no
+upload and has no media endpoint; transfer to an authorised training environment remains a
+separate human-controlled action.
+
+Verified: frontend **43 tests passed**; the archive test parses the generated tar, verifies
+the manifest and embedded WAV, and pins corrupt-audio refusal. TypeScript and oxlint passed,
+and the production PWA bundle built. Backend remains **894 collected / 891 passed / 3
+expected skips / 0 failed** from the preceding unchanged API milestone.
+
 ## 2026-08-28 — Awaaz caregiver-reviewed local repeats
 
 The evening review can now remain text-only or, after an explicit patient-consent checkbox,

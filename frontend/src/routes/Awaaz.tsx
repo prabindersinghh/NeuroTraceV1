@@ -25,6 +25,7 @@ import {
   Bath,
   Check,
   CircleCheck,
+  Download,
   Gauge,
   GlassWater,
   Hand,
@@ -58,10 +59,15 @@ import { confirmedCandidatePayload, emergencyPhrase } from "@/lib/awaaz";
 import {
   countLocalAudioPairs,
   deleteLocalAudioPair,
+  listLocalAudioPairs,
   listLocalAudioPairIds,
   saveLocalAudioPair,
   sha256Blob,
 } from "@/lib/awaazAudioVault";
+import {
+  buildLocalTrainingArchive,
+  trainingArchiveFilename,
+} from "@/lib/awaazTrainingExport";
 import {
   deleteLocalEmergencyAudio,
   getLocalEmergencyAudio,
@@ -154,6 +160,9 @@ export default function Awaaz() {
   const [autoStop, setAutoStop] = useState(false);
   const [endpointDraft, setEndpointDraft] = useState(2.5);
   const [localPairCount, setLocalPairCount] = useState(0);
+  const [exportConsent, setExportConsent] = useState(false);
+  const [exportingPairs, setExportingPairs] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [emergencyAudio, setEmergencyAudio] = useState<LocalEmergencyAudio | null>(null);
   const [emergencyAudioUrl, setEmergencyAudioUrl] = useState<string | null>(null);
   const [isEmergencyRecording, setIsEmergencyRecording] = useState(false);
@@ -402,6 +411,8 @@ export default function Awaaz() {
     const captureIds = await listLocalAudioPairIds(patientId).catch(() => []);
     await Promise.all(captureIds.map(deleteLocalAudioPair));
     setLocalPairCount(0);
+    setExportConsent(false);
+    setExportStatus(null);
     setPendingCapture(null);
     const receipts = await Promise.allSettled(
       captureIds.map((captureId) => api.awaazDeleteAudioPair(captureId)),
@@ -412,6 +423,32 @@ export default function Awaaz() {
       setCaptureStatus(t("awaazDeleteDone"));
     }
   }, [patientId, t]);
+
+  const exportTrainingPairs = useCallback(async () => {
+    if (!exportConsent || exportingPairs) return;
+    setActionError(null);
+    setExportStatus(null);
+    setExportingPairs(true);
+    try {
+      const pairs = await listLocalAudioPairs(patientId);
+      const createdAt = new Date();
+      const archive = await buildLocalTrainingArchive(pairs, createdAt);
+      const url = URL.createObjectURL(archive);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = trainingArchiveFilename(patientId, createdAt);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setExportConsent(false);
+      setExportStatus(t("awaazExportDone"));
+    } catch {
+      setActionError(t("awaazExportFailed"));
+    } finally {
+      setExportingPairs(false);
+    }
+  }, [exportConsent, exportingPairs, patientId, t]);
 
   const stopEmergencyRecording = useCallback(async () => {
     if (emergencyStoppingRef.current || !emergencyRecorderRef.current) return;
@@ -915,6 +952,38 @@ export default function Awaaz() {
               </button>
             )}
           </div>
+          {localPairCount > 0 && (
+            <div className="mt-3 rounded-xl border border-alert/30 bg-alert-soft/30 p-3">
+              <p className="text-sm font-medium">{t("awaazExportTitle")}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {t("awaazExportHelp")}
+              </p>
+              <label className="mt-3 flex min-h-11 items-start gap-3 text-xs">
+                <input
+                  type="checkbox"
+                  checked={exportConsent}
+                  disabled={exportingPairs}
+                  onChange={(event) => setExportConsent(event.target.checked)}
+                  className="mt-0.5 h-5 w-5 accent-accent"
+                />
+                <span>{t("awaazExportConsent")}</span>
+              </label>
+              <button
+                type="button"
+                disabled={!exportConsent || exportingPairs}
+                onClick={() => void exportTrainingPairs()}
+                className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-line bg-card px-3 text-sm disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" aria-hidden />
+                {exportingPairs ? t("awaazExporting") : t("awaazExportButton")}
+              </button>
+              {exportStatus && (
+                <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">
+                  {exportStatus}
+                </p>
+              )}
+            </div>
+          )}
         </details>
 
         <div className="grid grid-cols-2 gap-3">

@@ -159,6 +159,10 @@ the product depends on has been broken.
 has a binary column. Exam audio, video and frames are converted to numbers and discarded.
 Explicitly-consented Awaaz practice WAVs are the narrow local-retention case: they remain in
 origin-scoped IndexedDB and the server receives only a receipt that can be marked deleted.
+They leave protected app storage only when a person explicitly downloads an
+integrity-checked local archive after a sensitive-data warning; the app never sends that
+archive over a network. Deleting the IndexedDB copy cannot revoke an already downloaded
+file, and the UI says so before export.
 *This is the product's central privacy claim.*
 
 **INV-2 · No ALERT without a lateralised finding.** Stroke is lateralised; Parkinson's is
