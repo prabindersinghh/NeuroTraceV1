@@ -366,3 +366,12 @@ canvas directly and quantise anything React must see (the day number changes 20 
 for damped wheel scrolling only, dynamically imported — it is 5.4 kB gzipped and replacing
 it with hand-rolled wheel interception would break keyboard scrolling, scrollbar dragging
 and find-in-page, which is not a trade worth making to avoid one small package.
+
+**D-042 · 2026-08-28 · Awaaz practice audio is consented local state, not an upload.**
+Board-tap pairing needs the patient's attempted speech, but adding a media endpoint would
+break INV-1 before the compliance and object-storage lifecycle exists. The browser therefore
+keeps a 16 kHz WAV in origin-scoped IndexedDB and sends only a UUID, duration, SHA-256/size, exact tapped
+target, consent actor/time and deletion state. Manual push-to-talk is the default; optional
+silence auto-stop honours 0.5–4.0 seconds and cannot fire before speech. The person can
+delete every local recording, and the receipt records that revocation. This produces real
+card/audio pairs on one device without claiming cross-device review, ASR, or training.

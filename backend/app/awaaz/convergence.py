@@ -2,10 +2,10 @@
 
 IMPLEMENTATION STATUS
 ---------------------
-This module contains the queue, feature-routing, and drift algorithms. The current product
-stores utterance text and caregiver corrections but no associated patient audio, so those
-rows are verified labels for future personalisation, not training pairs yet. The capture,
-retention/consent, adapter-training, and deployment path remains to be built.
+This module contains the queue, feature-routing, and drift algorithms. Phrase-card practice
+can now create a consented audio/target pair whose WAV stays in the browser's IndexedDB;
+the server stores only its receipt. Caregiver-reviewed free speech still has no associated
+audio, and adapter training/deployment remains to be built.
 
 D4 — THE ENROLMENT PROBLEM
 --------------------------
@@ -16,8 +16,8 @@ never finish, and the ones who do are the least impaired.
 
 The intended collection design uses two low-burden sources:
 
-  TAPPED CARDS. A future on-device capture can pair speech with the exact card the person
-  tapped. Today only the card target and audit event are retained.
+  TAPPED CARDS. On-device capture pairs speech with the exact card the person tapped. The
+  local WAV is revocable; only UUID/duration/consent/deletion metadata reaches the server.
 
   THE CAREGIVER'S EVENING TWO MINUTES. The caregiver can verify unclear text. Once a
   consented audio association exists, that label can become a genuine audio/target pair.

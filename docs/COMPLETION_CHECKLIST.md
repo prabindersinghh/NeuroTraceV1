@@ -23,7 +23,7 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 10 | Caregiver dashboard complete | **LIVE** | Exercised over HTTP against the seeded demo |
 | 11 | Clinician dashboard: audit log + PDF export | **TEST** | Roster, typed cards, drift lane, audit table live. `/report/:patientId` print view added - browser Save-as-PDF, not server-rendered (D-032) |
 | 12 | ASHA interface complete | **TEST** | `AshaHome.tsx` — offline queue, idempotent sync, task-level due lists |
-| 13 | Awaaz D1–D5 complete | **PARTIAL** | Board and INV-9 confirmation handshake work in tests; listener capability and text-review queue have screens. Missing: patient-speech ASR, audio-backed pairs/training, adapter deployment, caregiver notification provider, and pre-rendered offline emergency audio |
+| 13 | Awaaz D1–D5 complete | **PARTIAL** | Board, INV-9 confirmation, listener capability, consented local card/audio pairs, 0.5–4.0 s endpointing, and text review exist. Missing: patient-speech ASR, reviewed-speech audio, adapter training/deployment, caregiver notification provider, and pre-rendered offline emergency audio |
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
 | 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
 | 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |

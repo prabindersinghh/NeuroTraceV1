@@ -2,12 +2,13 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-28 · The first Awaaz foundation slice repairs the candidate
-confirmation handshake, prevents listener links from exposing pre-link utterances, retains
-failed caregiver corrections, and reports emergency delivery/offline capability honestly.
-The full backend suite and frontend checks pass. Awaaz remains partial: there is no patient
-speech ASR, audio-backed learning pair, adapter deployment, caregiver notification provider,
-or pre-rendered offline emergency audio yet. Previous project history follows. ·
+**Last updated:** 2026-08-28 · Awaaz now captures explicitly-consented 16 kHz practice WAVs
+into a browser-only IndexedDB vault and pairs them with the exact phrase card the patient
+taps. The API receives metadata receipts only, retries are idempotent, deletion is recorded,
+and optional silence auto-stop honours a patient-set 0.5–4.0 s pause. Awaaz remains partial:
+there is no patient-speech ASR, reviewed-speech audio path, adapter deployment, caregiver
+notification provider, or pre-rendered offline emergency audio yet. Previous project
+history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
@@ -189,8 +190,9 @@ so in the source. D-015, D-017.
   only confirmed utterances created after it was minted. There is no live patient-speech
   recognition source yet.
 - **D3** adapter pipeline is synthetic scaffolding only; no model runs in the product.
-- **D4** worst-first text review exists and keeps failed saves retryable. It stores verified
-  text labels, not audio/target training pairs.
+- **D4** explicitly-consented card/audio pairs now stay in an on-device IndexedDB vault;
+  the server retains only UUID/duration/integrity/consent/deletion receipts. Worst-first text review
+  remains retryable, but reviewed free speech has no associated audio yet.
 - **D5** feature-routing and frozen-adapter drift algorithms exist as tested scaffolding;
   there is no production audio ingestion or adapter lifecycle behind them.
 
@@ -205,8 +207,9 @@ so in the source. D-015, D-017.
 
 - **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
   but does not train a voice.
-- **Awaaz ASR and learning loop** — no patient-speech recognition, audio association,
-  consented retention path, adapter training/deployment, or production inference exists.
+- **Awaaz ASR and learning loop** — card-tap audio association and consented local retention
+  now exist. Patient-speech recognition, caregiver-reviewed audio association, adapter
+  training/deployment, and production inference do not.
 - **Awaaz emergency completion** — add pre-rendered offline phrases and a real caregiver
   delivery provider before either capability may be reported as successful.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this

@@ -721,9 +721,25 @@ class UtteranceLog(Base):
     confidence: Mapped[float | None] = mapped_column(sa.Float)
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     #: The caregiver's verified text label (D4). It becomes a training target only after
-    #: an audio capture is associated with this utterance; this table currently stores none.
+    #: an audio capture is associated with this utterance.
     corrected_text: Mapped[str | None] = mapped_column(sa.String(500))
     reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    #: Identifier of a WAV retained in this browser's on-device IndexedDB vault. This is a
+    #: receipt/link only: the database has no media column and the API never receives bytes.
+    audio_capture_id: Mapped[str | None] = mapped_column(
+        sa.String(36), unique=True, index=True)
+    audio_duration_seconds: Mapped[float | None] = mapped_column(sa.Float)
+    #: Integrity metadata lets a future exporter verify the local WAV before training.
+    audio_sha256: Mapped[str | None] = mapped_column(sa.String(64))
+    audio_size_bytes: Mapped[int | None] = mapped_column(sa.Integer)
+    #: Explicit consent actor and time. A recording without these fields is not a pair.
+    audio_consent_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    audio_consent_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    #: Truth about the local copy, updated when the person revokes and deletes it.
+    audio_retained_on_device: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    audio_deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     ts: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
         nullable=False)

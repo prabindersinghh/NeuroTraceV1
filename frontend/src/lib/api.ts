@@ -267,6 +267,12 @@ export const api = {
     request<import("./types").AwaazSpeakResult>(`/awaaz/${patientId}/speak`, {
       method: "POST", json: payload,
     }),
+  awaazUpdateProfile: (patientId: string, payload: { endpoint_silence_seconds?: number }) =>
+    request<import("./types").AwaazProfile>(`/awaaz/${patientId}/profile`, {
+      method: "PATCH", json: payload,
+    }),
+  awaazDeleteAudioPair: (captureId: string) =>
+    request<{ detail: string }>(`/awaaz/audio-pairs/${captureId}`, { method: "DELETE" }),
   awaazEmergency: (patientId: string) =>
     request<AwaazEmergencyResult>(`/awaaz/${patientId}/emergency`, { method: "POST" }),
 

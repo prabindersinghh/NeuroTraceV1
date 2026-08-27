@@ -11,7 +11,8 @@ right and this file is a bug.
   Patient's phone (PWA, offline-first)
     camera / mic / touch  ──► MediaPipe + DSP, ON DEVICE
                                     │
-                              raw media discarded here ◄── INV-1
+                       exam media discarded here ◄── INV-1
+                 consented Awaaz practice WAVs stay in local IndexedDB
                                     │
                               features (numbers only)
                                     │
@@ -77,7 +78,7 @@ per-request cost to users with intermittent data.
 | `awaaz_profiles` | speech profile and auto-speak settings — gates INV-9 |
 | `phrase_cards` | the patient's phrase board |
 | `voice_samples` | voice-clone **metadata only**; the audio never enters this database |
-| `utterance_log` | what was spoken, and whether it was confirmed first |
+| `utterance_log` | what was spoken, whether confirmed; optional local-audio UUID/duration/integrity/consent/deletion receipt, never media |
 | `audit_log` | append-only |
 
 **Face identity lives in `patients.calibration_json["identity"]`** — six ratios between
@@ -155,8 +156,10 @@ Numbered. Each has a test in `backend/tests/test_invariants.py`. A failure here 
 the product depends on has been broken.
 
 **INV-1 · Raw media never leaves the device.** No endpoint accepts a file upload; no table
-has a binary column. Audio, video and frames are converted to numbers on the phone and
-discarded. *This is the product's central privacy claim.*
+has a binary column. Exam audio, video and frames are converted to numbers and discarded.
+Explicitly-consented Awaaz practice WAVs are the narrow local-retention case: they remain in
+origin-scoped IndexedDB and the server receives only a receipt that can be marked deleted.
+*This is the product's central privacy claim.*
 
 **INV-2 · No ALERT without a lateralised finding.** Stroke is lateralised; Parkinson's is
 symmetric. Without this a PD patient generates our highest-confidence alert.

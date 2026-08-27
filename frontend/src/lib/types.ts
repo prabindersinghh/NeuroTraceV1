@@ -404,6 +404,12 @@ export interface AwaazSpeakPayload {
   confidence?: number;
   /** Set only after the person taps a candidate that was offered for confirmation. */
   confirmed_candidate?: boolean;
+  /** UUID of a WAV kept in this browser's IndexedDB vault; the WAV never enters the API. */
+  audio_capture_id?: string;
+  audio_duration_seconds?: number;
+  audio_sha256?: string;
+  audio_size_bytes?: number;
+  audio_capture_consent?: boolean;
 }
 
 export interface AwaazSpeakResult {
@@ -415,6 +421,9 @@ export interface AwaazSpeakResult {
   candidates: string[];
   reason: string;
   requires_confirmation: boolean;
+  utterance_id: string | null;
+  /** A local audio receipt was registered; this does not mean media was uploaded. */
+  audio_pair_registered: boolean;
 }
 
 export interface AwaazEmergencyResult {

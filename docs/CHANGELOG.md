@@ -4,6 +4,26 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz on-device learning pairs
+
+The phrase board can now capture a 16 kHz practice WAV, preview it, and pair it with the
+exact card the patient taps. Retention is explicitly consented and entirely local to the
+browser's IndexedDB vault; the API has no media input and stores only UUID, duration,
+SHA-256/size, target, consent and deletion receipts. A delete-all control removes the local recordings
+and records revocation server-side.
+
+Push-to-talk/manual stop remains the default. Optional silence auto-stop uses the patient's
+saved 0.5–4.0 second threshold, never starts the silence clock before speech is heard, and
+always bounds a capture at 30 seconds. Pair registration is idempotent, so retrying after a
+lost response cannot duplicate a training example or increment card usage twice.
+
+This closes the board-tap half of D4. It does **not** claim ASR, caregiver-reviewed audio,
+adapter training/deployment, voice cloning, or cloud audio storage.
+
+Verified: backend **885 collected / 882 passed / 3 expected skips / 0 failed**; frontend
+**35 tests passed**; TypeScript, oxlint, migration round-trip, browser interaction checks,
+and the production Vite/PWA build passed.
+
 ## 2026-08-28 — Awaaz contract foundation
 
 The aphasia confirmation flow now has an explicit second-step contract: the candidate tap

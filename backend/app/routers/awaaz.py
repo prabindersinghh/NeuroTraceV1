@@ -212,7 +212,7 @@ async def update_profile(payload: AwaazProfileUpdate, patient: AuthorisedPatient
 
 @router.post("/{patient_id}/speak", response_model=AwaazSpeakResult)
 async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
-                db: Session) -> AwaazSpeakResult:
+                user: CurrentUser, db: Session) -> AwaazSpeakResult:
     """Resolve an utterance to speech — or to a set of candidates to confirm.
 
     A tapped CARD is always spoken: the patient chose those exact words themselves, so
@@ -227,17 +227,98 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
         if card is None or card.patient_id != patient.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Card not found")
 
+    capture_id = str(payload.audio_capture_id) if payload.audio_capture_id else None
+    has_capture_metadata = bool(
+        capture_id or payload.audio_duration_seconds is not None
+        or payload.audio_sha256 is not None or payload.audio_size_bytes is not None
+        or payload.audio_capture_consent
+    )
+    if has_capture_metadata and capture_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "An audio capture receipt requires audio_capture_id",
+        )
+    if capture_id is not None:
+        # Until ASR exists, only a card tap supplies an acoustically-independent, exact
+        # target. Registering free text beside audio would manufacture a training label.
+        if card is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "On-device audio can only be paired with a phrase the person tapped",
+            )
+        if not payload.audio_capture_consent:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Explicit consent is required before retaining an audio pair",
+            )
+        if payload.audio_duration_seconds is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "audio_duration_seconds is required for an audio capture receipt",
+            )
+        if payload.audio_sha256 is None or payload.audio_size_bytes is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Audio integrity metadata is required for an audio capture receipt",
+            )
+
+        existing = await db.scalar(select(UtteranceLog).where(
+            UtteranceLog.audio_capture_id == capture_id))
+        if existing is not None:
+            # Retrying after a lost response must not increment use_count or create a
+            # second training pair. Reusing the id for different words is refused.
+            if (
+                existing.patient_id != patient.id
+                or existing.card_id != card.id
+                or existing.audio_sha256 != payload.audio_sha256
+            ):
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "This audio capture is already paired with a different phrase",
+                )
+            return AwaazSpeakResult(
+                patient_id=patient.id, text=existing.text, lang=existing.lang,
+                mode=existing.mode, speak_now=True, candidates=[],
+                reason="the person chose these exact words themselves",
+                requires_confirmation=False, utterance_id=existing.id,
+                audio_pair_registered=existing.audio_retained_on_device,
+            )
+
     if card is not None:
         card.use_count += 1
-        db.add(UtteranceLog(
+        utterance = UtteranceLog(
             patient_id=patient.id, text=card.text, lang=card.lang, card_id=card.id,
-            mode="auto", confirmed=True, is_emergency=card.is_emergency))
+            mode="auto", confirmed=True, is_emergency=card.is_emergency,
+            audio_capture_id=capture_id,
+            audio_duration_seconds=payload.audio_duration_seconds,
+            audio_sha256=payload.audio_sha256,
+            audio_size_bytes=payload.audio_size_bytes,
+            audio_consent_by=user.id if capture_id else None,
+            audio_consent_at=datetime.now(timezone.utc) if capture_id else None,
+            audio_retained_on_device=bool(capture_id),
+        )
+        db.add(utterance)
+        if capture_id:
+            db.add(AuditLog(
+                actor_id=user.id, action="awaaz.audio_pair.register",
+                patient_id=patient.id,
+                meta_json={
+                    "capture_id": capture_id,
+                    "duration_seconds": payload.audio_duration_seconds,
+                    "sha256": payload.audio_sha256,
+                    "size_bytes": payload.audio_size_bytes,
+                    "storage": "on_device",
+                },
+            ))
         await db.commit()
+        await db.refresh(utterance)
         return AwaazSpeakResult(
             patient_id=patient.id, text=card.text, lang=card.lang,
             mode="auto", speak_now=True, candidates=[],
             reason="the person chose these exact words themselves",
             requires_confirmation=False,
+            utterance_id=utterance.id,
+            audio_pair_registered=bool(capture_id),
         )
 
     text = (payload.text or "").strip()
@@ -251,15 +332,18 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
                 status.HTTP_400_BAD_REQUEST,
                 "A confirmed candidate must include the text the person chose",
             )
-        db.add(UtteranceLog(
+        utterance = UtteranceLog(
             patient_id=patient.id, text=text, lang=payload.lang,
-            mode="confirm", confirmed=True, confidence=payload.confidence))
+            mode="confirm", confirmed=True, confidence=payload.confidence)
+        db.add(utterance)
         await db.commit()
+        await db.refresh(utterance)
         return AwaazSpeakResult(
             patient_id=patient.id, text=text, lang=payload.lang,
             mode="confirm", speak_now=True, candidates=[],
             reason="the person confirmed this candidate themselves",
             requires_confirmation=False,
+            utterance_id=utterance.id,
         )
 
     decision = decide(
@@ -269,14 +353,17 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
     )
 
     if decision.auto:
-        db.add(UtteranceLog(
+        utterance = UtteranceLog(
             patient_id=patient.id, text=text, lang=payload.lang,
-            mode="auto", confirmed=False, confidence=payload.confidence))
+            mode="auto", confirmed=False, confidence=payload.confidence)
+        db.add(utterance)
         await db.commit()
+        await db.refresh(utterance)
         return AwaazSpeakResult(
             patient_id=patient.id, text=text, lang=payload.lang,
             mode="auto", speak_now=True, candidates=[],
             reason=decision.reason, requires_confirmation=False,
+            utterance_id=utterance.id,
         )
 
     # Confirmation path. Nothing is spoken here — the response carries options only.
@@ -286,6 +373,33 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
         mode="confirm", speak_now=False, candidates=candidates[:5],
         reason=decision.reason, requires_confirmation=True,
     )
+
+
+@router.delete("/audio-pairs/{capture_id}", response_model=MessageResponse)
+async def delete_audio_pair(
+    capture_id: uuid.UUID, user: CurrentUser, db: Session,
+) -> MessageResponse:
+    """Record revocation after the browser deletes its local WAV.
+
+    The raw audio never reaches this endpoint. Deletion is intentionally idempotent so a
+    client can retry after losing a response without turning revocation into an error.
+    """
+    row = await db.scalar(select(UtteranceLog).where(
+        UtteranceLog.audio_capture_id == str(capture_id)))
+    if row is None:
+        return MessageResponse(detail="No retained audio receipt exists for this capture.")
+
+    await get_patient_for_user(row.patient_id, user, db)
+    if row.audio_retained_on_device:
+        row.audio_retained_on_device = False
+        row.audio_deleted_at = datetime.now(timezone.utc)
+        db.add(AuditLog(
+            actor_id=user.id, action="awaaz.audio_pair.delete",
+            patient_id=row.patient_id,
+            meta_json={"capture_id": str(capture_id), "storage": "on_device"},
+        ))
+        await db.commit()
+    return MessageResponse(detail="The on-device audio receipt is marked deleted.")
 
 
 @router.post("/{patient_id}/emergency", response_model=AwaazEmergencyResult)

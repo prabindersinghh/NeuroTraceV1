@@ -625,6 +625,15 @@ class AwaazSpeakRequest(BaseModel):
     #: a model returning the same text twice: the tap is the consent event that makes it safe
     #: to speak and the audit fact INV-9 needs to retain.
     confirmed_candidate: bool = False
+    #: A UUID naming a WAV kept in the browser's private IndexedDB vault. Only metadata
+    #: crosses this API; raw media remains on device under INV-1.
+    audio_capture_id: uuid.UUID | None = None
+    audio_duration_seconds: float | None = Field(default=None, ge=0.25, le=30.0)
+    audio_sha256: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
+    audio_size_bytes: int | None = Field(default=None, ge=44, le=1_100_000)
+    #: Must be explicitly true when an audio capture is registered. The authenticated user
+    #: becomes the consent actor retained beside the receipt.
+    audio_capture_consent: bool = False
 
 
 class AwaazSpeakResult(BaseModel):
@@ -638,6 +647,9 @@ class AwaazSpeakResult(BaseModel):
     candidates: list[str]
     reason: str
     requires_confirmation: bool
+    utterance_id: uuid.UUID | None = None
+    #: True means a labelled audio receipt was registered; it never means audio was uploaded.
+    audio_pair_registered: bool = False
 
 
 class AwaazEmergencyResult(BaseModel):

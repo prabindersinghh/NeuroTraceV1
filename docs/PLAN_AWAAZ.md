@@ -1,8 +1,9 @@
 # PLAN_AWAAZ — the communication assistant
 
 Second product inside the same platform. **Status: IN PROGRESS — the board, confirmation
-contract, listener capability, and text-review queue exist; ASR, audio-backed learning,
-caregiver delivery, and pre-rendered offline emergency audio are not connected.**
+contract, listener capability, text-review queue, and consented on-device card/audio pairs
+exist; ASR, reviewed-speech audio, adapter training/deployment, caregiver delivery, and
+pre-rendered offline emergency audio are not connected.**
 
 ---
 
@@ -45,7 +46,7 @@ This becomes **INV-9**.
 | `awaaz_profiles` | per patient: `speech_profile` (dysarthria_dominant / aphasia_dominant / mixed), `auto_speak_enabled`, `auto_speak_threshold`, voice status |
 | `phrase_cards` | patient's grid: text, language, icon, slot, category, usage count |
 | `voice_samples` | metadata for an uploaded family-archive clip — **duration and status only, never the audio** |
-| `utterance_log` | what was spoken, when, from which card |
+| `utterance_log` | what was spoken, when, from which card; optional on-device audio receipt and revocation metadata, never bytes |
 
 **INV-1 still holds.** The 2-minute voice clip is the one piece of raw audio that must reach
 a server, because cloning cannot happen on-device. It is therefore handled as a **separate,
@@ -60,7 +61,9 @@ GET    /awaaz/{pid}/board            the phrase grid
 POST   /awaaz/{pid}/cards            add/edit a card
 DELETE /awaaz/cards/{card_id}
 POST   /awaaz/{pid}/speak            resolve a card to speech; returns whether it may
-                                     auto-speak or must be confirmed
+                                     auto-speak or must be confirmed; may register a
+                                     consented local card/audio receipt
+DELETE /awaaz/audio-pairs/{capture}  record revocation after local deletion
 POST   /awaaz/{pid}/emergency        record emergency phrase + optional location
 GET    /awaaz/{pid}/profile
 PATCH  /awaaz/{pid}/profile          set speech profile (clinician or caregiver)
@@ -99,23 +102,25 @@ sentences. Ask yes/no questions if he's stuck."*
 Every conversation puts the product in a stranger's browser. That is also the distribution
 mechanism.
 
-## D3 — personalised ASR (planned)
+## D3 — personalised ASR (PARTIAL — capture endpointing exists; ASR/adapter do not)
 - Base: distil-Whisper or IndicWav2Vec2 + CTC head.
 - **Reduce language-model weight during decoding.** General ASR fails on dysarthric speech
   by producing fluent, confident, *wrong* output — it leans on its language prior. We want
   acoustic faithfulness, so prefer phoneme/CTC-level output downstream stages can reason
   about.
-- **End-of-utterance silence threshold user-tunable to 3–4 s.** Default VAD cutting
-  dysarthric speakers off mid-sentence is the leading cause of abandonment in this category.
+- **End-of-utterance silence threshold user-tunable to 3–4 s.** The board now exposes
+  0.5–4.0 s and applies it to optional silence auto-stop; push-to-talk/manual stop remains
+  the default. Endpointing never starts its silence clock before speech is detected.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
-## D4 — passive learning loop (PARTIAL — text review exists; audio pairs do not)
+## D4 — passive learning loop (PARTIAL — card/audio pairs + text review; no reviewed audio)
 Never ask a tired stroke survivor for 500 phrases up front — that is why Project Relate
-stalls. Instead: when the patient taps a card, silently record what they also said aloud →
-a free audio/target pair. Caregiver's 2-minute evening task replays unclear utterances and
-asks what they meant. Framed as *"help Papa's app understand him better"* — caregivers
-mostly feel helpless, and this gives them something useful to do.
+stalls. The current board offers an explicit practice capture: record, then tap the exact
+card. Its 16 kHz WAV stays in origin-scoped IndexedDB while Neon receives only a UUID,
+duration, SHA-256/size, target, consent actor/time and deletion state. Retention is opt-in, deletable,
+bounded to 30 seconds, and retry-safe. The caregiver's 2-minute review can verify unclear
+text, but cannot replay or pair patient audio until a consented ASR capture path exists.
 
 ## D5 — convergence with monitoring (algorithm scaffold; no production audio path)
 Every utterance is also a speech sample. Route articulation rate, pause structure, voice

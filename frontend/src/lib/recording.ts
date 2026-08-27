@@ -80,6 +80,12 @@ function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   return new Blob([view], { type: "audio/wav" });
 }
 
+/** Duration of the mono 16-bit PCM WAV produced above, without decoding the audio. */
+export function wavDurationSeconds(blob: Blob): number {
+  const pcmBytes = Math.max(0, blob.size - 44);
+  return pcmBytes / (AUDIO_SAMPLE_RATE * 2);
+}
+
 /** Downsample a Float32 buffer by simple averaging (anti-alias enough for speech features). */
 function resample(input: Float32Array, from: number, to: number): Float32Array {
   if (from === to) return input;

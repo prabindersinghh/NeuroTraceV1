@@ -25,9 +25,10 @@ from app.awaaz.safety import (
     decide,
     may_auto_speak,
 )
-from app.models import Patient, PhraseCard, Role, StrokeSide, User, UtteranceLog
+from app.models import AuditLog, Patient, PhraseCard, Role, StrokeSide, User, UtteranceLog
 
 NOW = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+AUDIO_RECEIPT = {"audio_sha256": "ab" * 32, "audio_size_bytes": 88_044}
 
 
 # ------------------------------------------------------------------ THE SAFETY GATE
@@ -184,6 +185,120 @@ async def test_a_tapped_card_is_always_spoken(session, client):
     assert r.status_code == 200, r.text
     assert r.json()["speak_now"] is True
     assert r.json()["requires_confirmation"] is False
+
+
+async def test_a_consented_card_capture_registers_a_real_on_device_audio_pair(
+    session, client,
+):
+    """The target comes from the patient's tap; only a receipt crosses the API."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    water = next(c for c in cards if "water" in c["text"].lower())
+    capture_id = uuid.uuid4()
+
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": water["id"],
+        "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 2.75,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["audio_pair_registered"] is True
+    assert response.json()["utterance_id"]
+
+    row = await session.scalar(select(UtteranceLog).where(
+        UtteranceLog.audio_capture_id == str(capture_id)))
+    assert row is not None
+    assert row.text == water["text"]
+    assert row.card_id == uuid.UUID(water["id"])
+    assert row.audio_duration_seconds == 2.75
+    assert row.audio_sha256 == AUDIO_RECEIPT["audio_sha256"]
+    assert row.audio_size_bytes == AUDIO_RECEIPT["audio_size_bytes"]
+    assert row.audio_consent_by == caregiver.id
+    assert row.audio_consent_at is not None
+    assert row.audio_retained_on_device is True
+
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.audio_pair.register"))
+    assert audit is not None
+    assert audit.meta_json["storage"] == "on_device"
+    # No request/response field can carry the WAV; the receipt is metadata only.
+    assert "audio" not in response.json()
+
+
+async def test_an_audio_pair_requires_explicit_consent(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": cards[1]["id"],
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.5,
+        "audio_capture_consent": False,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 409
+    assert "consent" in response.text.lower()
+    assert await session.scalar(select(func.count(UtteranceLog.id))) == 0
+
+
+async def test_audio_is_not_paired_with_unverified_free_text(session, client):
+    """Without ASR or a card tap, typed text is not evidence of what the audio contains."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.5,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 400
+    assert "phrase" in response.text.lower()
+
+
+async def test_retrying_the_same_capture_is_idempotent(session, client):
+    """A lost response must not create two pairs or count the card twice."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    card = cards[1]
+    payload = {
+        "card_id": card["id"], "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.25, "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }
+
+    first = await client.post(f"/awaaz/{patient.id}/speak", json=payload, headers=headers)
+    retry = await client.post(f"/awaaz/{patient.id}/speak", json=payload, headers=headers)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["utterance_id"] == first.json()["utterance_id"]
+    assert await session.scalar(select(func.count(UtteranceLog.id))) == 1
+    stored_card = await session.get(PhraseCard, uuid.UUID(card["id"]))
+    assert stored_card is not None and stored_card.use_count == 1
+
+
+async def test_revoking_a_local_pair_marks_its_receipt_deleted(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    capture_id = uuid.uuid4()
+    await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": cards[1]["id"], "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 1.25, "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+
+    deleted = await client.delete(f"/awaaz/audio-pairs/{capture_id}", headers=headers)
+    assert deleted.status_code == 200, deleted.text
+    row = await session.scalar(select(UtteranceLog).where(
+        UtteranceLog.audio_capture_id == str(capture_id)))
+    assert row is not None
+    assert row.audio_retained_on_device is False
+    assert row.audio_deleted_at is not None
 
 
 async def test_recognised_speech_for_an_aphasic_patient_must_be_confirmed(session, client):
