@@ -443,3 +443,17 @@ There is no caregiver phone field, contact selector, or phone-specific consent c
 the current data model. The product therefore does not infer a number from email/profile
 data or pretend that SMTP delivery enables calling. Caregiver dialing can be added only
 after that contact and consent boundary is designed; 108 is the sole pinned dial target.
+
+**D-048 · 2026-08-28 · Listener language belongs to the capability, not the stranger's browser.**
+A public listener may open the link on a device whose stored NeuroTrace language is unrelated
+to the conversation. The session language selected when the caregiver mints the capability
+therefore controls the shell and server coaching. New URLs repeat that non-sensitive
+language code so loading, outage, and expired states can localize before the server returns;
+after a successful response the server session is authoritative. Unsupported or missing
+codes fail safely to English.
+
+This changes presentation only. The capability remains a short-lived token exposing a
+caregiver-chosen display name, recent confirmed text after mint time, and one coaching line.
+No patient identity, clinical history, score, audio, or wider transcript window is added.
+Each utterance declares its own language separately so assistive technology does not assume
+the shell language for mixed-language speech.

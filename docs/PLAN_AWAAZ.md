@@ -110,10 +110,18 @@ number or contact-selection model.
 
 ---
 
-## D2 — listener mode (PARTIAL — capability + `Listen.tsx`; no live ASR source yet)
+## D2 — listener mode (PARTIAL — localized capability + `Listen.tsx`; no live ASR source yet)
 Shareable browser link, no install, showing live cleaned text of what the survivor is
 saying, plus one line of listener coaching: *"Give him 10 extra seconds. Don't finish his
 sentences. Ask yes/no questions if he's stuck."*
+
+The capability pins EN, HI, or PA when minted. New share URLs carry that language so the
+loading, connection-error, and expired states are localized before the first API response;
+the server response remains authoritative once available. Coaching was already localized
+server-side, and the surrounding shell, TTL disclosure, privacy notice, empty state, and
+retry path now use the same language. Each confirmed utterance also declares its own
+language for assistive technology. No patient name, health history, scores, or audio is
+added to the capability.
 
 Every conversation puts the product in a stranger's browser. That is also the distribution
 mechanism.

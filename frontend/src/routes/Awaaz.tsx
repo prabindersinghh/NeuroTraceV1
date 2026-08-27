@@ -69,6 +69,7 @@ import {
   buildLocalTrainingArchive,
   trainingArchiveFilename,
 } from "@/lib/awaazTrainingExport";
+import { listenerSharePath } from "@/lib/awaazListener";
 import {
   deleteLocalEmergencyAudio,
   getLocalEmergencyAudio,
@@ -719,7 +720,7 @@ export default function Awaaz() {
         display_name: t("awaazListenerDefaultName"),
         lang, ttl_minutes: 30,
       });
-      const url = `${window.location.origin}/listen/${res.token}`;
+      const url = `${window.location.origin}${listenerSharePath(res.token, lang)}`;
       setListenerLink(url);
       await navigator.clipboard?.writeText(url).catch(() => undefined);
     } catch {

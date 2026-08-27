@@ -18,9 +18,11 @@ complete integrity/consent receipt. Awaaz remains partial: there is no patient-s
 original conversational-audio capture, adapter deployment, provider field test, or consented
 caregiver-number calling. A visible `tel:108` action now opens the phone app from both the
 connected and emergency-only offline Awaaz states without claiming that a call connected.
-Consented local pairs can now be SHA-256 verified into a versioned tar only after
-the user acknowledges that the voice archive leaves protected app storage; NeuroTrace does
-not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
+The public listener capability now keeps its EN, HI, or PA language through share URL,
+loading/error/expired states, server-localized coaching, privacy copy, and per-utterance
+assistive-technology language. Consented local pairs can now be SHA-256 verified into a
+versioned tar only after the user acknowledges that the voice archive leaves protected app
+storage; NeuroTrace does not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
 undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
 adapter command then exits without writing a model or non-synthetic metrics: real LoRA
 training is still unimplemented. Previous project

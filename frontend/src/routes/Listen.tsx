@@ -16,9 +16,10 @@
  * because a listener reads one line.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError, api } from "@/lib/api";
+import { LISTENER_COPY, normaliseListenerLanguage } from "@/lib/awaazListener";
 
 interface ListenerView {
   display_name: string;
@@ -30,6 +31,7 @@ interface ListenerView {
 
 export default function Listen() {
   const { token = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<ListenerView | null>(null);
   const [dead, setDead] = useState(false);
   const [connectionProblem, setConnectionProblem] = useState(false);
@@ -61,12 +63,21 @@ export default function Listen() {
     return () => clearInterval(t);
   }, [load]);
 
+  const lang = normaliseListenerLanguage(view?.lang ?? searchParams.get("lang"));
+  const copy = LISTENER_COPY[lang];
+
+  useEffect(() => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = lang;
+    return () => { document.documentElement.lang = previous; };
+  }, [lang]);
+
   if (dead) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
-        <h1 className="text-2xl font-semibold">This link has expired</h1>
+      <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
+        <h1 className="text-2xl font-semibold">{copy.expiredTitle}</h1>
         <p className="text-muted-foreground">
-          Listener links last a short time on purpose. Ask for a new one.
+          {copy.expiredBody}
         </p>
       </main>
     );
@@ -74,9 +85,9 @@ export default function Listen() {
 
   if (!view) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+      <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-muted-foreground">
-          {connectionProblem ? "Could not connect. Check the connection and try again." : "Connecting…"}
+          {connectionProblem ? copy.connectionFailed : copy.connecting}
         </p>
         {connectionProblem && (
           <button
@@ -84,7 +95,7 @@ export default function Listen() {
             onClick={() => void load()}
             className="min-h-12 rounded-xl border border-line px-5 font-medium"
           >
-            Try again
+            {copy.retry}
           </button>
         )}
       </main>
@@ -97,32 +108,36 @@ export default function Listen() {
   );
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
+    <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
       {connectionProblem && (
         <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-3 text-sm text-alert">
-          Updates are paused while this connection recovers. The last confirmed text is still shown.
+          {copy.updatesPaused}
         </p>
       )}
       <header>
-        <p className="text-sm text-muted-foreground">You are listening with</p>
+        <p className="text-sm text-muted-foreground">{copy.listeningWith}</p>
         <h1 className="text-2xl font-semibold">{view.display_name}</h1>
       </header>
 
       {/* The single most useful thing to say right now. */}
       <section className="rounded-2xl border-2 border-accent/40 bg-accent/5 p-5">
-        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">HOW TO HELP</p>
+        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">{copy.howToHelp}</p>
         <p className="mt-2 text-xl leading-snug">{view.coaching.line}</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">What they have said</p>
+        <p className="text-sm text-muted-foreground">{copy.whatTheySaid}</p>
         {view.recent.length === 0 ? (
           <p className="rounded-xl border border-line p-4 text-muted-foreground">
-            Nothing yet. Give them time — waiting is the help.
+            {copy.nothingYet}
           </p>
         ) : (
           view.recent.map((u) => (
-            <p key={u.ts} className="rounded-xl border border-line p-4 text-xl">
+            <p
+              key={u.ts}
+              lang={normaliseListenerLanguage(u.lang)}
+              className="rounded-xl border border-line p-4 text-xl"
+            >
               {u.text}
             </p>
           ))
@@ -130,11 +145,8 @@ export default function Listen() {
       </section>
 
       <footer className="mt-auto space-y-2 pt-6 text-xs text-muted-foreground">
-        <p>This link expires in about {minutesLeft} minute{minutesLeft === 1 ? "" : "s"}.</p>
-        <p>
-          You are seeing only what they chose to say. No health information, no history,
-          and no recording — theirs or yours.
-        </p>
+        <p>{copy.expiresIn(minutesLeft)}</p>
+        <p>{copy.privacy}</p>
       </footer>
     </main>
   );

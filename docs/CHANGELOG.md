@@ -4,6 +4,26 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz public listener localization
+
+The unauthenticated listener page now renders its whole shell in the capability's English,
+Hindi, or Punjabi language instead of surrounding localized server coaching with English
+UI. Loading, transient-error, retry, expired, empty, TTL, and privacy states all follow the
+same normalized language. The document and each recent utterance declare their language so
+assistive technology can pronounce mixed-language conversation text correctly.
+
+New share URLs carry the capability language in their query string, allowing first-load and
+expired states to localize before any API response. Once loaded, the server's session
+language is authoritative. No identity, health history, score, audio, or additional history
+was added to the listener payload.
+
+Verified: frontend **47 tests passed**; new tests pin complete copy for all three languages,
+safe English fallback, and language-bearing share paths. TypeScript and oxlint passed
+(known warnings only), and the production PWA bundle built. The unauthenticated Punjabi
+connection-error state was rendered in the browser: copy and retry action were Punjabi and
+both document and main language resolved to `pa`. Backend behavior remains unchanged from
+the preceding **898 collected / 895 passed / 3 expected skips / 0 failed** run.
+
 ## 2026-08-28 — Awaaz emergency dial action
 
 The connected Awaaz board and its emergency-only offline fallback now expose the same
