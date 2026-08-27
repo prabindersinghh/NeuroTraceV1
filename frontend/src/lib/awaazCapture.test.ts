@@ -5,7 +5,7 @@ import {
   advanceEndpoint,
   startEndpointState,
 } from "./awaazCapture";
-import { sha256Blob } from "./awaazAudioVault";
+import { isLocalReviewPairFor, sha256Blob, type LocalAudioPair } from "./awaazAudioVault";
 import {
   isEmergencyAudioCurrent,
   startEmergencyPlayback,
@@ -90,5 +90,27 @@ describe("Awaaz emergency long press", () => {
       x: 21 + EMERGENCY_LONG_PRESS_MOVE_PX,
       y: 20,
     })).toBe(true);
+  });
+});
+
+describe("Awaaz caregiver-reviewed local audio", () => {
+  const pair: LocalAudioPair = {
+    capture_id: "capture-1",
+    patient_id: "patient-1",
+    source: "caregiver_review",
+    utterance_id: "utterance-1",
+    target_text: "Water",
+    lang: "en",
+    duration_seconds: 1.2,
+    sha256: "ab".repeat(32),
+    created_at: "2026-08-28T00:00:00.000Z",
+    audio: new Blob(["wav"]),
+  };
+
+  it("restores only a review repeat for the same patient and utterance", () => {
+    expect(isLocalReviewPairFor(pair, "patient-1", "utterance-1")).toBe(true);
+    expect(isLocalReviewPairFor(pair, "patient-2", "utterance-1")).toBe(false);
+    expect(isLocalReviewPairFor({ ...pair, source: "card_tap" },
+      "patient-1", "utterance-1")).toBe(false);
   });
 });

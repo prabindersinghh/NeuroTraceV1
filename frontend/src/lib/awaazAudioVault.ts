@@ -7,14 +7,17 @@
  */
 
 const DB_NAME = "neurotrace-awaaz-vault";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = "audio_pairs";
 const PATIENT_INDEX = "patient_id";
+const UTTERANCE_INDEX = "utterance_id";
 
 export interface LocalAudioPair {
   capture_id: string;
   patient_id: string;
-  card_id: string;
+  source: "card_tap" | "caregiver_review";
+  card_id?: string;
+  utterance_id?: string;
   target_text: string;
   lang: string;
   duration_seconds: number;
@@ -39,9 +42,17 @@ function openVault(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "capture_id" });
+        store = db.createObjectStore(STORE, { keyPath: "capture_id" });
+      } else {
+        store = request.transaction!.objectStore(STORE);
+      }
+      if (!store.indexNames.contains(PATIENT_INDEX)) {
         store.createIndex(PATIENT_INDEX, "patient_id", { unique: false });
+      }
+      if (!store.indexNames.contains(UTTERANCE_INDEX)) {
+        store.createIndex(UTTERANCE_INDEX, "utterance_id", { unique: false });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -90,6 +101,35 @@ export async function listLocalAudioPairIds(patientId: string): Promise<string[]
       request.onsuccess = () => resolve(request.result.map(String));
       request.onerror = () => reject(request.error ?? new Error("Could not read audio storage"));
     });
+  } finally {
+    db.close();
+  }
+}
+
+export function isLocalReviewPairFor(
+  pair: LocalAudioPair,
+  patientId: string,
+  utteranceId: string,
+): boolean {
+  return pair.source === "caregiver_review"
+    && pair.patient_id === patientId
+    && pair.utterance_id === utteranceId;
+}
+
+/** Restore a failed review submission without loading unrelated WAVs into memory. */
+export async function getLocalAudioPairForUtterance(
+  patientId: string,
+  utteranceId: string,
+): Promise<LocalAudioPair | null> {
+  const db = await openVault();
+  try {
+    const transaction = db.transaction(STORE, "readonly");
+    const request = transaction.objectStore(STORE).index(UTTERANCE_INDEX).getAll(utteranceId);
+    const pairs = await new Promise<LocalAudioPair[]>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as LocalAudioPair[]);
+      request.onerror = () => reject(request.error ?? new Error("Could not read audio storage"));
+    });
+    return pairs.find((pair) => isLocalReviewPairFor(pair, patientId, utteranceId)) ?? null;
   } finally {
     db.close();
   }

@@ -4,8 +4,9 @@ IMPLEMENTATION STATUS
 ---------------------
 This module contains the queue, feature-routing, and drift algorithms. Phrase-card practice
 can now create a consented audio/target pair whose WAV stays in the browser's IndexedDB;
-the server stores only its receipt. Caregiver-reviewed free speech still has no associated
-audio, and adapter training/deployment remains to be built.
+the server stores only its receipt. Caregiver review can also pair a fresh patient repeat
+with the verified label under the same local-only contract. Original conversational audio,
+patient-speech ASR, and adapter training/deployment remain to be built.
 
 D4 — THE ENROLMENT PROBLEM
 --------------------------
@@ -19,8 +20,9 @@ The intended collection design uses two low-burden sources:
   TAPPED CARDS. On-device capture pairs speech with the exact card the person tapped. The
   local WAV is revocable; only UUID/duration/consent/deletion metadata reaches the server.
 
-  THE CAREGIVER'S EVENING TWO MINUTES. The caregiver can verify unclear text. Once a
-  consented audio association exists, that label can become a genuine audio/target pair.
+  THE CAREGIVER'S EVENING TWO MINUTES. The caregiver can verify unclear text and, with the
+  patient's explicit consent, capture one fresh repeat of the verified words. The local WAV
+  and the human label then form a genuine audio/target pair without media upload.
 
 D5 — EVERY UTTERANCE IS ALSO A MEASUREMENT
 ------------------------------------------

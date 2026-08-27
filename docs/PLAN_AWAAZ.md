@@ -1,10 +1,11 @@
 # PLAN_AWAAZ — the communication assistant
 
 Second product inside the same platform. **Status: IN PROGRESS — the board, confirmation
-contract, listener capability, text-review queue, and consented on-device card/audio pairs
-exist. A caregiver can also record and self-test the fixed emergency phrase as a local WAV
-that starts before any network request; ASR, reviewed-speech audio, adapter
-training/deployment, and caregiver delivery are not connected.**
+contract, listener capability, and consented on-device card/audio and caregiver-reviewed
+repeat pairs exist. A caregiver can also record and self-test the fixed emergency phrase as
+a local WAV that starts before any network request. Patient-speech ASR, original
+conversational-audio capture, adapter training/deployment, live provider field testing, and
+one-tap calling remain incomplete.**
 
 ---
 
@@ -67,6 +68,8 @@ POST   /awaaz/{pid}/speak            resolve a card to speech; returns whether i
 DELETE /awaaz/audio-pairs/{capture}  record revocation after local deletion
 POST   /awaaz/{pid}/emergency        record emergency phrase + optional location and
                                      on-device playback receipt (never audio bytes)
+POST   /awaaz/review/{utterance}     save a verified text label; optionally register a
+                                     consented local patient-repeat receipt
 GET    /awaaz/{pid}/profile
 PATCH  /awaaz/{pid}/profile          set speech profile (clinician or caregiver)
 ```
@@ -122,13 +125,16 @@ mechanism.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
-## D4 — passive learning loop (PARTIAL — card/audio pairs + text review; no reviewed audio)
+## D4 — passive learning loop (PARTIAL — local card + reviewed-repeat pairs)
 Never ask a tired stroke survivor for 500 phrases up front — that is why Project Relate
 stalls. The current board offers an explicit practice capture: record, then tap the exact
 card. Its 16 kHz WAV stays in origin-scoped IndexedDB while Neon receives only a UUID,
-duration, SHA-256/size, target, consent actor/time and deletion state. Retention is opt-in, deletable,
-bounded to 30 seconds, and retry-safe. The caregiver's 2-minute review can verify unclear
-text, but cannot replay or pair patient audio until a consented ASR capture path exists.
+duration, SHA-256/size, target, consent actor/time and deletion state. Retention is opt-in,
+deletable, bounded to 30 seconds, and retry-safe. During the caregiver's short review, a
+text correction stays text-only unless the patient explicitly agrees to say the verified
+words again. That fresh repeat is previewable, locally retained, label-locked across retry,
+and registered through the same metadata-only receipt. Original conversational audio is
+not captured or reconstructable; that still depends on a consented patient-speech ASR path.
 
 ## D5 — convergence with monitoring (algorithm scaffold; no production audio path)
 Every utterance is also a speech sample. Route articulation rate, pause structure, voice

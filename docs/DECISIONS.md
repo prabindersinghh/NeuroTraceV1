@@ -389,3 +389,18 @@ Location follows the same discipline. The caregiver/patient explicitly enables i
 coordinates are requested only for an emergency, kept in browser memory, included in the
 provider message, returned to the initiating client, and not written to the audit log.
 The audit retains only whether location was shared and which contract supplied it.
+
+**D-044 · 2026-08-28 · A reviewed label becomes an audio pair only with a fresh, consented repeat.**
+The evening queue previously saved corrected text but had no audio association. Treating
+that text as training data would manufacture a pair: there was no recording proving what
+the patient said. The caregiver may now ask the patient to repeat the verified words once,
+but only after an explicit per-recording consent checkbox. The 16 kHz WAV stays in the same
+origin-scoped IndexedDB vault as card practice; the API accepts only the UUID, duration,
+SHA-256/size, consent actor/time and deletion state.
+
+The verified target is locked once the local WAV is saved. An exact retry after a lost
+response is idempotent, and a failed submission is restored from IndexedDB by utterance ID
+instead of silently orphaning or relabelling the recording. Text-only review remains the
+default and keeps working without microphone permission. This closes reviewed-repeat
+pairing; it does not claim the original unclear conversation was recorded, uploaded, or
+recoverable, and it does not claim ASR or adapter training.

@@ -426,6 +426,16 @@ export interface AwaazSpeakResult {
   audio_pair_registered: boolean;
 }
 
+export interface AwaazReviewLabelPayload {
+  corrected_text: string;
+  /** UUID of a caregiver-reviewed patient repeat held only in local IndexedDB. */
+  audio_capture_id?: string;
+  audio_duration_seconds?: number;
+  audio_sha256?: string;
+  audio_size_bytes?: number;
+  audio_capture_consent?: boolean;
+}
+
 export interface AwaazEmergencyResult {
   patient_id: string;
   spoken_text: string;

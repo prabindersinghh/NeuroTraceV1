@@ -344,6 +344,7 @@ export default function Awaaz() {
         await saveLocalAudioPair({
           capture_id: lockedCapture.id,
           patient_id: patientId,
+          source: "card_tap",
           card_id: cardId,
           target_text: text,
           lang: cardLang,

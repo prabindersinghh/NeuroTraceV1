@@ -652,6 +652,39 @@ class AwaazSpeakResult(BaseModel):
     audio_pair_registered: bool = False
 
 
+class AwaazReviewLabelRequest(BaseModel):
+    """A caregiver-verified label, optionally paired with a local patient repeat.
+
+    The WAV never enters this schema. If a local receipt is supplied, all integrity and
+    consent metadata is required together so a partial request cannot become a training
+    pair by accident.
+    """
+
+    corrected_text: str = Field(min_length=1, max_length=500)
+    audio_capture_id: uuid.UUID | None = None
+    audio_duration_seconds: float | None = Field(default=None, ge=0.25, le=30.0)
+    audio_sha256: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
+    audio_size_bytes: int | None = Field(default=None, ge=44, le=1_100_000)
+    audio_capture_consent: bool = False
+
+    @model_validator(mode="after")
+    def local_audio_receipt_is_complete_and_consented(self):
+        receipt_values = (
+            self.audio_capture_id,
+            self.audio_duration_seconds,
+            self.audio_sha256,
+            self.audio_size_bytes,
+        )
+        has_any_receipt = any(value is not None for value in receipt_values)
+        if has_any_receipt and not all(value is not None for value in receipt_values):
+            raise ValueError("local audio receipt metadata must be provided together")
+        if has_any_receipt and not self.audio_capture_consent:
+            raise ValueError("explicit consent is required for a local audio receipt")
+        if self.audio_capture_consent and not has_any_receipt:
+            raise ValueError("audio_capture_consent requires a complete local audio receipt")
+        return self
+
+
 class AwaazEmergencyResult(BaseModel):
     patient_id: uuid.UUID
     spoken_text: str

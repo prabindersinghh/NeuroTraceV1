@@ -11,9 +11,12 @@ network request, stays reachable on an offline boot with the last authenticated 
 and the server records only the actual playback result. Long-press activation now ignores
 controls and scrolling, location is explicitly opt-in, and a configured-only SMTP adapter
 reports caregiver delivery only after provider acceptance. Production remains unconfigured
-until real SMTP credentials are installed and field-tested. Awaaz remains partial:
-there is no patient-speech ASR, reviewed-speech audio path, adapter deployment, or caregiver
-notification deployment. Previous project
+until real SMTP credentials are installed and field-tested. Caregiver review can now add an
+explicitly consented fresh patient repeat: the 16 kHz WAV is previewable and retained only
+in local IndexedDB, its verified label is locked across retry, and the API receives only a
+complete integrity/consent receipt. Awaaz remains partial: there is no patient-speech ASR,
+original conversational-audio capture, adapter deployment, provider field test, or one-tap
+calling. Previous project
 history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient

@@ -301,6 +301,112 @@ async def test_revoking_a_local_pair_marks_its_receipt_deleted(session, client):
     assert row.audio_deleted_at is not None
 
 
+async def test_caregiver_review_can_pair_a_consented_local_patient_repeat(session, client):
+    """The reviewed text is the label; only a receipt for the local WAV crosses the API."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    row = UtteranceLog(
+        patient_id=patient.id,
+        text="wadar",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        confidence=0.31,
+    )
+    session.add(row)
+    await session.commit()
+    capture_id = uuid.uuid4()
+    payload = {
+        "corrected_text": "Water",
+        "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 1.75,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }
+
+    saved = await client.post(f"/awaaz/review/{row.id}", json=payload, headers=headers)
+    assert saved.status_code == 200, saved.text
+    await session.refresh(row)
+    assert row.corrected_text == "Water"
+    assert row.reviewed_at is not None
+    assert row.audio_capture_id == str(capture_id)
+    assert row.audio_duration_seconds == 1.75
+    assert row.audio_sha256 == AUDIO_RECEIPT["audio_sha256"]
+    assert row.audio_size_bytes == AUDIO_RECEIPT["audio_size_bytes"]
+    assert row.audio_consent_by == caregiver.id
+    assert row.audio_consent_at is not None
+    assert row.audio_retained_on_device is True
+
+    receipt_audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.audio_pair.register",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert receipt_audit is not None
+    assert receipt_audit.meta_json["source"] == "caregiver_review"
+    assert "audio" not in saved.json()
+
+    # A lost success response can be retried without making another pair or audit event.
+    retry = await client.post(f"/awaaz/review/{row.id}", json=payload, headers=headers)
+    assert retry.status_code == 200, retry.text
+    assert await session.scalar(select(func.count(UtteranceLog.id)).where(
+        UtteranceLog.audio_capture_id == str(capture_id),
+    )) == 1
+    assert await session.scalar(select(func.count(AuditLog.id)).where(
+        AuditLog.action == "awaaz.audio_pair.register",
+        AuditLog.patient_id == patient.id,
+    )) == 1
+
+
+async def test_review_audio_receipts_are_all_or_nothing_and_consent_bound(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    row = UtteranceLog(
+        patient_id=patient.id,
+        text="unclear",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        confidence=0.2,
+    )
+    session.add(row)
+    await session.commit()
+
+    unconsented = await client.post(f"/awaaz/review/{row.id}", json={
+        "corrected_text": "Water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.0,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert unconsented.status_code == 422
+
+    partial = await client.post(f"/awaaz/review/{row.id}", json={
+        "corrected_text": "Water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_capture_consent": True,
+    }, headers=headers)
+    assert partial.status_code == 422
+    await session.refresh(row)
+    assert row.reviewed_at is None
+    assert row.audio_capture_id is None
+
+    emergency = UtteranceLog(
+        patient_id=patient.id,
+        text="I need help",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        is_emergency=True,
+    )
+    session.add(emergency)
+    await session.commit()
+    refused = await client.post(f"/awaaz/review/{emergency.id}", json={
+        "corrected_text": "I need help",
+    }, headers=headers)
+    assert refused.status_code == 409
+    await session.refresh(emergency)
+    assert emergency.reviewed_at is None
+
+
 async def test_recognised_speech_for_an_aphasic_patient_must_be_confirmed(session, client):
     caregiver, patient = await _patient(session)
     headers = await _headers(client, caregiver)

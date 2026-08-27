@@ -17,6 +17,7 @@ import type {
   AuthResponse,
   AwaazEmergencyResult,
   AwaazEmergencyPayload,
+  AwaazReviewLabelPayload,
   AwaazSpeakPayload,
   Battery,
   ClinicPatientRow,
@@ -291,9 +292,9 @@ export const api = {
     }>(`/awaaz/listen/${token}`, { auth: false }),
   awaazReviewQueue: (patientId: string) =>
     request<{ items: unknown[]; total_candidates: number }>(`/awaaz/${patientId}/review`),
-  awaazLabel: (utteranceId: string, correctedText: string) =>
+  awaazLabel: (utteranceId: string, payload: AwaazReviewLabelPayload) =>
     request<{ detail: string }>(`/awaaz/review/${utteranceId}`, {
-      method: "POST", json: { corrected_text: correctedText },
+      method: "POST", json: payload,
     }),
 
   saveIdentitySignature: (patientId: string, signature: unknown) =>

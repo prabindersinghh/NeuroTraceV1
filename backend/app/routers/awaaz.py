@@ -32,6 +32,7 @@ from ..schemas import (
     AwaazEmergencyRequest,
     AwaazProfileRead,
     AwaazProfileUpdate,
+    AwaazReviewLabelRequest,
     AwaazSpeakRequest,
     AwaazSpeakResult,
     MessageResponse,
@@ -614,9 +615,15 @@ async def review_queue(patient: AuthorisedPatient, db: Session) -> dict:
 
 @router.post("/review/{utterance_id}", response_model=MessageResponse)
 async def label_utterance(
-    utterance_id: uuid.UUID, payload: dict, user: CurrentUser, db: Session,
+    utterance_id: uuid.UUID, payload: AwaazReviewLabelRequest,
+    user: CurrentUser, db: Session,
 ) -> MessageResponse:
-    """Save the caregiver's verified text label on the utterance row."""
+    """Save a verified label and, optionally, a consented local-audio receipt.
+
+    The optional WAV is a fresh patient repeat recorded during review. It remains in that
+    browser's IndexedDB vault; only integrity, consent, and deletion metadata crosses this
+    boundary. Retrying the exact receipt after a lost response is idempotent.
+    """
     row = await db.get(UtteranceLog, utterance_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Utterance not found")
@@ -624,11 +631,59 @@ async def label_utterance(
     from ..auth.deps import get_patient_for_user
 
     await get_patient_for_user(row.patient_id, user, db)
-    corrected = str(payload.get("corrected_text") or "").strip()
+    corrected = payload.corrected_text.strip()
     if not corrected:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "corrected_text is required")
+
+    capture_id = str(payload.audio_capture_id) if payload.audio_capture_id else None
+    if row.is_emergency:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Emergency events cannot become review pairs")
+    if row.reviewed_at is not None:
+        if row.corrected_text == corrected and row.audio_capture_id == capture_id:
+            return MessageResponse(detail="This review was already saved.")
+        raise HTTPException(status.HTTP_409_CONFLICT, "This utterance was already reviewed")
+    if capture_id:
+        existing = await db.scalar(select(UtteranceLog).where(
+            UtteranceLog.audio_capture_id == capture_id,
+        ))
+        if existing is not None and existing.id != row.id:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This local audio capture is already paired with another utterance",
+            )
+
     row.corrected_text = corrected[:500]
     row.reviewed_at = datetime.now(timezone.utc)
-    db.add(AuditLog(actor_id=user.id, action="awaaz.review.label", patient_id=row.patient_id))
+    if capture_id:
+        row.audio_capture_id = capture_id
+        row.audio_duration_seconds = payload.audio_duration_seconds
+        row.audio_sha256 = payload.audio_sha256
+        row.audio_size_bytes = payload.audio_size_bytes
+        row.audio_consent_by = user.id
+        row.audio_consent_at = datetime.now(timezone.utc)
+        row.audio_retained_on_device = True
+        db.add(AuditLog(
+            actor_id=user.id,
+            action="awaaz.audio_pair.register",
+            patient_id=row.patient_id,
+            meta_json={
+                "capture_id": capture_id,
+                "duration_seconds": payload.audio_duration_seconds,
+                "sha256": payload.audio_sha256,
+                "size_bytes": payload.audio_size_bytes,
+                "source": "caregiver_review",
+                "storage": "on_device",
+            },
+        ))
+    db.add(AuditLog(
+        actor_id=user.id,
+        action="awaaz.review.label",
+        patient_id=row.patient_id,
+        meta_json={"audio_pair_registered": bool(capture_id)},
+    ))
     await db.commit()
-    return MessageResponse(detail="Correction saved for review and future personalisation.")
+    return MessageResponse(detail=(
+        "Correction and local audio receipt saved for future personalisation."
+        if capture_id else
+        "Correction saved for review and future personalisation."
+    ))

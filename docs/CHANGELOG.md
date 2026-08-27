@@ -4,6 +4,27 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz caregiver-reviewed local repeats
+
+The evening review can now remain text-only or, after an explicit patient-consent checkbox,
+record one fresh repeat of the verified words. The 16 kHz WAV is previewable and stays in
+the browser's IndexedDB vault. Only its UUID, duration, SHA-256/size, source and consent
+receipt cross the API; no request field accepts media bytes.
+
+The reviewed label locks to the WAV once local retention begins. Exact retries after a lost
+response are idempotent, failed saves can restore the pair by utterance ID, and deletion
+revokes both the local copy and its server receipt. Partial or unconsented receipts are
+rejected, emergency events cannot become training pairs, and text-only review still needs
+no microphone permission. This pairs a fresh reviewed repeat, not the original unclear
+conversation, and makes no ASR or adapter-training claim.
+
+Verified: backend **894 collected / 891 passed / 3 expected skips / 0 failed** (with Numba's
+cache directed to writable `/tmp`); frontend **41 tests passed**; TypeScript and oxlint
+passed; and the production PWA bundle built. The seeded caregiver route was exercised in
+the browser in English and Hindi: recorder controls appeared only after consent, the
+local-only disclosure rendered, and text-only correction still saved and cleared the
+queue. Microphone permission and audio capture remain a physical-device field test.
+
 ## 2026-08-28 — Awaaz emergency activation and provider boundary
 
 Holding non-interactive space for 1.2 seconds now activates the same fixed emergency path
