@@ -18,7 +18,10 @@ complete integrity/consent receipt. Awaaz remains partial: there is no patient-s
 original conversational-audio capture, adapter deployment, provider field test, or one-tap
 calling. Consented local pairs can now be SHA-256 verified into a versioned tar only after
 the user acknowledges that the voice archive leaves protected app storage; NeuroTrace does
-not upload it. Previous project
+not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
+undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
+adapter command then exits without writing a model or non-synthetic metrics: real LoRA
+training is still unimplemented. Previous project
 history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient

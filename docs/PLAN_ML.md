@@ -50,7 +50,10 @@ turns it into a number with a confusion matrix.
 
 ### 4. `personalised_asr_adapter`
 LoRA fine-tuning per patient from harvested pairs (Awaaz D4). Few million parameters,
-trained nightly, shipped back for on-device inference.
+intended to train nightly and ship back for on-device inference. **Current executable status:
+synthetic spec/drift simulation only.** A strict importer verifies the versioned local tar
+without extraction, but the command then refuses to write an adapter or non-synthetic
+metrics until real LoRA fine-tuning, held-out evaluation and model deployment exist.
 **Keep the day-30 adapter permanently** — the frozen-reference trick (D-013) applied to a
 model. If speech scores worse against the *frozen* adapter while the live one compensates
 perfectly, that is objective deterioration.
@@ -101,3 +104,7 @@ artefacts are produced, and a missing dataset is a data problem rather than a co
 
 Scripts emit `"synthetic": true` in `metrics.json` so a synthetic run can never be mistaken
 for a real one.
+
+For `personalised_asr_adapter`, an archive or directory merely existing is never evidence
+that training happened. Real-archive mode validates and fails closed; the synthetic mode is
+the only mode that writes the current demonstration metrics.

@@ -125,8 +125,10 @@ mechanism.
   the default. Endpointing never starts its silence clock before speech is detected.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - A versioned local tar now provides a human-controlled, integrity-checked handoff of
-  consented pairs. No importer, trainer service, model registry, or adapter shipment is yet
-  connected, so this is training input—not a deployed personalised ASR system.
+  consented pairs. A strict non-extracting verifier now checks the schema, paths, UUID
+  associations, bounds, WAV headers and hashes. It then refuses training because the LoRA
+  implementation, evaluation, model registry, and adapter shipment are not connected. This
+  is verified training input—not a deployed personalised ASR system.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
 ## D4 — passive learning loop (PARTIAL — local card + reviewed-repeat pairs)

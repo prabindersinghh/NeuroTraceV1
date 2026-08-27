@@ -19,7 +19,7 @@ is not calibrated on real data.
 | `voice_dysarthria_clf` | **SYNTHETIC** | 0.987 (meaningless) | one advisory feature into the engine | TORGO + UASpeech access |
 | `rhythm_irregularity_clf` | **SYNTHETIC** | 0.973 (meaningless) | "get an ECG" advisory | PhysioNet AF — **openly downloadable, no excuse** |
 | `asymmetry_discriminator` | **SYNTHETIC** | 0.976 (meaningless) | the empirical basis for Gate 3 | mPower — **publicly available after certification** |
-| `personalised_asr_adapter` | **SYNTHETIC** | — | per-patient Awaaz ASR | harvested pairs from a real patient |
+| `personalised_asr_adapter` | **SYNTHETIC SCAFFOLD** | — | future per-patient Awaaz ASR | real LoRA implementation and evaluation; exported pairs can be verified but are refused for training |
 | `voice_clone` | **SYNTHETIC** | — | family-archive voice for Awaaz | a consented 2-minute clip |
 | `face_identity` (not a model — a threshold) | **SYNTHETIC CALIBRATION** | — | same-person check; flags a session as a confounder | enrolment pairs from real households |
 
@@ -27,6 +27,12 @@ is not calibrated on real data.
 classes were separated by construction; they measure nothing except that the pipeline runs
 end to end. Every metrics file carries `"synthetic": true` or a limitations note beginning
 `SYNTHETIC RUN`, so no artefact can be mistaken for evidence.
+
+The personalised-ASR command previously inferred `synthetic = false` from the mere
+existence of a data directory while still generating synthetic pairs. That path is removed.
+It now accepts a user-exported Awaaz tar only to validate member paths, schema, UUID
+associations, size bounds, RIFF/WAVE headers and SHA-256, then exits without writing an
+adapter or metrics. No real-data claim is possible until actual LoRA fine-tuning exists.
 
 ### The identity check is not a model, and is listed anyway
 

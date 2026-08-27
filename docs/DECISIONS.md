@@ -417,3 +417,16 @@ acknowledges that patient voice and labels will leave protected app storage, tha
 cannot be revoked from NeuroTrace, and that it must go only to an authorised workflow. The
 app does not upload or transmit it. This enables a deliberate offline handoff; it does not
 provide an importer, trainer, registry, deployment channel, or personalised model claim.
+
+**D-046 · 2026-08-28 · An archive's existence can never turn a synthetic run into a real one.**
+The personalised-ASR scaffold used to set `synthetic = not data_path.exists()`, but it did
+not read that path: every WER still came from generated phrase substitutions. Creating an
+empty directory could therefore write `synthetic: false` around synthetic metrics. That is
+the exact silent claim failure `ML_STATUS` exists to prevent.
+
+Real-archive mode now verifies the tar without extracting it: safe/declared paths only,
+schema and association UUIDs, pair and total size limits, supported languages/sources,
+RIFF/WAVE headers and exact SHA-256/size matches. It then exits non-zero before creating an
+adapter or metrics because LoRA fine-tuning and held-out evaluation are not implemented.
+Synthetic simulation remains runnable and always writes `synthetic: true`. A verified
+corpus is an input; it is not evidence that a model trained, evaluated, or shipped.

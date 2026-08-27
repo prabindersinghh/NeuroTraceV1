@@ -15,7 +15,7 @@ Per-patient LoRA adapter over a frozen base, for Awaaz.
 
 ## Limitations
 
-- SYNTHETIC RUN. No harvested audio was present, so the figures below are generated and mean nothing clinically. They demonstrate the pipeline only.
+- SYNTHETIC RUN. The executable trainer is a simulation scaffold; the figures below are generated and mean nothing clinically. A real archive is verified and then refused until LoRA fine-tuning is implemented.
 - Trained on one patient's own speech. It is not a general model and must never be evaluated as one.
 - The frozen-adapter drift metric assumes the day-30 recordings were representative. A patient already deteriorating at day 30 has a compromised reference, exactly as with the frozen baseline in the monitoring engine.
 - Decoding uses a deliberately low language-model weight (0.15). Transcripts will read as less fluent than a general ASR system's, which is the intended trade: fluent-and-wrong is the failure mode this exists to avoid.

@@ -4,6 +4,26 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz archive verification and synthetic-trainer truthfulness
+
+The backend now verifies a local Awaaz tar without extracting patient audio. It rejects
+unsafe or duplicate paths, links, undeclared files, unsupported schemas/sources/languages,
+invalid patient/capture/association UUIDs, pair and corpus size overruns, non-WAV payloads,
+and SHA-256 or byte-size mismatches before returning an in-memory verified corpus.
+
+The personalised-ASR command previously treated a data directory's existence as proof of a
+real run even though it still generated synthetic pairs. That path is removed. Archive mode
+now verifies the corpus and then exits before writing a model or non-synthetic metrics,
+because LoRA fine-tuning and evaluation do not exist. The demonstration mode remains
+runnable and unconditionally writes `synthetic: true`; its artifact and model card now say
+that it is a simulation scaffold.
+
+Verified: backend **898 collected / 895 passed / 3 expected skips / 0 failed**. New tests
+pin successful non-extracting verification, corrupt-hash and undeclared-file refusal, and
+the guarantee that archive mode creates no model directory or metrics. Frontend remains
+**43 tests passed** with TypeScript, oxlint, and the production PWA build green from the
+unchanged export milestone.
+
 ## 2026-08-28 — Awaaz verified local training export
 
 Consented card and caregiver-reviewed-repeat pairs can now leave IndexedDB only through an
