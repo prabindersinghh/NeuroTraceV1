@@ -283,6 +283,10 @@ export const api = {
   awaazMintListener: (patientId: string, payload: { display_name: string; lang?: string; ttl_minutes?: number }) =>
     request<{ token: string; display_name: string; expires_at: string; path: string }>(
       `/awaaz/${patientId}/listener`, { method: "POST", json: payload }),
+  awaazRevokeListener: (token: string) =>
+    request<{ detail: string }>(`/awaaz/listener/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
   /** No auth: the unguessable token IS the capability. */
   listenerView: (token: string) =>
     request<{

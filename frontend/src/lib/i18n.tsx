@@ -39,6 +39,46 @@ const STRINGS = {
     hi: "लिंक फिर कॉपी करें",
     pa: "ਲਿੰਕ ਫਿਰ ਕਾਪੀ ਕਰੋ",
   },
+  awaazListenerActive: {
+    en: "This link can show new confirmed messages until it expires. Stop sharing when the conversation ends.",
+    hi: "यह लिंक समाप्त होने तक नए पुष्ट संदेश दिखा सकता है। बातचीत खत्म होने पर साझा करना बंद करें।",
+    pa: "ਇਹ ਲਿੰਕ ਮਿਆਦ ਖ਼ਤਮ ਹੋਣ ਤੱਕ ਨਵੇਂ ਪੁਸ਼ਟੀ ਕੀਤੇ ਸੁਨੇਹੇ ਦਿਖਾ ਸਕਦਾ ਹੈ। ਗੱਲਬਾਤ ਮੁੱਕਣ 'ਤੇ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਕਰੋ।",
+  },
+  awaazListenerCreated: {
+    en: "Listening link created. It is shown below.",
+    hi: "सुनने वाला लिंक बन गया है। यह नीचे दिख रहा है।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਬਣ ਗਿਆ ਹੈ। ਇਹ ਹੇਠਾਂ ਦਿਖ ਰਿਹਾ ਹੈ।",
+  },
+  awaazListenerCopied: {
+    en: "Listening link copied.",
+    hi: "सुनने वाला लिंक कॉपी हो गया।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ।",
+  },
+  awaazListenerCopyFailed: {
+    en: "The link is active but could not be copied automatically. Copy the address shown below.",
+    hi: "लिंक चालू है लेकिन अपने-आप कॉपी नहीं हुआ। नीचे दिखा पता कॉपी करें।",
+    pa: "ਲਿੰਕ ਚਾਲੂ ਹੈ ਪਰ ਆਪਣੇ ਆਪ ਕਾਪੀ ਨਹੀਂ ਹੋਇਆ। ਹੇਠਾਂ ਦਿਖਾਇਆ ਪਤਾ ਕਾਪੀ ਕਰੋ।",
+  },
+  awaazListenerRevoke: {
+    en: "Stop sharing this link",
+    hi: "यह लिंक साझा करना बंद करें",
+    pa: "ਇਹ ਲਿੰਕ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਕਰੋ",
+  },
+  awaazListenerRevoking: {
+    en: "Stopping sharing…",
+    hi: "साझा करना बंद हो रहा है…",
+    pa: "ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਹੋ ਰਿਹਾ ਹੈ…",
+  },
+  awaazListenerRevoked: {
+    en: "Listening link revoked. It can no longer be opened.",
+    hi: "सुनने वाला लिंक रद्द हो गया। अब इसे खोला नहीं जा सकता।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਰੱਦ ਹੋ ਗਿਆ। ਹੁਣ ਇਸਨੂੰ ਖੋਲ੍ਹਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ।",
+  },
+  awaazListenerRevokeFailed: {
+    en: "The link could not be revoked. Check the connection and try again.",
+    hi: "लिंक रद्द नहीं हो सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    pa: "ਲਿੰਕ ਰੱਦ ਨਹੀਂ ਹੋ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
   // The default listener name is deliberately not the patient's full name: a link can be
   // forwarded, and a stranger does not need their identity in order to help them.
   awaazListenerDefaultName: {

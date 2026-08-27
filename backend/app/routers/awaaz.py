@@ -489,12 +489,13 @@ async def emergency(patient: AuthorisedPatient, db: Session,
 # outstanding link errs exactly the right way for something that shows a live transcript.
 # Nothing about a listener session belongs in the durable record except the audit line.
 from ..awaaz.listener import (  # noqa: E402  (grouped with the endpoints they serve)
+    ListenerSession,
     ListenerState,
     coaching_line,
     create_listener_session,
 )
 
-_LISTENER_SESSIONS: dict[str, object] = {}
+_LISTENER_SESSIONS: dict[str, ListenerSession] = {}
 
 
 @router.post("/{patient_id}/listener")
@@ -526,10 +527,16 @@ async def mint_listener_link(
 @router.delete("/listener/{token}", response_model=MessageResponse)
 async def revoke_listener_link(token: str, user: CurrentUser, db: Session) -> MessageResponse:
     session = _LISTENER_SESSIONS.get(token)
-    if session is not None:
-        session.revoked = True  # type: ignore[attr-defined]
+    if session is None:
+        # Idempotent and non-enumerable: an unknown or already-cleared token reveals no
+        # session information to an authenticated caller.
+        return MessageResponse(detail="Listener link revoked")
+
+    await get_patient_for_user(uuid.UUID(session.patient_id), user, db)
+    if not session.revoked:
+        session.revoked = True
         db.add(AuditLog(actor_id=user.id, action="awaaz.listener.revoke",
-                        patient_id=uuid.UUID(session.patient_id)))  # type: ignore[attr-defined]
+                        patient_id=uuid.UUID(session.patient_id)))
         await db.commit()
     return MessageResponse(detail="Listener link revoked")
 
@@ -543,10 +550,10 @@ async def listener_view(token: str, db: Session) -> dict:
     Expired or revoked tokens 404 indistinguishably from never-existed ones.
     """
     session = _LISTENER_SESSIONS.get(token)
-    if session is None or not session.active:  # type: ignore[attr-defined]
+    if session is None or not session.active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "This link is no longer active")
 
-    pid = uuid.UUID(session.patient_id)  # type: ignore[attr-defined]
+    pid = uuid.UUID(session.patient_id)
     rows = list(await db.scalars(
         select(UtteranceLog)
         .where(
@@ -554,7 +561,7 @@ async def listener_view(token: str, db: Session) -> dict:
             UtteranceLog.confirmed.is_(True),
             # A conversation link is a live capability, not permission to read what the
             # person said before it was created.
-            UtteranceLog.ts >= session.created_at,  # type: ignore[attr-defined]
+            UtteranceLog.ts >= session.created_at,
         )
         .order_by(UtteranceLog.ts.desc())
         .limit(5)
@@ -564,17 +571,17 @@ async def listener_view(token: str, db: Session) -> dict:
     if last_ts is not None and last_ts.tzinfo is None:
         last_ts = last_ts.replace(tzinfo=timezone.utc)
     state = ListenerState(
-        display_name=session.display_name,  # type: ignore[attr-defined]
-        lang=session.lang,  # type: ignore[attr-defined]
+        display_name=session.display_name,
+        lang=session.lang,
         recent_confidences=[float(r.confidence) for r in rows if r.confidence is not None],
         seconds_since_last_utterance=(now - last_ts).total_seconds() if last_ts else 0.0,
         utterances=len(rows),
     )
     code, line = coaching_line(state)
     return {
-        "display_name": session.display_name,  # type: ignore[attr-defined]
-        "lang": session.lang,  # type: ignore[attr-defined]
-        "expires_at": session.expires_at.isoformat(),  # type: ignore[attr-defined]
+        "display_name": session.display_name,
+        "lang": session.lang,
+        "expires_at": session.expires_at.isoformat(),
         "coaching": {"code": code, "line": line},
         "recent": [
             {"text": r.text, "lang": r.lang, "ts": r.ts.isoformat()} for r in rows

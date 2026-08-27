@@ -742,6 +742,41 @@ async def test_listener_link_never_reveals_utterances_from_before_it_was_minted(
     ]
 
 
+async def test_only_an_authorised_patient_user_can_revoke_a_listener_link(session, client):
+    caregiver, patient = await _patient(session)
+    owner_headers = await _headers(client, caregiver)
+    minted = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "en", "ttl_minutes": 30,
+    }, headers=owner_headers)
+    token = minted.json()["token"]
+
+    stranger = User(email=f"stranger-{uuid.uuid4().hex[:8]}@example.com",
+                    pw_hash=hash_password("a-real-password"), role=Role.caregiver)
+    session.add(stranger)
+    await session.commit()
+    stranger_headers = await _headers(client, stranger)
+
+    refused = await client.delete(f"/awaaz/listener/{token}", headers=stranger_headers)
+    assert refused.status_code == 403
+    assert (await client.get(f"/awaaz/listen/{token}")).status_code == 200
+
+    revoked = await client.delete(f"/awaaz/listener/{token}", headers=owner_headers)
+    assert revoked.status_code == 200
+    assert (await client.get(f"/awaaz/listen/{token}")).status_code == 404
+
+    # Retrying after a lost response is safe and does not manufacture a second audit row.
+    assert (await client.delete(
+        f"/awaaz/listener/{token}", headers=owner_headers,
+    )).status_code == 200
+    audit_count = await session.scalar(
+        select(func.count()).select_from(AuditLog).where(
+            AuditLog.patient_id == patient.id,
+            AuditLog.action == "awaaz.listener.revoke",
+        )
+    )
+    assert audit_count == 1
+
+
 def test_coaching_tells_the_listener_to_wait_during_a_long_pause():
     """The commonest moment a listener jumps in, and the one where waiting matters most."""
     from app.awaaz.listener import LONG_PAUSE_SECONDS, ListenerState, coaching_line

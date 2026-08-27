@@ -112,6 +112,11 @@ interface PendingCapture {
   cardLang?: string;
 }
 
+interface ListenerCapability {
+  token: string;
+  url: string;
+}
+
 const CARD_ICONS: Record<string, LucideIcon> = {
   alert: AlertTriangle,
   water: GlassWater,
@@ -702,7 +707,16 @@ export default function Awaaz() {
     if (longPressArmed && isEmergencyHoldTarget(event.target)) event.preventDefault();
   }, [longPressArmed]);
 
-  const [listenerLink, setListenerLink] = useState<string | null>(null);
+  const [listenerCapability, setListenerCapability] = useState<ListenerCapability | null>(null);
+  const [listenerBusy, setListenerBusy] = useState(false);
+  const [listenerStatus, setListenerStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    // A capability belongs to exactly one patient. Never carry its URL into a route whose
+    // patient parameter changed while React reused this component instance.
+    setListenerCapability(null);
+    setListenerStatus(null);
+  }, [patientId]);
 
   /**
    * Mint a short-lived listener link. The token IS the capability, so the display name is
@@ -710,23 +724,51 @@ export default function Awaaz() {
    * forwarded, and a stranger does not need the patient's full name to help them.
    */
   const mintListenerLink = useCallback(async () => {
-    if (listenerLink) {
-      await navigator.clipboard?.writeText(listenerLink).catch(() => undefined);
+    if (listenerCapability) {
+      try {
+        if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(listenerCapability.url);
+        setListenerStatus(t("awaazListenerCopied"));
+        setActionError(null);
+      } catch {
+        setActionError(t("awaazListenerCopyFailed"));
+      }
       return;
     }
+    if (listenerBusy) return;
+    setListenerBusy(true);
     try {
       setActionError(null);
+      setListenerStatus(null);
       const res = await api.awaazMintListener(patientId, {
         display_name: t("awaazListenerDefaultName"),
         lang, ttl_minutes: 30,
       });
       const url = `${window.location.origin}${listenerSharePath(res.token, lang)}`;
-      setListenerLink(url);
+      setListenerCapability({ token: res.token, url });
+      setListenerStatus(t("awaazListenerCreated"));
       await navigator.clipboard?.writeText(url).catch(() => undefined);
     } catch {
       setActionError(t("awaazListenerFailed"));
+    } finally {
+      setListenerBusy(false);
     }
-  }, [lang, listenerLink, patientId, t]);
+  }, [lang, listenerBusy, listenerCapability, patientId, t]);
+
+  const revokeListenerLink = useCallback(async () => {
+    if (!listenerCapability || listenerBusy) return;
+    setListenerBusy(true);
+    setActionError(null);
+    try {
+      await api.awaazRevokeListener(listenerCapability.token);
+      setListenerCapability(null);
+      setListenerStatus(t("awaazListenerRevoked"));
+    } catch {
+      setActionError(t("awaazListenerRevokeFailed"));
+    } finally {
+      setListenerBusy(false);
+    }
+  }, [listenerBusy, listenerCapability, t]);
 
   if (error && !currentBoard) {
     return (
@@ -1152,14 +1194,32 @@ export default function Awaaz() {
           </details>
           <button
             type="button"
+            disabled={listenerBusy}
             onClick={() => void mintListenerLink()}
-            className="min-h-12 rounded-xl border border-line px-4 text-sm"
+            className="min-h-12 rounded-xl border border-line px-4 text-sm disabled:opacity-50"
           >
-            {listenerLink ? t("awaazListenerCopy") : t("awaazListenerShare")}
+            {listenerCapability ? t("awaazListenerCopy") : t("awaazListenerShare")}
           </button>
-          {listenerLink && (
-            <p className="break-all rounded-xl border border-line bg-secondary p-3 text-xs">
-              {listenerLink}
+          {listenerCapability && (
+            <div className="rounded-xl border border-line bg-secondary p-3">
+              <p className="break-all text-xs">{listenerCapability.url}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t("awaazListenerActive")}
+              </p>
+              <button
+                type="button"
+                disabled={listenerBusy}
+                onClick={() => void revokeListenerLink()}
+                className="mt-3 flex min-h-10 items-center gap-2 text-xs font-medium text-alert underline disabled:opacity-50"
+              >
+                <X className="h-4 w-4" aria-hidden />
+                {listenerBusy ? t("awaazListenerRevoking") : t("awaazListenerRevoke")}
+              </button>
+            </div>
+          )}
+          {listenerStatus && (
+            <p aria-live="polite" className="text-xs text-muted-foreground">
+              {listenerStatus}
             </p>
           )}
           <Link

@@ -23,13 +23,13 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 10 | Caregiver dashboard complete | **LIVE** | Exercised over HTTP against the seeded demo |
 | 11 | Clinician dashboard: audit log + PDF export | **TEST** | Roster, typed cards, drift lane, audit table live. `/report/:patientId` print view added - browser Save-as-PDF, not server-rendered (D-032) |
 | 12 | ASHA interface complete | **TEST** | `AshaHome.tsx` — offline queue, idempotent sync, task-level due lists |
-| 13 | Awaaz D1–D5 complete | **PARTIAL** | Board, INV-9 confirmation, listener capability, consented local card/audio and caregiver-reviewed repeat pairs, integrity-checked local training export + fail-closed verifier, 0.5–4.0 s endpointing, offline emergency WAV, long-press, opt-in location, explicit 108 dialer action, and a configured-only SMTP adapter exist. Missing: patient-speech ASR/original conversational audio, real adapter training/deployment, provider credentials/field test, and a consented caregiver phone/contact contract |
+| 13 | Awaaz D1–D5 complete | **PARTIAL** | Board, INV-9 confirmation, localized/revocable listener capability, consented local card/audio and caregiver-reviewed repeat pairs, integrity-checked local training export + fail-closed verifier, 0.5–4.0 s endpointing, offline emergency WAV, long-press, opt-in location, explicit 108 dialer action, and a configured-only SMTP adapter exist. Missing: patient-speech ASR/original conversational audio, real adapter training/deployment, provider credentials/field test, and a consented caregiver phone/contact contract |
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
 | 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
 | 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |
 | 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed; `verify_deploy.sh` **7/7** — identical band sequence on the public URL. Neon still to swap in (SQLite bridge until then) |
 | 18 | EN / HI / PA throughout | **PARTIAL** | Awaaz board, review, emergency, and public listener shell are trilingual, including listener loading/error/expired/privacy states and server coaching. Full physical-device language QA across every non-Awaaz route is still pending |
-| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 invariants; full backend run on 2026-08-28: 898 collected / 895 passed / 3 skipped / 0 failed |
+| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 invariants; full backend run on 2026-08-28: 899 collected / 896 passed / 3 skipped / 0 failed |
 | 20 | Privacy invariant passing; PR open | **TEST** | INV-11 is covered by tests. The portable pre-push hook runs on the Awaaz branch; PR #1 is open against upstream `main` |
 | 21 | Living docs current | **LIVE** | 12 docs + 5 model cards |
 

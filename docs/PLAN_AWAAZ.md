@@ -121,7 +121,10 @@ the server response remains authoritative once available. Coaching was already l
 server-side, and the surrounding shell, TTL disclosure, privacy notice, empty state, and
 retry path now use the same language. Each confirmed utterance also declares its own
 language for assistive technology. No patient name, health history, scores, or audio is
-added to the capability.
+added to the capability. The sharing screen keeps an explicit stop-sharing control next to
+the active URL. Revocation is authorized against the patient, retry-idempotent, audited
+once, and immediately turns the public view into the same 404 as an expired or unknown
+token. Possessing the public read capability does not grant revoke authority.
 
 Every conversation puts the product in a stranger's browser. That is also the distribution
 mechanism.

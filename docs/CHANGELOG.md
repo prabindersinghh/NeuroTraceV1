@@ -4,6 +4,30 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz listener revocation closure
+
+The Awaaz sharing panel now keeps an explicit stop-sharing control beside the active
+listener URL, explains that new confirmed messages remain visible until expiry, and reports
+created, copied, copy-failed, revoked, and revoke-failed states in English, Hindi, and
+Punjabi. Successful revocation clears the local link immediately; a failed request leaves
+the control available for retry.
+
+The existing backend revoke route previously trusted any authenticated user who knew a
+token. It now resolves the capability's patient and applies the same caregiver, linked
+patient, or clinician access rule as other Awaaz patient operations. An unrelated caregiver
+gets 403 and cannot interrupt the conversation. Owner retries are idempotent and create one
+audit event; unknown tokens remain a generic success so the endpoint does not become a
+token-existence oracle. The unauthenticated listener token remains read-only.
+
+Verified: backend **899 collected / 896 passed / 3 expected skips / 0 failed**. The new API
+test pins unauthorized refusal, continued listener availability after refusal, immediate
+404 after owner revocation, and single-row audit behavior across retry. Frontend remains
+**47 tests passed**; TypeScript and oxlint passed (known warnings only), and the production
+PWA bundle built. The complete flow was rendered against an isolated migrated SQLite demo:
+the owner created a live capability, saw the disclosure and stop-sharing action, revoked it,
+received the success state, and the public page changed from live coaching to the generic
+expired/unknown view on its next poll. Privacy preflight passed **7/7**.
+
 ## 2026-08-28 — Awaaz public listener localization
 
 The unauthenticated listener page now renders its whole shell in the capability's English,

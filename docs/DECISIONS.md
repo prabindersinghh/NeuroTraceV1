@@ -457,3 +457,17 @@ caregiver-chosen display name, recent confirmed text after mint time, and one co
 No patient identity, clinical history, score, audio, or wider transcript window is added.
 Each utterance declares its own language separately so assistive technology does not assume
 the shell language for mixed-language speech.
+
+**D-049 · 2026-08-28 · A listener capability is read-only; revocation follows patient access.**
+The public token intentionally authorizes a bounded view of new confirmed utterances without
+login. It does not authorize writes, including killing its own session. Revocation therefore
+requires authentication and resolves the session's patient through the same access rule as
+the board: owning caregiver, linked patient account, or clinician. An authenticated stranger
+who obtains the URL can read exactly what the capability already grants until expiry, but
+cannot interrupt it by revoking the link.
+
+The sharing UI exposes stop-sharing beside the active URL rather than hiding revocation in a
+backend-only endpoint. A successful request immediately removes the link from the UI and
+makes the public view 404 indistinguishably from expiry. Retrying is safe and audits only the
+first state change. Unknown tokens still return the generic success response so revocation
+cannot be used to enumerate live capability tokens.
