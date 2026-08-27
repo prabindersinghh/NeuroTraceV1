@@ -2,10 +2,12 @@
 
 Two categories, and they are forbidden for different reasons.
 
-**Diagnostic language** ("stroke", "diagnos*") is forbidden because we are not a
-diagnostic device and must not present as one. Saying "possible stroke" to a family turns
-a wellness companion into an unregistered medical device and, worse, invites them to act
-on a claim the system cannot support.
+**Diagnostic language** ("stroke", "diagnos*") is forbidden because the system does not
+have the evidence to support a diagnostic claim, independent of what that would do to our
+regulatory posture. Saying "possible stroke" to a family invites them to act on a claim
+the engine cannot support — that is the harm, not a classification technicality. (Word
+choice was never a route to being unregulated: under the CDSCO Medical Devices Rules
+framework, classification follows intended use, not phrasing. See `docs/INTENDED_USE.md`.)
 
 **Wellness assertions** ("you are fine", "all clear", "normal, no action") are forbidden
 because they are actively dangerous. This system monitors slow change and structurally

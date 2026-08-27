@@ -173,9 +173,9 @@ export default function Landing() {
 
               <Reveal step={6} className="mt-8">
                 <p className="max-w-lg border-l-2 border-watch pl-4 text-[14px] leading-relaxed text-muted-foreground">
-                  A monitoring aid, not a medical device. It reasons over days, so it cannot
-                  see a stroke that is happening now. Sudden weakness, a drooping face or
-                  slurred speech is an emergency — call 108 first, always.
+                  It reasons over days, so it cannot see a stroke that is happening now.
+                  Sudden weakness, a drooping face or slurred speech is an emergency —
+                  call 108 first, always.
                 </p>
               </Reveal>
             </div>
@@ -614,7 +614,7 @@ export default function Landing() {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-7 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Built for families in Punjab. Works offline. Nothing identifiable leaves the phone.</span>
-          <span className="font-mono tracking-wide">engine deterministic · seed 42 · not a medical device</span>
+          <span className="font-mono tracking-wide">engine deterministic · seed 42</span>
         </div>
       </footer>
     </div>

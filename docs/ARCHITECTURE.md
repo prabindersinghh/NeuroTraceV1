@@ -184,6 +184,19 @@ tablet-area neglect tasks. They are excluded from the daily protocol but NOT del
 one of M9's laterality features comes from them, so removing them would un-lateralise the
 posterior domain.
 
+**INV-13 · No file may contain a regulatory-exemption claim.** "Outside CDSCO", "not a
+medical device" used as a classification conclusion, "wellness software" framed to avoid
+regulation, a bare "exempt", or an asserted risk class (A/B/C/D) without a completed CDSCO
+assessment — none of these may appear anywhere in the repository, the UI, or generated
+copy. Classification under the Medical Devices Rules framework follows intended use, not
+phrasing choices; a sentence asserting otherwise was in this repo until 2026-08-24 (D-042)
+and is a live credibility risk wherever it survives. `docs/INTENDED_USE.md` is the frozen
+statement everything else must quote. This does NOT forbid the exam's own safety
+disclaimers ("it cannot detect a stroke happening now, call 108") — those describe a real
+functional limitation, not a regulatory posture, and removing them would make the product
+more dangerous, not more compliant. Enforced by
+`backend/tests/test_regulatory_claims.py`.
+
 **INV-11 · No patient identifier exists anywhere in this repository.** No tracked image, no
 identifier label in tracked text, no day-level date in clinical documents, nothing in git
 history. The source photographs sit INSIDE the working tree — the brief assumed otherwise —

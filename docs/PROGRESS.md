@@ -2,6 +2,25 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
+## TASK_FINAL_TECHNICAL_COMPLETION.md — in progress
+
+Nine-part build (`TASK_FINAL_TECHNICAL_COMPLETION.md`, repo root). Order per the task:
+1 → 2 → 3 → 4 → 5 → 6 → 7, deploy, verify. Part 9's checklist is the definition of done.
+Updated as each part closes; a stranger resuming this should read the task file itself
+first, then this line, then `git log` since the last part closed.
+
+- [x] **Part 1 — regulatory language.** Done and verified. `docs/INTENDED_USE.md`,
+      `docs/CLAIMS_MATRIX.md`, INV-13, `test_regulatory_claims.py` (9/9, including the
+      built bundle — caught a real stale-`dist/` near-miss on first run). D-042.
+- [ ] Part 2 — two-layer session model (Daily Pulse / Comprehensive Follow-up)
+- [ ] Part 3 — doctor-in-the-loop 21-day baseline
+- [ ] Part 4 — consent architecture
+- [ ] Part 5 — privacy, security, data
+- [ ] Part 6 — UX and session flow completion
+- [ ] Part 7 — phone readiness
+- [ ] Part 8 — claims matrix seed (8.1 prohibited-phrase test — done as part of Part 1)
+- [ ] Part 9 — completion checklist, deploy, verify live
+
 **Last updated:** 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign

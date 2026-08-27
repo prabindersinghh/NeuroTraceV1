@@ -366,3 +366,26 @@ canvas directly and quantise anything React must see (the day number changes 20 
 for damped wheel scrolling only, dynamically imported — it is 5.4 kB gzipped and replacing
 it with hand-rolled wheel interception would break keyboard scrolling, scrollbar dragging
 and find-in-page, which is not a trade worth making to avoid one small package.
+
+**D-042 · 2026-08-24 · The "outside CDSCO" claim was wrong and is removed everywhere.**
+The repo stated, in PRD.md and propagated from there into the safety-guardrail rationale,
+the Onboarding consent screen, the landing page (hero disclaimer and footer), and
+FINAL_PRODUCT_SPEC_v4.md: "D2C — Recovery Companion — Outside CDSCO device classification."
+That is the project owner's own error, introduced into the specs this codebase was built
+from, and it is a live credibility risk in front of any doctor, investor, or regulator —
+not a documentation nit.
+
+CDSCO published final Medical Device Software guidance on 21 July 2026. Under the Medical
+Devices Rules 2017 framework, software is classified by INTENDED USE, not business model.
+A system whose stated purpose is monitoring neurological change in identified post-stroke
+patients is much closer to SaMD than to wellness software; "outside CDSCO because it is
+D2C" was never a defensible reading of the rules.
+
+Fixed at the source, not patched at the symptom: `docs/INTENDED_USE.md` is now the single
+frozen statement every surface must quote, `docs/CLAIMS_MATRIX.md` classifies every
+public-facing sentence ALLOWED / NEEDS EVIDENCE / PROHIBITED, INV-13 codifies the rule, and
+`test_regulatory_claims.py` fails the build if the phrasing reappears — including in the
+built frontend bundle, which caught a stale `frontend/dist/` still carrying the old wording
+after the source was already fixed. Every genuine safety disclaimer ("it cannot detect a
+stroke happening now, call 108") was reworded to carry the same warning without using any
+of the banned phrases, so the ban costs nothing safety-relevant.

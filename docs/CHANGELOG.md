@@ -4,6 +4,40 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-24 (even later) — The "outside CDSCO" claim removed everywhere; INV-13
+
+### Part 1 of TASK_FINAL_TECHNICAL_COMPLETION.md, done first because it was flagged urgent
+The repo stated "Outside CDSCO device classification" — the project owner's own error,
+propagated into the specs this codebase was built from. CDSCO's final Medical Device
+Software guidance (21 July 2026) classifies by intended use, not business model; the claim
+was never defensible and was a live credibility risk.
+
+Swept the whole repo rather than trusting the two files named in the task. A blind grep for
+"exempt" alone returned false positives in `DEVELOPMENT.md`/`frontend/README.md` (the
+HTTPS/localhost note) and in `DECISIONS.md`/`CHANGELOG.md` (INV-11's own scanner history,
+D-030) — reviewed each hit individually rather than pattern-matching blind. Five real sites
+fixed: `docs/PRD.md` (the primary claim), `backend/app/safety/guards.py` (the guardrail's
+docstring *rationale* implied word-avoidance kept the product unregulated — the guardrail's
+actual behaviour was always correct and is unchanged), `Landing.tsx` (hero disclaimer and
+footer tagline — both reworded to keep 100% of the safety warning while dropping the
+self-classification), `Onboarding.tsx` (EN/HI/PA, the consent-screen line every caregiver
+must acknowledge), `FINAL_PRODUCT_SPEC_v4.md` (historical spec, fixed anyway — a wrong
+claim doesn't get a pass for being old).
+
+New: `docs/INTENDED_USE.md` (the frozen statement everything else quotes),
+`docs/CLAIMS_MATRIX.md` (ALLOWED / NEEDS EVIDENCE / PROHIBITED, seeded from Part 8), INV-13
+in ARCHITECTURE.md, and `test_regulatory_claims.py` — which found a real near-miss on its
+first run: `frontend/dist/` was a stale build still carrying the old wording after the
+source fix, caught by the "check the shipped bundle, not just the source" test Part 8.1
+asked for. Rebuilt; second run green.
+
+**Verified:** `test_regulatory_claims.py` 9/9 passed, including against the freshly rebuilt
+`frontend/dist/`. Scanner self-tests confirm it catches the six seeded historical-phrasing
+variants and does not false-positive on the localhost/HTTPS exemption note, INV-11's own
+history, or either replacement safety-disclaimer sentence.
+
+---
+
 ## 2026-08-24 (later still) — Admin console, and a privilege-escalation hole closed
 
 *Merged with DEEPESH-845's frontend session below — this backend work and that

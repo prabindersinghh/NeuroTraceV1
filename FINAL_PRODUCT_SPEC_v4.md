@@ -97,7 +97,7 @@ this product must not be a chore.
 
   STEP 1 · Caregiver account + consent
     Plain-language consent, EN/HI/PA. Explicit statements:
-      - this is not a medical device and does not diagnose
+      - it does not diagnose anything
       - it cannot detect a stroke happening now
       - for sudden symptoms, call emergency services immediately
       - what data is collected, that raw audio/video never leaves the phone

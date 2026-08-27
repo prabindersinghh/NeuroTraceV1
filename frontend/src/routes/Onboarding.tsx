@@ -29,21 +29,21 @@ type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** Each must be acknowledged separately. A single "I agree" gets tapped unread. */
 const SCOPE_LIMITS = {
   en: [
-    "This is not a medical device. It does not diagnose anything.",
+    "It does not diagnose anything.",
     "It CANNOT detect a stroke that is happening now.",
     "For sudden weakness, drooping, or slurred speech — call 108 immediately. Do not open this app first.",
     "It watches for slow changes over days, and can be wrong.",
     "Nothing here replaces their doctor.",
   ],
   hi: [
-    "यह कोई मेडिकल डिवाइस नहीं है। यह किसी बीमारी की पहचान नहीं करता।",
+    "यह किसी बीमारी की पहचान नहीं करता।",
     "यह अभी हो रहे स्ट्रोक को नहीं पकड़ सकता।",
     "अचानक कमज़ोरी, चेहरा लटकना या बोली लड़खड़ाना — तुरंत 108 पर फ़ोन कीजिए। पहले यह ऐप मत खोलिए।",
     "यह कई दिनों में होने वाले धीमे बदलाव देखता है, और ग़लत भी हो सकता है।",
     "यह उनके डॉक्टर की जगह नहीं ले सकता।",
   ],
   pa: [
-    "ਇਹ ਕੋਈ ਮੈਡੀਕਲ ਡਿਵਾਈਸ ਨਹੀਂ ਹੈ। ਇਹ ਕਿਸੇ ਬਿਮਾਰੀ ਦੀ ਪਛਾਣ ਨਹੀਂ ਕਰਦਾ।",
+    "ਇਹ ਕਿਸੇ ਬਿਮਾਰੀ ਦੀ ਪਛਾਣ ਨਹੀਂ ਕਰਦਾ।",
     "ਇਹ ਹੁਣ ਹੋ ਰਹੇ ਸਟ੍ਰੋਕ ਨੂੰ ਨਹੀਂ ਫੜ ਸਕਦਾ।",
     "ਅਚਾਨਕ ਕਮਜ਼ੋਰੀ, ਚਿਹਰਾ ਲਟਕਣਾ ਜਾਂ ਬੋਲੀ ਲੜਖੜਾਉਣਾ — ਤੁਰੰਤ 108 'ਤੇ ਫ਼ੋਨ ਕਰੋ। ਪਹਿਲਾਂ ਇਹ ਐਪ ਨਾ ਖੋਲ੍ਹੋ।",
     "ਇਹ ਕਈ ਦਿਨਾਂ ਵਿੱਚ ਹੋਣ ਵਾਲੀਆਂ ਹੌਲੀ ਤਬਦੀਲੀਆਂ ਦੇਖਦਾ ਹੈ, ਅਤੇ ਗ਼ਲਤ ਵੀ ਹੋ ਸਕਦਾ ਹੈ।",

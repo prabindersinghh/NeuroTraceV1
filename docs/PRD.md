@@ -54,15 +54,23 @@ EXPLICITLY OUT OF SCOPE — must be stated in onboarding and in-app
                confounder annotations, audit trail. Retains ALL medical judgment.
 
 ## 5. THE TWO TIERS
-  D2C — "Recovery Companion"
-    Wellness and adherence companion. Fully on-device. Non-diagnostic language only.
-    Outputs observations and trends for the family to raise with their doctor.
-    Positioned outside medical-device classification.
+See `docs/INTENDED_USE.md` for the frozen intended-use statement — quote it, do not
+paraphrase it. This section summarises; that file is the source of truth.
 
-  B2B — "Clinical Continuity Platform"
+  D2C — Home Recovery Companion
+    Smartphone-first neurological follow-up for eligible post-stroke patients, with
+    clinician involvement during baseline establishment and clinical escalation when
+    required. Regulatory classification will be determined based on the final intended
+    use under the CDSCO Medical Devices Rules framework (D-042).
+
+  B2B — Clinical Continuity Platform
+    Hospital and clinician-facing longitudinal monitoring and review workflow, with
+    clinical decisions remaining with appropriately qualified healthcare professionals.
     Sold to hospitals. Clinician dashboard showing all discharged stroke patients ranked
     by sustained deviation. We measure and report; the clinician interprets and diagnoses.
-    Decision-support under clinician oversight.
+
+Regulatory status: a formal CDSCO intended-use and risk-classification assessment under
+the Medical Devices Rules framework is in progress. No exemption is claimed.
 
 ## 6. FUNCTIONAL REQUIREMENTS
 FR1  Auth with roles patient | caregiver | clinician; caregiver creates patient profile.
