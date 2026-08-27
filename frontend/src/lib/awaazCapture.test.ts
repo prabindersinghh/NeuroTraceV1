@@ -6,6 +6,11 @@ import {
   startEndpointState,
 } from "./awaazCapture";
 import { sha256Blob } from "./awaazAudioVault";
+import {
+  isEmergencyAudioCurrent,
+  startEmergencyPlayback,
+  type LocalEmergencyAudio,
+} from "./awaazEmergencyAudio";
 
 describe("Awaaz dysarthria-aware endpointing", () => {
   it("never treats pre-speech thinking time as end-of-utterance silence", () => {
@@ -42,5 +47,31 @@ describe("Awaaz dysarthria-aware endpointing", () => {
     expect(await sha256Blob(new Blob(["abc"]))).toBe(
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
+  });
+});
+
+describe("Awaaz offline emergency playback receipt", () => {
+  const phrase: LocalEmergencyAudio = {
+    patient_id: "patient-1",
+    target_text: "I need help",
+    lang: "en",
+    duration_seconds: 1.2,
+    sha256: "ab".repeat(32),
+    created_at: "2026-08-28T00:00:00.000Z",
+    audio: new Blob(["wav"]),
+  };
+
+  it("only marks playback true after the browser accepts play", async () => {
+    expect(await startEmergencyPlayback({ play: async () => undefined })).toBe(true);
+    expect(await startEmergencyPlayback({
+      play: async () => { throw new Error("blocked"); },
+    })).toBe(false);
+  });
+
+  it("does not use a stale recording after the pinned phrase changes", () => {
+    expect(isEmergencyAudioCurrent(phrase, "patient-1", "I need help", "en")).toBe(true);
+    expect(isEmergencyAudioCurrent(phrase, "patient-2", "I need help", "en")).toBe(false);
+    expect(isEmergencyAudioCurrent(phrase, "patient-1", "Help me now", "en")).toBe(false);
+    expect(isEmergencyAudioCurrent(phrase, "patient-1", "I need help", "pa")).toBe(false);
   });
 });

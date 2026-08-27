@@ -436,3 +436,8 @@ export interface AwaazEmergencyResult {
   used_speech_recognition: boolean;
   message: string;
 }
+
+export interface AwaazEmergencyPayload {
+  /** True only after a patient-specific WAV stored on this device started playing. */
+  offline_audio_played: boolean;
+}

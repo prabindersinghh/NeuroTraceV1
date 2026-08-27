@@ -56,6 +56,14 @@ import {
   sha256Blob,
 } from "@/lib/awaazAudioVault";
 import {
+  deleteLocalEmergencyAudio,
+  getLocalEmergencyAudio,
+  isEmergencyAudioCurrent,
+  saveLocalEmergencyAudio,
+  startEmergencyPlayback,
+  type LocalEmergencyAudio,
+} from "@/lib/awaazEmergencyAudio";
+import {
   advanceEndpoint,
   startEndpointState,
   type EndpointState,
@@ -128,10 +136,34 @@ export default function Awaaz() {
   const [autoStop, setAutoStop] = useState(false);
   const [endpointDraft, setEndpointDraft] = useState(2.5);
   const [localPairCount, setLocalPairCount] = useState(0);
+  const [emergencyAudio, setEmergencyAudio] = useState<LocalEmergencyAudio | null>(null);
+  const [emergencyAudioUrl, setEmergencyAudioUrl] = useState<string | null>(null);
+  const [isEmergencyRecording, setIsEmergencyRecording] = useState(false);
+  const [emergencySelfTestPassed, setEmergencySelfTestPassed] = useState(false);
+  const [emergencySetupStatus, setEmergencySetupStatus] = useState<string | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
+  const emergencyRecorderRef = useRef<AudioRecorder | null>(null);
+  const emergencyStopTimerRef = useRef<number | null>(null);
   const endpointRef = useRef<EndpointState | null>(null);
   const meterTimerRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
+  const emergencyStoppingRef = useRef(false);
+
+  const currentBoard = board?.patient_id === patientId ? board : null;
+  const currentEmergencyAudio = emergencyAudio?.patient_id === patientId
+    ? emergencyAudio
+    : null;
+  const emergencyText = currentBoard
+    ? emergencyPhrase(currentBoard, lang)
+    : (currentEmergencyAudio?.target_text ?? emergencyPhrase(null, lang));
+  const emergencyCard = currentBoard?.cards.find((card) => card.is_emergency);
+  const emergencyLang = emergencyCard?.lang ?? currentEmergencyAudio?.lang ?? lang;
+  const emergencyAudioReady = Boolean(
+    emergencyAudioUrl
+    && isEmergencyAudioCurrent(
+      currentEmergencyAudio, patientId, emergencyText, emergencyLang,
+    ),
+  );
 
   useEffect(() => {
     let live = true;
@@ -152,6 +184,32 @@ export default function Awaaz() {
   }, [patientId]);
 
   useEffect(() => {
+    let live = true;
+    void getLocalEmergencyAudio(patientId)
+      .then((phrase) => {
+        if (!live) return;
+        setEmergencyAudio(phrase);
+        setEmergencySelfTestPassed(Boolean(phrase?.last_tested_at));
+      })
+      .catch(() => {
+        if (!live) return;
+        setEmergencyAudio(null);
+        setEmergencySelfTestPassed(false);
+      });
+    return () => { live = false; };
+  }, [patientId]);
+
+  useEffect(() => {
+    if (!emergencyAudio) {
+      setEmergencyAudioUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(emergencyAudio.audio);
+    setEmergencyAudioUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [emergencyAudio]);
+
+  useEffect(() => {
     if (!pendingCapture) {
       setPreviewUrl(null);
       return;
@@ -163,7 +221,11 @@ export default function Awaaz() {
 
   useEffect(() => () => {
     if (meterTimerRef.current !== null) window.clearInterval(meterTimerRef.current);
+    if (emergencyStopTimerRef.current !== null) {
+      window.clearTimeout(emergencyStopTimerRef.current);
+    }
     recorderRef.current?.cancel();
+    emergencyRecorderRef.current?.cancel();
   }, []);
 
   const clearMeterTimer = useCallback(() => {
@@ -197,7 +259,9 @@ export default function Awaaz() {
   }, [clearMeterTimer, t]);
 
   const startCapture = useCallback(async () => {
-    if (!captureConsent || pendingCapture || recorderRef.current) return;
+    if (
+      !captureConsent || pendingCapture || recorderRef.current || emergencyRecorderRef.current
+    ) return;
     setActionError(null);
     setCaptureStatus(null);
     try {
@@ -317,6 +381,88 @@ export default function Awaaz() {
     }
   }, [patientId, t]);
 
+  const stopEmergencyRecording = useCallback(async () => {
+    if (emergencyStoppingRef.current || !emergencyRecorderRef.current) return;
+    emergencyStoppingRef.current = true;
+    const recorder = emergencyRecorderRef.current;
+    emergencyRecorderRef.current = null;
+    if (emergencyStopTimerRef.current !== null) {
+      window.clearTimeout(emergencyStopTimerRef.current);
+      emergencyStopTimerRef.current = null;
+    }
+    setIsEmergencyRecording(false);
+    try {
+      const blob = await recorder.stop();
+      const durationSeconds = wavDurationSeconds(blob);
+      if (durationSeconds < 0.4) throw new Error("Recording was too short");
+      const phrase: LocalEmergencyAudio = {
+        patient_id: patientId,
+        target_text: emergencyText,
+        lang: emergencyLang,
+        duration_seconds: durationSeconds,
+        sha256: await sha256Blob(blob),
+        created_at: new Date().toISOString(),
+        audio: blob,
+      };
+      await saveLocalEmergencyAudio(phrase);
+      setEmergencyAudio(phrase);
+      setEmergencySelfTestPassed(false);
+      setEmergencySetupStatus(t("awaazEmergencySavedTestNext"));
+    } catch {
+      setEmergencySetupStatus(t("awaazEmergencySetupFailed"));
+    } finally {
+      emergencyStoppingRef.current = false;
+    }
+  }, [emergencyLang, emergencyText, patientId, t]);
+
+  const startEmergencyRecording = useCallback(async () => {
+    if (emergencyRecorderRef.current || recorderRef.current || pendingCapture) return;
+    setActionError(null);
+    setEmergencySetupStatus(null);
+    try {
+      emergencyRecorderRef.current = await startAudioRecording();
+      setIsEmergencyRecording(true);
+      // A fixed phrase should be short, but give dysarthric speakers ample time. This cap
+      // prevents an accidentally abandoned microphone session from recording indefinitely.
+      emergencyStopTimerRef.current = window.setTimeout(
+        () => void stopEmergencyRecording(),
+        15_000,
+      );
+    } catch {
+      setEmergencySetupStatus(t("awaazMicUnavailable"));
+    }
+  }, [pendingCapture, stopEmergencyRecording, t]);
+
+  const testEmergencyAudio = useCallback(async () => {
+    if (!emergencyAudioUrl || !isEmergencyAudioCurrent(
+      emergencyAudio, patientId, emergencyText, emergencyLang,
+    )) {
+      setEmergencySetupStatus(t("awaazEmergencyNeedsSetup"));
+      return;
+    }
+    const started = await startEmergencyPlayback(new Audio(emergencyAudioUrl));
+    if (!started) {
+      setEmergencySetupStatus(t("awaazEmergencyTestFailed"));
+      return;
+    }
+    const tested = { ...emergencyAudio, last_tested_at: new Date().toISOString() };
+    await saveLocalEmergencyAudio(tested).catch(() => undefined);
+    setEmergencySelfTestPassed(true);
+    setEmergencySetupStatus(t("awaazEmergencyTestPassed"));
+  }, [emergencyAudio, emergencyAudioUrl, emergencyLang, emergencyText, patientId, t]);
+
+  const removeEmergencyAudio = useCallback(async () => {
+    if (!window.confirm(t("awaazEmergencyDeleteConfirm"))) return;
+    try {
+      await deleteLocalEmergencyAudio(patientId);
+      setEmergencyAudio(null);
+      setEmergencySelfTestPassed(false);
+      setEmergencySetupStatus(t("awaazEmergencyDeleted"));
+    } catch {
+      setEmergencySetupStatus(t("awaazEmergencySetupFailed"));
+    }
+  }, [patientId, t]);
+
   const submitFree = useCallback(async () => {
     if (!freeText.trim()) return;
     setBusy(true);
@@ -365,21 +511,33 @@ export default function Awaaz() {
   }, [lang, patientId, t]);
 
   const emergency = useCallback(async () => {
-    // Voice locally first so a network round trip is never on the critical path. This is
-    // best-effort stock browser synthesis until pre-rendered offline audio is connected.
-    const msg = emergencyPhrase(board, lang);
-    voice(msg, lang);
-    setLastSpoken(msg);
+    // Start the on-device WAV before touching the network. A stock browser voice is only a
+    // visible fallback and is never counted as offline-capable because browsers may fetch
+    // voices from the network.
+    let offlineAudioPlayed = false;
+    if (emergencyAudioReady && emergencyAudioUrl) {
+      offlineAudioPlayed = await startEmergencyPlayback(new Audio(emergencyAudioUrl));
+    }
+    if (!offlineAudioPlayed) voice(emergencyText, emergencyLang);
+    setLastSpoken(emergencyText);
     setEmergencyWarning(null);
     try {
-      const result = await api.awaazEmergency(patientId);
-      if (!result.caregiver_notified) {
-        setEmergencyWarning(t("awaazEmergencyDeliveryMissing"));
-      }
+      const result = await api.awaazEmergency(patientId, {
+        offline_audio_played: offlineAudioPlayed,
+      });
+      const warnings = [
+        ...(!result.works_offline ? [t("awaazEmergencyOfflineMissing")] : []),
+        ...(!result.caregiver_notified ? [t("awaazEmergencyDeliveryMissing")] : []),
+      ];
+      setEmergencyWarning(warnings.length ? warnings.join(" ") : null);
     } catch {
-      setEmergencyWarning(t("awaazEmergencyDeliveryMissing"));
+      const warnings = [
+        ...(!offlineAudioPlayed ? [t("awaazEmergencyOfflineMissing")] : []),
+        t("awaazEmergencyDeliveryMissing"),
+      ];
+      setEmergencyWarning(warnings.join(" "));
     }
-  }, [board, lang, patientId, t]);
+  }, [emergencyAudioReady, emergencyAudioUrl, emergencyLang, emergencyText, patientId, t]);
 
   const [listenerLink, setListenerLink] = useState<string | null>(null);
 
@@ -407,10 +565,41 @@ export default function Awaaz() {
     }
   }, [lang, listenerLink, patientId, t]);
 
-  if (error && !board) return <AppShell><ErrorState message={error} /></AppShell>;
-  if (!board) return <AppShell><LoadingState /></AppShell>;
+  if (error && !currentBoard) {
+    return (
+      <AppShell>
+        <div className="mx-auto flex max-w-xl flex-col gap-4">
+          <button
+            type="button"
+            onClick={() => void emergency()}
+            className="flex min-h-24 items-center justify-center gap-3 rounded-2xl bg-alert px-4 text-2xl font-semibold text-white"
+          >
+            <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
+          </button>
+          <p className="rounded-xl border border-line bg-secondary p-4 text-sm">
+            {emergencyAudioReady
+              ? t("awaazEmergencyOfflineReady")
+              : t("awaazEmergencyOfflineMissing")}
+          </p>
+          {lastSpoken && (
+            <p className="flex items-center gap-2 rounded-xl border border-line p-4 text-xl">
+              <Volume2 className="h-6 w-6 shrink-0 text-accent" aria-hidden />
+              <span aria-live="polite">{lastSpoken}</span>
+            </p>
+          )}
+          {emergencyWarning && (
+            <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-alert">
+              {emergencyWarning}
+            </p>
+          )}
+          <ErrorState message={t("awaazBoardOfflineUnavailable")} />
+        </div>
+      </AppShell>
+    );
+  }
+  if (!currentBoard) return <AppShell><LoadingState /></AppShell>;
 
-  const isAphasia = board.profile.speech_profile !== "dysarthria_dominant";
+  const isAphasia = currentBoard.profile.speech_profile !== "dysarthria_dominant";
 
   return (
     <AppShell>
@@ -421,7 +610,7 @@ export default function Awaaz() {
           onClick={() => void emergency()}
           className="flex min-h-20 items-center justify-center gap-3 rounded-2xl bg-alert text-2xl font-semibold text-white"
         >
-          <AlertTriangle className="h-8 w-8" aria-hidden /> {t("awaazEmergency")}
+          <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
         </button>
 
         {lastSpoken && (
@@ -501,7 +690,7 @@ export default function Awaaz() {
               </label>
               <button
                 type="button"
-                disabled={isRecording || endpointDraft === board.profile.endpoint_silence_seconds}
+                disabled={isRecording || endpointDraft === currentBoard.profile.endpoint_silence_seconds}
                 onClick={() => void saveEndpoint()}
                 className="min-h-11 rounded-lg border border-line px-3 text-sm disabled:opacity-50"
               >
@@ -532,7 +721,9 @@ export default function Awaaz() {
             type="button"
             size="touch"
             variant={isRecording ? "destructive" : "accent"}
-            disabled={!isRecording && (!captureConsent || Boolean(pendingCapture) || busy)}
+            disabled={!isRecording && (
+              !captureConsent || Boolean(pendingCapture) || busy || isEmergencyRecording
+            )}
             onClick={() => void (isRecording ? stopCapture() : startCapture())}
             className="mt-4"
           >
@@ -546,7 +737,7 @@ export default function Awaaz() {
               <p className="font-medium">{t("awaazChoosePhrase")}</p>
               {previewUrl && <audio controls src={previewUrl} className="mt-3 w-full" />}
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {board.cards.filter((card) => !card.is_emergency).map((card) => (
+                {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => (
                   <button
                     key={`pair-${card.id}`}
                     type="button"
@@ -584,7 +775,7 @@ export default function Awaaz() {
         </details>
 
         <div className="grid grid-cols-2 gap-3">
-          {board.cards.map((c) => (
+          {currentBoard.cards.filter((card) => !card.is_emergency).map((c) => (
             <button
               key={c.id}
               type="button"
@@ -639,6 +830,76 @@ export default function Awaaz() {
             uses the top of this screen to speak, and a share button competing with the
             emergency card would be a design failure with real consequences. */}
         <section className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
+          <details className="rounded-xl border border-line p-3">
+            <summary className="flex cursor-pointer list-none items-start gap-3">
+              <Volume2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />
+              <span>
+                <span className="block text-sm font-semibold">{t("awaazEmergencySetupTitle")}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {emergencyAudioReady
+                    ? t("awaazEmergencyReady")
+                    : t("awaazEmergencyNeedsSetup")}
+                </span>
+              </span>
+            </summary>
+
+            <p className="mt-3 text-sm text-muted-foreground">
+              {t("awaazEmergencySetupIntro")}
+            </p>
+            <p className="mt-2 rounded-lg bg-secondary p-3 text-lg font-medium">
+              “{emergencyText}”
+            </p>
+
+            {emergencyAudioReady && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {emergencySelfTestPassed
+                  ? t("awaazEmergencyTestRecorded")
+                  : t("awaazEmergencyNotTested")}
+              </p>
+            )}
+
+            {emergencySetupStatus && (
+              <p aria-live="polite" className="mt-3 rounded-lg border border-line bg-secondary p-3 text-sm">
+                {emergencySetupStatus}
+              </p>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busy || isRecording || Boolean(pendingCapture)}
+                onClick={() => void (
+                  isEmergencyRecording ? stopEmergencyRecording() : startEmergencyRecording()
+                )}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm disabled:opacity-50"
+              >
+                {isEmergencyRecording
+                  ? <><Square className="h-4 w-4" aria-hidden /> {t("awaazStopRecording")}</>
+                  : <><Mic className="h-4 w-4" aria-hidden /> {emergencyAudioReady
+                    ? t("awaazEmergencyRerecord")
+                    : t("awaazEmergencyRecord")}</>}
+              </button>
+              <button
+                type="button"
+                disabled={!emergencyAudioReady || isEmergencyRecording}
+                onClick={() => void testEmergencyAudio()}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line px-3 text-sm disabled:opacity-50"
+              >
+                <Volume2 className="h-4 w-4" aria-hidden /> {t("awaazEmergencyTest")}
+              </button>
+            </div>
+
+            {emergencyAudio && (
+              <button
+                type="button"
+                disabled={isEmergencyRecording}
+                onClick={() => void removeEmergencyAudio()}
+                className="mt-2 flex min-h-10 items-center gap-2 text-xs text-alert underline disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden /> {t("awaazEmergencyDelete")}
+              </button>
+            )}
+          </details>
           <button
             type="button"
             onClick={() => void mintListenerLink()}

@@ -16,6 +16,7 @@ import type {
   AshaSessionResult,
   AuthResponse,
   AwaazEmergencyResult,
+  AwaazEmergencyPayload,
   AwaazSpeakPayload,
   Battery,
   ClinicPatientRow,
@@ -273,8 +274,10 @@ export const api = {
     }),
   awaazDeleteAudioPair: (captureId: string) =>
     request<{ detail: string }>(`/awaaz/audio-pairs/${captureId}`, { method: "DELETE" }),
-  awaazEmergency: (patientId: string) =>
-    request<AwaazEmergencyResult>(`/awaaz/${patientId}/emergency`, { method: "POST" }),
+  awaazEmergency: (patientId: string, payload: AwaazEmergencyPayload) =>
+    request<AwaazEmergencyResult>(`/awaaz/${patientId}/emergency`, {
+      method: "POST", json: payload,
+    }),
 
   awaazMintListener: (patientId: string, payload: { display_name: string; lang?: string; ttl_minutes?: number }) =>
     request<{ token: string; display_name: string; expires_at: string; path: string }>(

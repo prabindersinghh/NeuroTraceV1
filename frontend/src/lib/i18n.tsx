@@ -80,9 +80,104 @@ const STRINGS = {
     pa: "ਪੁਸ਼ਟੀ ਸੰਭਾਲੀ ਨਹੀਂ ਜਾ ਸਕੀ, ਇਸ ਲਈ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਗਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
   awaazEmergencyDeliveryMissing: {
-    en: "The phrase was spoken here, but caregiver alerts are not connected yet. Call family or 108 directly.",
-    hi: "संदेश यहाँ बोल दिया गया, लेकिन देखभालकर्ता अलर्ट अभी जुड़ा नहीं है। परिवार या 108 को सीधे कॉल करें।",
-    pa: "ਸੁਨੇਹਾ ਇੱਥੇ ਬੋਲ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਹਾਲੇ ਜੁੜਿਆ ਨਹੀਂ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+    en: "Caregiver alerts are not connected yet. Call family or 108 directly.",
+    hi: "देखभालकर्ता अलर्ट अभी जुड़ा नहीं है। परिवार या 108 को सीधे कॉल करें।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਹਾਲੇ ਜੁੜਿਆ ਨਹੀਂ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+  },
+  awaazEmergencyOfflineMissing: {
+    en: "The saved offline phrase did not play. A browser voice was attempted; set up and test the offline phrase below.",
+    hi: "सहेजा हुआ ऑफ़लाइन संदेश नहीं चला। ब्राउज़र की आवाज़ की कोशिश की गई; नीचे ऑफ़लाइन संदेश सेट करके जाँचें।",
+    pa: "ਸੰਭਾਲਿਆ ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਨਹੀਂ ਚੱਲਿਆ। ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਆਵਾਜ਼ ਦੀ ਕੋਸ਼ਿਸ਼ ਕੀਤੀ ਗਈ; ਹੇਠਾਂ ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸੈੱਟ ਕਰਕੇ ਜਾਂਚੋ।",
+  },
+  awaazEmergencyOfflineReady: {
+    en: "The saved emergency phrase is ready on this device without internet.",
+    hi: "सहेजा हुआ आपातकालीन संदेश इस डिवाइस पर बिना इंटरनेट तैयार है।",
+    pa: "ਸੰਭਾਲਿਆ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਤਿਆਰ ਹੈ।",
+  },
+  awaazBoardOfflineUnavailable: {
+    en: "The rest of the communication board needs a connection right now. Emergency voice remains available above.",
+    hi: "बाकी संवाद बोर्ड को अभी कनेक्शन चाहिए। ऊपर आपातकालीन आवाज़ उपलब्ध है।",
+    pa: "ਬਾਕੀ ਸੰਚਾਰ ਬੋਰਡ ਨੂੰ ਹੁਣ ਕਨੈਕਸ਼ਨ ਚਾਹੀਦਾ ਹੈ। ਉੱਪਰ ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼ ਉਪਲਬਧ ਹੈ।",
+  },
+  awaazEmergencySetupTitle: {
+    en: "Offline emergency voice",
+    hi: "ऑफ़लाइन आपातकालीन आवाज़",
+    pa: "ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼",
+  },
+  awaazEmergencyReady: {
+    en: "Saved on this device and ready without internet",
+    hi: "इस डिवाइस पर सहेजा गया और बिना इंटरनेट तैयार",
+    pa: "ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ ਅਤੇ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਤਿਆਰ",
+  },
+  awaazEmergencyNeedsSetup: {
+    en: "Not set up on this device",
+    hi: "इस डिवाइस पर सेट नहीं किया गया",
+    pa: "ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੈੱਟ ਨਹੀਂ ਕੀਤਾ ਗਿਆ",
+  },
+  awaazEmergencySetupIntro: {
+    en: "A caregiver should record this exact phrase once. It stays only on this device and plays before any network request.",
+    hi: "देखभालकर्ता इस संदेश को एक बार ठीक इसी तरह रिकॉर्ड करें। यह केवल इस डिवाइस पर रहता है और किसी नेटवर्क अनुरोध से पहले चलता है।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲਾ ਇਹੀ ਸੁਨੇਹਾ ਇੱਕ ਵਾਰ ਰਿਕਾਰਡ ਕਰੇ। ਇਹ ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਰਹਿੰਦਾ ਹੈ ਅਤੇ ਕਿਸੇ ਨੈੱਟਵਰਕ ਬੇਨਤੀ ਤੋਂ ਪਹਿਲਾਂ ਚੱਲਦਾ ਹੈ।",
+  },
+  awaazEmergencyTestRecorded: {
+    en: "The last self-test started successfully.",
+    hi: "पिछली स्व-जाँच सफलतापूर्वक शुरू हुई।",
+    pa: "ਪਿਛਲੀ ਸਵੈ-ਜਾਂਚ ਸਫਲਤਾਪੂਰਵਕ ਸ਼ੁਰੂ ਹੋਈ।",
+  },
+  awaazEmergencyNotTested: {
+    en: "Recorded, but not self-tested yet.",
+    hi: "रिकॉर्ड हो गया, लेकिन अभी स्व-जाँच नहीं हुई।",
+    pa: "ਰਿਕਾਰਡ ਹੋ ਗਿਆ, ਪਰ ਹਾਲੇ ਸਵੈ-ਜਾਂਚ ਨਹੀਂ ਹੋਈ।",
+  },
+  awaazEmergencyRecord: {
+    en: "Record phrase",
+    hi: "संदेश रिकॉर्ड करें",
+    pa: "ਸੁਨੇਹਾ ਰਿਕਾਰਡ ਕਰੋ",
+  },
+  awaazEmergencyRerecord: {
+    en: "Record again",
+    hi: "फिर रिकॉर्ड करें",
+    pa: "ਦੁਬਾਰਾ ਰਿਕਾਰਡ ਕਰੋ",
+  },
+  awaazEmergencyTest: {
+    en: "Test offline voice",
+    hi: "ऑफ़लाइन आवाज़ जाँचें",
+    pa: "ਆਫ਼ਲਾਈਨ ਆਵਾਜ਼ ਜਾਂਚੋ",
+  },
+  awaazEmergencyDelete: {
+    en: "Delete offline phrase",
+    hi: "ऑफ़लाइन संदेश मिटाएँ",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਮਿਟਾਓ",
+  },
+  awaazEmergencySavedTestNext: {
+    en: "Saved only on this device. Test it now before relying on it.",
+    hi: "केवल इस डिवाइस पर सहेजा गया। भरोसा करने से पहले अभी जाँचें।",
+    pa: "ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ। ਭਰੋਸਾ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਹੁਣੇ ਜਾਂਚੋ।",
+  },
+  awaazEmergencySetupFailed: {
+    en: "The offline phrase could not be saved. Try again and complete the self-test.",
+    hi: "ऑफ़लाइन संदेश सहेजा नहीं जा सका। फिर कोशिश करें और स्व-जाँच पूरी करें।",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸੰਭਾਲਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਅਤੇ ਸਵੈ-ਜਾਂਚ ਪੂਰੀ ਕਰੋ।",
+  },
+  awaazEmergencyTestFailed: {
+    en: "The offline phrase did not start. Record it again before relying on it.",
+    hi: "ऑफ़लाइन संदेश शुरू नहीं हुआ। भरोसा करने से पहले फिर रिकॉर्ड करें।",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸ਼ੁਰੂ ਨਹੀਂ ਹੋਇਆ। ਭਰੋਸਾ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਦੁਬਾਰਾ ਰਿਕਾਰਡ ਕਰੋ।",
+  },
+  awaazEmergencyTestPassed: {
+    en: "Self-test passed: the on-device phrase started playing.",
+    hi: "स्व-जाँच सफल: डिवाइस पर सहेजा संदेश चलना शुरू हुआ।",
+    pa: "ਸਵੈ-ਜਾਂਚ ਸਫਲ: ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ ਸੁਨੇਹਾ ਚੱਲਣਾ ਸ਼ੁਰੂ ਹੋਇਆ।",
+  },
+  awaazEmergencyDeleteConfirm: {
+    en: "Delete the offline emergency phrase from this device? Emergency taps will fall back to the browser voice.",
+    hi: "इस डिवाइस से ऑफ़लाइन आपातकालीन संदेश मिटाएँ? आपातकालीन टैप ब्राउज़र की आवाज़ पर निर्भर होगा।",
+    pa: "ਇਸ ਡਿਵਾਈਸ ਤੋਂ ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਮਿਟਾਉਣਾ ਹੈ? ਐਮਰਜੈਂਸੀ ਟੈਪ ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਆਵਾਜ਼ 'ਤੇ ਨਿਰਭਰ ਹੋਵੇਗਾ।",
+  },
+  awaazEmergencyDeleted: {
+    en: "Offline emergency phrase deleted from this device.",
+    hi: "ऑफ़लाइन आपातकालीन संदेश इस डिवाइस से मिटा दिया गया।",
+    pa: "ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਇਸ ਡਿਵਾਈਸ ਤੋਂ ਮਿਟਾ ਦਿੱਤਾ ਗਿਆ।",
   },
   awaazListenerFailed: {
     en: "The listening link could not be created. Check the connection and try again.",

@@ -28,6 +28,7 @@ from ..schemas import (
     AwaazCardCreate,
     AwaazCardRead,
     AwaazEmergencyResult,
+    AwaazEmergencyRequest,
     AwaazProfileRead,
     AwaazProfileUpdate,
     AwaazSpeakRequest,
@@ -404,20 +405,32 @@ async def delete_audio_pair(
 
 @router.post("/{patient_id}/emergency", response_model=AwaazEmergencyResult)
 async def emergency(patient: AuthorisedPatient, db: Session,
+                    user: CurrentUser,
+                    payload: AwaazEmergencyRequest | None = None,
                     lat: float | None = None, lon: float | None = None,
                     ) -> AwaazEmergencyResult:
     """Record a deliberately selected, fixed emergency phrase.
 
-    The current frontend speaks a local stock voice before awaiting this request. A
-    caregiver delivery provider and pre-rendered offline audio are not wired yet, so the
-    response reports both capabilities truthfully as unavailable.
+    The frontend starts its patient-specific on-device WAV before awaiting this request.
+    The receipt records what happened during this invocation; no audio enters this API.
+    Caregiver delivery is still reported unavailable until a real provider accepts it.
     """
     lang = (patient.languages or ["en"])[0]
     phrase = {"hi": "मुझे मदद चाहिए", "pa": "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ"}.get(lang, "I need help")
 
+    offline_audio_played = bool(payload and payload.offline_audio_played)
     db.add(UtteranceLog(
         patient_id=patient.id, text=phrase, lang=lang,
         mode="auto", confirmed=True, is_emergency=True))
+    db.add(AuditLog(
+        actor_id=user.id,
+        action="awaaz.emergency",
+        patient_id=patient.id,
+        meta_json={
+            "offline_audio_played": offline_audio_played,
+            "used_speech_recognition": False,
+        },
+    ))
     await db.commit()
 
     return AwaazEmergencyResult(
@@ -425,16 +438,14 @@ async def emergency(patient: AuthorisedPatient, db: Session,
         spoken_text=phrase,
         lang=lang,
         location={"lat": lat, "lon": lon} if lat is not None and lon is not None else None,
-        # Notification delivery and pre-rendered offline audio are not wired yet. Returning
-        # True here used to make a demo response sound complete while no provider was called
-        # and the browser used best-effort Web Speech synthesis. Safety state must describe
-        # what happened, not what a later milestone intends to build.
         caregiver_notified=False,
-        works_offline=False,
+        works_offline=offline_audio_played,
         used_speech_recognition=False,
         message=(
-            "The help phrase was requested on this device. Caregiver notification is not "
-            "connected yet; call the family or emergency services directly."
+            ("The on-device help phrase started playing. " if offline_audio_played else
+             "No on-device help phrase was played. ")
+            + "Caregiver notification is not connected yet; call the family or emergency "
+            "services directly."
         ),
     )
 

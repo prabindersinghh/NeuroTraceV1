@@ -2,8 +2,9 @@
 
 Second product inside the same platform. **Status: IN PROGRESS — the board, confirmation
 contract, listener capability, text-review queue, and consented on-device card/audio pairs
-exist; ASR, reviewed-speech audio, adapter training/deployment, caregiver delivery, and
-pre-rendered offline emergency audio are not connected.**
+exist. A caregiver can also record and self-test the fixed emergency phrase as a local WAV
+that starts before any network request; ASR, reviewed-speech audio, adapter
+training/deployment, and caregiver delivery are not connected.**
 
 ---
 
@@ -64,7 +65,8 @@ POST   /awaaz/{pid}/speak            resolve a card to speech; returns whether i
                                      auto-speak or must be confirmed; may register a
                                      consented local card/audio receipt
 DELETE /awaaz/audio-pairs/{capture}  record revocation after local deletion
-POST   /awaaz/{pid}/emergency        record emergency phrase + optional location
+POST   /awaaz/{pid}/emergency        record emergency phrase + optional location and
+                                     on-device playback receipt (never audio bytes)
 GET    /awaaz/{pid}/profile
 PATCH  /awaaz/{pid}/profile          set speech profile (clinician or caregiver)
 ```
@@ -83,12 +85,15 @@ patient hunting.
   with no training**; the clone is an upgrade, not a prerequisite.
 
 ### Emergency mode
-Long-press anywhere → speaks *"I need help"* loudly in their voice, sends location,
-one-tap family call.
+The persistent red control speaks *"I need help"* from a caregiver-recorded WAV held in
+origin-scoped IndexedDB. Setup includes a visible playback self-test and explicit deletion.
+Long-press-anywhere, location capture, one-tap family calling, and delivery remain future
+work and are not claimed by the current UI.
 
 **Two hard requirements:**
-- Works **fully offline**. The phrase audio is pre-rendered and cached; nothing is
-  synthesised at the moment of need.
+- Works **fully offline after setup**. The phrase audio is recorded once and loaded from
+  on-device storage; nothing is synthesised at the moment of need. If playback is rejected,
+  the UI labels browser TTS as a fallback and the API receipt remains false.
 - **Never depends on speech recognition to succeed.** A person in crisis is the least
   intelligible they will ever be, and ASR is the component most likely to fail exactly then.
 

@@ -4,6 +4,27 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz offline emergency voice
+
+The persistent emergency control now starts a patient-specific WAV from IndexedDB before
+making any network request. A quiet caregiver panel records the fixed phrase, makes its
+local-only storage explicit, provides a visible self-test, supports re-recording and
+deletion, and requests persistent browser storage as a best effort. The ordinary phrase
+grid no longer duplicates the emergency card, so there is one safety path.
+
+The API receives no audio—only `offline_audio_played`, set after the browser accepts local
+playback. `works_offline` mirrors that event rather than the mere existence of a recording;
+browser speech synthesis remains a clearly warned fallback and is never counted as offline.
+Emergency audit rows pin the receipt and confirm speech recognition was not used. Caregiver
+delivery remains false until a real provider accepts a notification. Offline startup also
+keeps the last authenticated local identity instead of deleting it on a network error, so
+the emergency-only fallback can render while invalid-session responses still sign out.
+
+Verified: backend **886 collected / 883 passed / 3 expected skips / 0 failed**; frontend
+**39 tests passed**; TypeScript and oxlint passed; the production PWA bundle built; and the
+rendered Awaaz route retained its emergency control with the backend stopped and logged no
+browser errors.
+
 ## 2026-08-28 — Awaaz on-device learning pairs
 
 The phrase board can now capture a 16 kHz practice WAV, preview it, and pair it with the

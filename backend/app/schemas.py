@@ -664,3 +664,9 @@ class AwaazEmergencyResult(BaseModel):
     #: Always False. A person in crisis is the least intelligible they will ever be.
     used_speech_recognition: bool
     message: str
+
+
+class AwaazEmergencyRequest(BaseModel):
+    #: Set by the client only after a patient-specific local WAV starts playing. This is a
+    #: playback receipt, not a claim that the server itself can provide offline speech.
+    offline_audio_played: bool = False

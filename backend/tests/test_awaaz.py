@@ -431,11 +431,39 @@ async def test_emergency_never_uses_speech_recognition(session, client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["used_speech_recognition"] is False
-    # These stay false until pre-rendered audio and a real delivery provider exist. Returning
-    # an aspirational True here would be more dangerous than an incomplete feature.
+    # No client playback receipt means the API must not infer offline capability merely
+    # because a recording might exist in some browser.
     assert body["works_offline"] is False
     assert body["caregiver_notified"] is False
     assert body["spoken_text"] == "I need help"
+
+
+async def test_emergency_reports_and_audits_a_local_playback_receipt(session, client):
+    """The raw WAV stays on the phone; the server receives only what happened on tap."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+
+    r = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"offline_audio_played": True},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["works_offline"] is True
+    assert body["used_speech_recognition"] is False
+    assert body["caregiver_notified"] is False
+
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.emergency",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None
+    assert audit.actor_id == caregiver.id
+    assert audit.meta_json == {
+        "offline_audio_played": True,
+        "used_speech_recognition": False,
+    }
 
 
 async def test_emergency_speaks_the_patients_own_language(session, client):
