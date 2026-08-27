@@ -4,6 +4,23 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz emergency dial action
+
+The connected Awaaz board and its emergency-only offline fallback now expose the same
+explicit 108 action. It uses a pinned `tel:108` target to hand control to the device's phone
+app; it does not auto-dial, report success, or treat opening the dialer as proof that a call
+connected. The action is separate from the red speak-and-alert control, so activating one
+cannot silently trigger the other, and the existing long-press detector excludes links.
+
+The label is available in English, Hindi, and Punjabi. Direct caregiver calling remains
+unimplemented because the product has no consented caregiver phone-number or contact-choice
+contract; no number was inferred from email or other profile data.
+
+Verified: frontend **44 tests passed**; the dial-contract test pins both `108` and
+`tel:108`. TypeScript passed, oxlint reported only the repository's known warnings, and the
+production PWA bundle built successfully. Backend behavior is unchanged from the preceding
+**898 collected / 895 passed / 3 expected skips / 0 failed** run.
+
 ## 2026-08-28 — Awaaz archive verification and synthetic-trainer truthfulness
 
 The backend now verifies a local Awaaz tar without extracting patient audio. It rejects

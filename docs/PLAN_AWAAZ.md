@@ -4,9 +4,10 @@ Second product inside the same platform. **Status: IN PROGRESS — the board, co
 contract, listener capability, and consented on-device card/audio and caregiver-reviewed
 repeat pairs exist. Those pairs can be integrity-verified into an explicitly acknowledged
 local training archive; the app never uploads it. A caregiver can also record and self-test
-the fixed emergency phrase as a local WAV that starts before any network request. Patient-speech ASR, original
+the fixed emergency phrase as a local WAV that starts before any network request, and the
+emergency surface can open the phone dialer with India's 108 number prefilled. Patient-speech ASR, original
 conversational-audio capture, adapter training/deployment, live provider field testing, and
-one-tap calling remain incomplete.**
+caregiver-number calling remain incomplete.**
 
 ---
 
@@ -95,7 +96,10 @@ Holding non-interactive space for 1.2 seconds activates the same path; finger mo
 cancels it so scrolling cannot fire an alert. Exact location is opt-in and requested only
 for an emergency. A configured SMTP provider can notify the owning caregiver and reports
 success only after their address is accepted; deployments without credentials stay false.
-One-tap calling remains future work.
+An explicit `tel:108` control opens the phone app from both the connected board and the
+emergency-only offline fallback. It does not auto-dial or claim that a call connected.
+Calling a caregiver remains future work because the current contract has no consented phone
+number or contact-selection model.
 
 **Two hard requirements:**
 - Works **fully offline after setup**. The phrase audio is recorded once and loaded from

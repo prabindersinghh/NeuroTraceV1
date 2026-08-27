@@ -15,8 +15,10 @@ until real SMTP credentials are installed and field-tested. Caregiver review can
 explicitly consented fresh patient repeat: the 16 kHz WAV is previewable and retained only
 in local IndexedDB, its verified label is locked across retry, and the API receives only a
 complete integrity/consent receipt. Awaaz remains partial: there is no patient-speech ASR,
-original conversational-audio capture, adapter deployment, provider field test, or one-tap
-calling. Consented local pairs can now be SHA-256 verified into a versioned tar only after
+original conversational-audio capture, adapter deployment, provider field test, or consented
+caregiver-number calling. A visible `tel:108` action now opens the phone app from both the
+connected and emergency-only offline Awaaz states without claiming that a call connected.
+Consented local pairs can now be SHA-256 verified into a versioned tar only after
 the user acknowledges that the voice archive leaves protected app storage; NeuroTrace does
 not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
 undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
@@ -228,8 +230,10 @@ so in the source. D-015, D-017.
   now exist. Patient-speech recognition, caregiver-reviewed audio association, adapter
   training/deployment, and production inference do not.
 - **Awaaz emergency completion** — configure and field-test the SMTP caregiver provider,
-  then add one-tap calling. Offline playback and provider delivery are reported successful
-  only when the local WAV starts and SMTP accepts the recipient respectively.
+  then add a consented caregiver phone/contact contract if direct caregiver dialing is
+  required. The explicit 108 dialer action exists. Offline playback and provider delivery
+  are reported successful only when the local WAV starts and SMTP accepts the recipient
+  respectively; opening a dialer is never reported as a completed call.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
   per model, and the model cards are generated from the artifact metrics so they cannot
   quietly claim otherwise. Three datasets need a human to request access.

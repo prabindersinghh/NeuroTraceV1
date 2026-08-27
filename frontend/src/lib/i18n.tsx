@@ -109,6 +109,11 @@ const STRINGS = {
     hi: "आपातकाल के लिए दबाए रखें…",
     pa: "ਐਮਰਜੈਂਸੀ ਲਈ ਦਬਾਈ ਰੱਖੋ…",
   },
+  awaazEmergencyCall108: {
+    en: "Open phone to call 108",
+    hi: "108 पर कॉल करने के लिए फ़ोन खोलें",
+    pa: "108 'ਤੇ ਕਾਲ ਕਰਨ ਲਈ ਫ਼ੋਨ ਖੋਲ੍ਹੋ",
+  },
   awaazBoardOfflineUnavailable: {
     en: "The rest of the communication board needs a connection right now. Emergency voice remains available above.",
     hi: "बाकी संवाद बोर्ड को अभी कनेक्शन चाहिए। ऊपर आपातकालीन आवाज़ उपलब्ध है।",

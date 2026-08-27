@@ -1,5 +1,7 @@
 export const EMERGENCY_LONG_PRESS_MS = 1_200;
 export const EMERGENCY_LONG_PRESS_MOVE_PX = 14;
+export const INDIA_EMERGENCY_NUMBER = "108";
+export const INDIA_EMERGENCY_DIAL_HREF = `tel:${INDIA_EMERGENCY_NUMBER}`;
 
 export interface PointerPoint {
   x: number;

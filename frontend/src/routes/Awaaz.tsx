@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Mic,
   Phone,
+  PhoneCall,
   Square,
   Timer,
   Trash2,
@@ -78,6 +79,7 @@ import {
 } from "@/lib/awaazEmergencyAudio";
 import {
   EMERGENCY_LONG_PRESS_MS,
+  INDIA_EMERGENCY_DIAL_HREF,
   getEmergencyLocation,
   isEmergencyHoldTarget,
   movedBeyondEmergencyHold,
@@ -127,6 +129,19 @@ const CARD_ICONS: Record<string, LucideIcon> = {
 function PhraseIcon({ name }: { name: string | null }) {
   const Icon = (name && CARD_ICONS[name]) || MessageSquare;
   return <Icon className="h-8 w-8 text-accent" aria-hidden />;
+}
+
+function EmergencyDialLink() {
+  const { t } = useI18n();
+  return (
+    <a
+      href={INDIA_EMERGENCY_DIAL_HREF}
+      className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-alert bg-alert-soft px-4 text-base font-semibold text-alert focus-ring"
+    >
+      <PhoneCall className="h-5 w-5" aria-hidden />
+      {t("awaazEmergencyCall108")}
+    </a>
+  );
 }
 
 function voice(text: string, lang: string) {
@@ -731,6 +746,7 @@ export default function Awaaz() {
           >
             <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
           </button>
+          <EmergencyDialLink />
           <p className="-mt-2 text-center text-xs text-muted-foreground">
             {longPressArmed ? t("awaazEmergencyHolding") : t("awaazEmergencyHoldHint")}
           </p>
@@ -783,6 +799,7 @@ export default function Awaaz() {
         >
           <AlertTriangle className="h-8 w-8" aria-hidden /> {emergencyText}
         </button>
+        <EmergencyDialLink />
         <p className="-mt-3 text-center text-xs text-muted-foreground">
           {longPressArmed ? t("awaazEmergencyHolding") : t("awaazEmergencyHoldHint")}
         </p>

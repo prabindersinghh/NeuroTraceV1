@@ -13,6 +13,8 @@ import {
   type LocalEmergencyAudio,
 } from "./awaazEmergencyAudio";
 import {
+  INDIA_EMERGENCY_DIAL_HREF,
+  INDIA_EMERGENCY_NUMBER,
   EMERGENCY_LONG_PRESS_MOVE_PX,
   movedBeyondEmergencyHold,
 } from "./awaazEmergency";
@@ -91,6 +93,11 @@ describe("Awaaz emergency long press", () => {
       x: 21 + EMERGENCY_LONG_PRESS_MOVE_PX,
       y: 20,
     })).toBe(true);
+  });
+
+  it("pins the India ambulance dial target without claiming call completion", () => {
+    expect(INDIA_EMERGENCY_NUMBER).toBe("108");
+    expect(INDIA_EMERGENCY_DIAL_HREF).toBe("tel:108");
   });
 });
 

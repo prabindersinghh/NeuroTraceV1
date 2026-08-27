@@ -430,3 +430,16 @@ RIFF/WAVE headers and exact SHA-256/size matches. It then exits non-zero before 
 adapter or metrics because LoRA fine-tuning and held-out evaluation are not implemented.
 Synthetic simulation remains runnable and always writes `synthetic: true`. A verified
 corpus is an input; it is not evidence that a model trained, evaluated, or shipped.
+
+**D-047 · 2026-08-28 · Opening a dialer is an action, not a call receipt.**
+The Awaaz emergency surface now exposes India's 108 number through an explicit `tel:` link
+in both connected and emergency-only offline states. The link hands control to the device's
+phone app. NeuroTrace cannot observe whether the person confirms the call, whether the
+network connects, or whether an operator answers, so it stores and displays no success
+claim. It is deliberately separate from the speak-and-notify control and is excluded from
+the blank-space long-press gesture.
+
+There is no caregiver phone field, contact selector, or phone-specific consent contract in
+the current data model. The product therefore does not infer a number from email/profile
+data or pretend that SMTP delivery enables calling. Caregiver dialing can be added only
+after that contact and consent boundary is designed; 108 is the sole pinned dial target.
