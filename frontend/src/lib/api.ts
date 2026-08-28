@@ -15,6 +15,8 @@ import type {
   AshaHousehold,
   AshaSessionResult,
   AuthResponse,
+  AwaazCard,
+  AwaazCardCreatePayload,
   AwaazEmergencyResult,
   AwaazEmergencyPayload,
   AwaazReviewLabelPayload,
@@ -265,6 +267,12 @@ export const api = {
   // --- Awaaz ---
   awaazBoard: (patientId: string) =>
     request<import("./types").AwaazBoard>(`/awaaz/${patientId}/board`),
+  awaazAddCard: (patientId: string, payload: AwaazCardCreatePayload) =>
+    request<AwaazCard>(`/awaaz/${patientId}/cards`, {
+      method: "POST", json: payload,
+    }),
+  awaazDeleteCard: (cardId: string) =>
+    request<{ detail: string }>(`/awaaz/cards/${cardId}`, { method: "DELETE" }),
   awaazSpeak: (patientId: string, payload: AwaazSpeakPayload) =>
     request<import("./types").AwaazSpeakResult>(`/awaaz/${patientId}/speak`, {
       method: "POST", json: payload,

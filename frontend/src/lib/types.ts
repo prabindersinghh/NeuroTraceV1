@@ -390,6 +390,12 @@ export interface AwaazCard {
   is_emergency: boolean;
 }
 
+export interface AwaazCardCreatePayload {
+  text: string;
+  lang: Lang;
+  category: "personal";
+}
+
 export interface AwaazBoard {
   patient_id: string;
   profile: AwaazProfile;

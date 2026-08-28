@@ -1,4 +1,19 @@
-import type { AwaazBoard, AwaazSpeakPayload, Lang } from "./types";
+import type {
+  AwaazBoard,
+  AwaazCardCreatePayload,
+  AwaazSpeakPayload,
+  Lang,
+} from "./types";
+
+/** Build a bounded personal-board request; blank whitespace never reaches the API. */
+export function personalPhrasePayload(
+  text: string,
+  lang: Lang,
+): AwaazCardCreatePayload | null {
+  const phrase = text.trim();
+  if (!phrase) return null;
+  return { text: phrase, lang, category: "personal" };
+}
 
 /** Build the second half of the INV-9 handshake after the person taps a candidate. */
 export function confirmedCandidatePayload(

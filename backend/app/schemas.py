@@ -597,10 +597,12 @@ class AwaazCardRead(BaseModel):
 
 class AwaazCardCreate(BaseModel):
     text: str = Field(min_length=1, max_length=200)
-    lang: str | None = Field(default=None, max_length=8)
+    lang: str | None = Field(default=None, pattern="^(en|hi|pa)$")
     icon: str | None = Field(default=None, max_length=32)
     category: str = Field(default="general", max_length=32)
-    slot: int = 0
+    #: Omitted means append after the existing board. Explicit positions remain available
+    #: for an eventual reorder UI without making every new phrase jump to the first slot.
+    slot: int | None = Field(default=None, ge=0, le=1_000)
 
 
 class AwaazBoard(BaseModel):

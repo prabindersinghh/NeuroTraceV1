@@ -500,3 +500,17 @@ permissions. The 200-pair pilot target is reported as a planning target, not a h
 claim. A single-patient archive cannot support speaker-disjoint shared-model evaluation,
 and word error rate cannot substitute for the primary human outcome of listener
 intelligibility gain. Both remain blocked on separately consented research protocols.
+
+**D-052 · 2026-08-28 · Personal phrases change the board; they do not train recognition.**
+The dormant phrase-card endpoints are now a localized management surface at the quiet end
+of the Awaaz screen. An authorized caregiver, linked patient, or clinician can append the
+words this person actually uses and remove non-emergency tiles. New phrases inherit the
+patient's supported board language, trim outer whitespace, reject blank or
+Unicode-normalised duplicates, append after the existing layout, and stop at 36 total
+cards so the board remains navigable. The fixed emergency phrase cannot be removed.
+
+Adding or deleting a tile is audited without copying its text into the audit metadata.
+Removing a card does not delete a previously consented local learning recording or rewrite
+its locked target; those have their own explicit revocation path. The UI says plainly that
+board customization changes tiles only and is not speech-recognition training, preventing
+a useful personalization control from becoming an unsupported model claim.

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { confirmedCandidatePayload, emergencyPhrase } from "./awaaz";
+import {
+  confirmedCandidatePayload,
+  emergencyPhrase,
+  personalPhrasePayload,
+} from "./awaaz";
 import type { AwaazBoard } from "./types";
 
 describe("Awaaz interaction contract", () => {
@@ -35,5 +39,14 @@ describe("Awaaz interaction contract", () => {
 
   it("has a language fallback before the board loads", () => {
     expect(emergencyPhrase(null, "hi")).toBe("मुझे मदद चाहिए");
+  });
+
+  it("builds a trimmed patient-language personal phrase and refuses whitespace", () => {
+    expect(personalPhrasePayload("  ਡਾਕਟਰ ਨੂੰ ਬੁਲਾਓ  ", "pa")).toEqual({
+      text: "ਡਾਕਟਰ ਨੂੰ ਬੁਲਾਓ",
+      lang: "pa",
+      category: "personal",
+    });
+    expect(personalPhrasePayload("   ", "en")).toBeNull();
   });
 });

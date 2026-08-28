@@ -4,6 +4,29 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz personal phrase-board management
+
+The existing add/delete card endpoints now power a collapsed, trilingual management panel
+below the patient speaking surface. An authorized caregiver, linked patient, or clinician
+can add the patient's everyday phrases in the board's language and remove any non-emergency
+tile. Newly added phrases appear immediately as speakable cards; Enter and the explicit add
+button follow the same path.
+
+The server trims outer whitespace, rejects blank and Unicode-normalised duplicate phrases,
+appends instead of jumping a new card to the first slot, and caps the board at 36 tiles so it
+remains navigable. Emergency deletion remains blocked. Add and delete are audited without
+placing phrase text in audit metadata, and deleting a tile does not silently delete a
+separately consented local learning recording. The UI explicitly says tile customization is
+not speech-recognition training.
+
+Verified: backend **907 collected / 904 passed / 3 expected skips / 0 failed**. New API
+tests pin normalized duplicate refusal, blank rejection, append ordering, the 36-card cap,
+linked-patient deletion, and text-free add/delete audit events. Frontend **48 tests passed**;
+TypeScript passed, oxlint reported only the repository's known warnings, and the production
+PWA bundle built. On an isolated migrated SQLite demo, a Punjabi phrase added from the
+English UI appeared immediately as a speakable tile, deleted cleanly through confirmation,
+and the complete management surface localized to Punjabi. Privacy preflight passed **7/7**.
+
 ## 2026-08-28 — Awaaz privacy-safe corpus readiness
 
 A verified local Awaaz archive can now produce a non-clinical readiness artifact without

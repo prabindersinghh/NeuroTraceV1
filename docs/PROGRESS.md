@@ -210,6 +210,8 @@ so in the source. D-015, D-017.
   speech offline after setup. A 1.2-second blank-space hold reaches the same path, scroll
   movement cancels it, and exact location is opt-in. A configured SMTP adapter reports true
   only after acceptance; the deployed provider still needs credentials and a field test.
+  A localized, collapsed board manager now adds duplicate-safe personal phrases and removes
+  non-emergency tiles while keeping the patient-facing speaking surface uncluttered.
 - **D2** expiring listener capability and localized public screen exist. A link sees only
   confirmed utterances created after it was minted, and the sharing UI can revoke it through
   a patient-authorized, retry-idempotent endpoint. The active capability recovers after
@@ -218,7 +220,8 @@ so in the source. D-015, D-017.
 - **D3** adapter pipeline is synthetic scaffolding only; no model runs in the product.
 - **D4** explicitly-consented card/audio pairs now stay in an on-device IndexedDB vault;
   the server retains only UUID/duration/integrity/consent/deletion receipts. Worst-first text review
-  remains retryable, but reviewed free speech has no associated audio yet.
+  remains retryable, and an explicitly consented fresh repeat can pair the verified label
+  with a local WAV. Original unclear conversational audio is still not captured.
 - **D5** feature-routing and frozen-adapter drift algorithms exist as tested scaffolding;
   there is no production audio ingestion or adapter lifecycle behind them.
 
@@ -234,8 +237,9 @@ so in the source. D-015, D-017.
 - **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
   but does not train a voice.
 - **Awaaz ASR and learning loop** — card-tap audio association and consented local retention
-  now exist. Patient-speech recognition, caregiver-reviewed audio association, adapter
-  training/deployment, and production inference do not.
+  now exist, as does caregiver-reviewed fresh-repeat audio association. Patient-speech
+  recognition, original conversational-audio capture, adapter training/deployment, and
+  production inference do not.
 - **Awaaz emergency completion** — configure and field-test the SMTP caregiver provider,
   then add a consented caregiver phone/contact contract if direct caregiver dialing is
   required. The explicit 108 dialer action exists. Offline playback and provider delivery

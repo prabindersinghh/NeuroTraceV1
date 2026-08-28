@@ -56,7 +56,11 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
-import { confirmedCandidatePayload, emergencyPhrase } from "@/lib/awaaz";
+import {
+  confirmedCandidatePayload,
+  emergencyPhrase,
+  personalPhrasePayload,
+} from "@/lib/awaaz";
 import {
   countLocalAudioPairs,
   deleteLocalAudioPair,
@@ -184,6 +188,9 @@ export default function Awaaz() {
   const [exportConsent, setExportConsent] = useState(false);
   const [exportingPairs, setExportingPairs] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [personalPhrase, setPersonalPhrase] = useState("");
+  const [phraseBusy, setPhraseBusy] = useState(false);
+  const [phraseStatus, setPhraseStatus] = useState<string | null>(null);
   const [emergencyAudio, setEmergencyAudio] = useState<LocalEmergencyAudio | null>(null);
   const [emergencyAudioUrl, setEmergencyAudioUrl] = useState<string | null>(null);
   const [isEmergencyRecording, setIsEmergencyRecording] = useState(false);
@@ -615,6 +622,45 @@ export default function Awaaz() {
       setBusy(false);
     }
   }, [lang, patientId, t]);
+
+  const addPersonalPhrase = useCallback(async () => {
+    const boardLang = normaliseListenerLanguage(
+      currentBoard?.cards.find((card) => card.is_emergency)?.lang ?? lang,
+    );
+    const payload = personalPhrasePayload(personalPhrase, boardLang);
+    if (!payload || phraseBusy) return;
+    setPhraseBusy(true);
+    setPhraseStatus(null);
+    try {
+      const card = await api.awaazAddCard(patientId, payload);
+      setBoard((current) => current?.patient_id === patientId
+        ? { ...current, cards: [...current.cards, card] }
+        : current);
+      setPersonalPhrase("");
+      setPhraseStatus(t("awaazPhraseAdded"));
+    } catch {
+      setPhraseStatus(t("awaazPhraseAddFailed"));
+    } finally {
+      setPhraseBusy(false);
+    }
+  }, [currentBoard, lang, patientId, personalPhrase, phraseBusy, t]);
+
+  const removePhrase = useCallback(async (cardId: string) => {
+    if (phraseBusy || !window.confirm(t("awaazPhraseRemoveConfirm"))) return;
+    setPhraseBusy(true);
+    setPhraseStatus(null);
+    try {
+      await api.awaazDeleteCard(cardId);
+      setBoard((current) => current?.patient_id === patientId
+        ? { ...current, cards: current.cards.filter((card) => card.id !== cardId) }
+        : current);
+      setPhraseStatus(t("awaazPhraseRemoved"));
+    } catch {
+      setPhraseStatus(t("awaazPhraseRemoveFailed"));
+    } finally {
+      setPhraseBusy(false);
+    }
+  }, [patientId, phraseBusy, t]);
 
   const emergency = useCallback(async () => {
     // Start the on-device WAV before touching the network. A stock browser voice is only a
@@ -1116,6 +1162,68 @@ export default function Awaaz() {
             uses the top of this screen to speak, and a share button competing with the
             emergency card would be a design failure with real consequences. */}
         <section className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
+          <details className="rounded-xl border border-line p-3">
+            <summary className="flex cursor-pointer list-none items-start gap-3">
+              <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />
+              <span>
+                <span className="block text-sm font-semibold">
+                  {t("awaazManagePhrasesTitle")}
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("awaazManagePhrasesHelp")}
+                </span>
+              </span>
+            </summary>
+
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addPersonalPhrase();
+              }}
+            >
+              <input
+                value={personalPhrase}
+                onChange={(event) => setPersonalPhrase(event.target.value)}
+                maxLength={200}
+                placeholder={t("awaazPhrasePlaceholder")}
+                className="min-h-12 min-w-0 flex-1 rounded-lg border border-line px-3 text-base"
+              />
+              <button
+                type="submit"
+                disabled={
+                  phraseBusy || isRecording || Boolean(pendingCapture)
+                  || !personalPhrase.trim()
+                }
+                className="min-h-12 rounded-lg border border-line px-3 text-sm font-medium disabled:opacity-50"
+              >
+                {t("awaazPhraseAdd")}
+              </button>
+            </form>
+
+            <ul className="mt-3 flex flex-col gap-1">
+              {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => (
+                <li key={card.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-3 py-2">
+                  <span className="min-w-0 break-words text-sm">{card.text}</span>
+                  <button
+                    type="button"
+                    disabled={phraseBusy || isRecording || Boolean(pendingCapture)}
+                    onClick={() => void removePhrase(card.id)}
+                    aria-label={`${t("awaazPhraseRemove")}: ${card.text}`}
+                    className="flex min-h-10 shrink-0 items-center gap-1 text-xs text-alert underline disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    {t("awaazPhraseRemove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {phraseStatus && (
+              <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">
+                {phraseStatus}
+              </p>
+            )}
+          </details>
           <details className="rounded-xl border border-line p-3">
             <summary className="flex cursor-pointer list-none items-start gap-3">
               <Volume2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />

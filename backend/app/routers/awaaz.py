@@ -6,6 +6,7 @@ patient selected those words directly; nothing is being inferred on their behalf
 """
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -16,8 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import CurrentUser, get_patient_for_user
 from ..awaaz.safety import (
-    MIN_AUTO_SPEAK_THRESHOLD,
     AUTO_SPEAK_ELIGIBLE,
+    MIN_AUTO_SPEAK_THRESHOLD,
     SpeechProfile,
     decide,
 )
@@ -42,6 +43,9 @@ router = APIRouter(prefix="/awaaz", tags=["awaaz"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 AuthorisedPatient = Annotated[Patient, Depends(get_patient_for_user)]
+
+MAX_BOARD_CARDS = 36
+SUPPORTED_LANGUAGES = frozenset({"en", "hi", "pa"})
 
 #: The board a patient starts with. Chosen to cover the things that cannot wait — needing
 #: the toilet, being in pain, wanting company — because a board that needs configuring
@@ -72,6 +76,11 @@ DEFAULT_CARDS_PA = [
     "ਮੇਰੀ ਧੀ ਨੂੰ ਬੁਲਾਓ", "ਮੈਂ ਠੀਕ ਹਾਂ", "ਹਾਂ", "ਨਹੀਂ", "ਮੇਰੇ ਕੋਲ ਬੈਠੋ",
     "ਬਹੁਤ ਤੇਜ਼ - ਹੌਲੀ ਬੋਲੋ", "ਮੈਨੂੰ ਇੱਕ ਪਲ ਦਿਓ",
 ]
+
+
+def _normalise_card_text(text: str) -> str:
+    """Comparison form for duplicate prevention; never stored in place of patient text."""
+    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
 async def _profile(db: AsyncSession, patient: Patient) -> AwaazProfile:
@@ -127,10 +136,34 @@ async def board(patient: AuthorisedPatient, db: Session) -> AwaazBoard:
              status_code=status.HTTP_201_CREATED)
 async def add_card(payload: AwaazCardCreate, patient: AuthorisedPatient,
                    user: CurrentUser, db: Session) -> AwaazCardRead:
+    cards = list(await db.scalars(
+        select(PhraseCard).where(PhraseCard.patient_id == patient.id)))
+    if len(cards) >= MAX_BOARD_CARDS:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"The phrase board is limited to {MAX_BOARD_CARDS} cards so it stays usable.",
+        )
+
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Phrase cannot be blank")
+    lang = payload.lang or (patient.languages or ["en"])[0]
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "en"
+    normalised = _normalise_card_text(text)
+    if any(
+        card.lang == lang and _normalise_card_text(card.text) == normalised
+        for card in cards
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "That phrase is already on this patient's board.",
+        )
+    next_slot = max((card.slot for card in cards), default=-1) + 1
     card = PhraseCard(
-        patient_id=patient.id, text=payload.text,
-        lang=payload.lang or (patient.languages or ["en"])[0],
-        icon=payload.icon, category=payload.category, slot=payload.slot,
+        patient_id=patient.id, text=text, lang=lang,
+        icon=payload.icon, category=payload.category,
+        slot=payload.slot if payload.slot is not None else next_slot,
     )
     db.add(card)
     db.add(AuditLog(actor_id=user.id, action="awaaz.card.add", patient_id=patient.id))
@@ -145,15 +178,16 @@ async def delete_card(card_id: uuid.UUID, user: CurrentUser,
     card = await db.get(PhraseCard, card_id)
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Card not found")
-    patient = await db.get(Patient, card.patient_id)
-    if patient is None or patient.caregiver_id != user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your patient")
+    patient = await get_patient_for_user(card.patient_id, user, db)
     if card.is_emergency:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "The emergency phrase cannot be removed. It is the one card that has to be "
             "there on the worst day.")
     await db.delete(card)
+    db.add(AuditLog(
+        actor_id=user.id, action="awaaz.card.delete", patient_id=patient.id,
+    ))
     await db.commit()
     return MessageResponse(detail="Card removed")
 

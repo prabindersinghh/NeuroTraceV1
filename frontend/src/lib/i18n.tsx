@@ -91,6 +91,56 @@ const STRINGS = {
     hi: "आज शाम की जाँच",
     pa: "ਅੱਜ ਸ਼ਾਮ ਦੀ ਜਾਂਚ",
   },
+  awaazManagePhrasesTitle: {
+    en: "Manage the phrase board",
+    hi: "वाक्य बोर्ड बदलें",
+    pa: "ਵਾਕ ਬੋਰਡ ਬਦਲੋ",
+  },
+  awaazManagePhrasesHelp: {
+    en: "Add the words this person uses every day. This changes the tiles only; it does not train speech recognition.",
+    hi: "वे शब्द जोड़ें जो यह व्यक्ति रोज़ इस्तेमाल करता है। इससे केवल टाइल बदलती हैं; आवाज़ पहचान का प्रशिक्षण नहीं होता।",
+    pa: "ਉਹ ਸ਼ਬਦ ਜੋੜੋ ਜੋ ਇਹ ਵਿਅਕਤੀ ਹਰ ਰੋਜ਼ ਵਰਤਦਾ ਹੈ। ਇਸ ਨਾਲ ਸਿਰਫ਼ ਟਾਈਲਾਂ ਬਦਲਦੀਆਂ ਹਨ; ਆਵਾਜ਼ ਪਛਾਣ ਦੀ ਟ੍ਰੇਨਿੰਗ ਨਹੀਂ ਹੁੰਦੀ।",
+  },
+  awaazPhrasePlaceholder: {
+    en: "e.g. Call Dr Singh",
+    hi: "जैसे: डॉ. सिंह को बुलाओ",
+    pa: "ਜਿਵੇਂ: ਡਾ. ਸਿੰਘ ਨੂੰ ਬੁਲਾਓ",
+  },
+  awaazPhraseAdd: {
+    en: "Add phrase",
+    hi: "वाक्य जोड़ें",
+    pa: "ਵਾਕ ਜੋੜੋ",
+  },
+  awaazPhraseAdded: {
+    en: "Phrase added to the board.",
+    hi: "वाक्य बोर्ड में जोड़ दिया गया।",
+    pa: "ਵਾਕ ਬੋਰਡ ਵਿੱਚ ਜੋੜ ਦਿੱਤਾ ਗਿਆ।",
+  },
+  awaazPhraseAddFailed: {
+    en: "The phrase could not be added. It may already be on the board or the board may be full.",
+    hi: "वाक्य नहीं जोड़ा जा सका। यह पहले से बोर्ड पर हो सकता है या बोर्ड भरा हो सकता है।",
+    pa: "ਵਾਕ ਜੋੜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਇਹ ਪਹਿਲਾਂ ਹੀ ਬੋਰਡ ਉੱਤੇ ਹੋ ਸਕਦਾ ਹੈ ਜਾਂ ਬੋਰਡ ਭਰਿਆ ਹੋ ਸਕਦਾ ਹੈ।",
+  },
+  awaazPhraseRemove: {
+    en: "Remove",
+    hi: "हटाएँ",
+    pa: "ਹਟਾਓ",
+  },
+  awaazPhraseRemoveConfirm: {
+    en: "Remove this phrase from the board? Existing learning recordings are not deleted.",
+    hi: "यह वाक्य बोर्ड से हटाएँ? पहले से सहेजी सीखने की रिकॉर्डिंग नहीं मिटेंगी।",
+    pa: "ਇਹ ਵਾਕ ਬੋਰਡ ਤੋਂ ਹਟਾਉਣਾ ਹੈ? ਪਹਿਲਾਂ ਤੋਂ ਸੰਭਾਲੀਆਂ ਸਿੱਖਣ ਵਾਲੀਆਂ ਰਿਕਾਰਡਿੰਗਾਂ ਨਹੀਂ ਮਿਟਣਗੀਆਂ।",
+  },
+  awaazPhraseRemoved: {
+    en: "Phrase removed from the board.",
+    hi: "वाक्य बोर्ड से हटा दिया गया।",
+    pa: "ਵਾਕ ਬੋਰਡ ਤੋਂ ਹਟਾ ਦਿੱਤਾ ਗਿਆ।",
+  },
+  awaazPhraseRemoveFailed: {
+    en: "The phrase could not be removed. Check the connection and try again.",
+    hi: "वाक्य हटाया नहीं जा सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    pa: "ਵਾਕ ਹਟਾਇਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
   awaazTypeSpeak: {
     en: "Type what you want said aloud",
     hi: "जो बुलवाना है, वह लिखें",

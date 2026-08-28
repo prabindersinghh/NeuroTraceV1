@@ -5,7 +5,8 @@ contract, listener capability, and consented on-device card/audio and caregiver-
 repeat pairs exist. Those pairs can be integrity-verified into an explicitly acknowledged
 local training archive; the app never uploads it. A caregiver can also record and self-test
 the fixed emergency phrase as a local WAV that starts before any network request, and the
-emergency surface can open the phone dialer with India's 108 number prefilled. Patient-speech ASR, original
+emergency surface can open the phone dialer with India's 108 number prefilled. The board is
+now locally manageable in English, Hindi, and Punjabi. Patient-speech ASR, original
 conversational-audio capture, adapter training/deployment, live provider field testing, and
 caregiver-number calling remain incomplete.**
 
@@ -82,6 +83,14 @@ pain · call my son · I'm fine · sit with me · too fast · yes · no.
 
 One tap speaks. Cards are ordered by use, so the ones that matter surface without the
 patient hunting.
+
+A collapsed management panel at the bottom lets an authorized caregiver, linked patient,
+or clinician add everyday personal phrases and remove non-emergency cards without competing
+with the speaking surface. The server trims phrases, prevents Unicode-normalised duplicates,
+inherits a supported patient language, appends new tiles, and caps the whole board at 36.
+Customization is audited without phrase text. It changes the phrase board only; it does not
+claim to train ASR, and deleting a tile does not silently revoke a separately consented
+local learning recording.
 
 ### Voice
 - **XTTS-v2** for the clone; **Sarvam** evaluated for Indic quality (see PLAN_ML).

@@ -160,6 +160,95 @@ async def test_the_emergency_card_cannot_be_deleted(session, client):
     assert r.status_code == 409
 
 
+async def test_a_personal_phrase_is_trimmed_appended_and_duplicate_safe(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    existing = (await client.get(
+        f"/awaaz/{patient.id}/board", headers=headers,
+    )).json()["cards"]
+
+    created = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "  Call   Dr Singh  ", "category": "personal",
+    }, headers=headers)
+
+    assert created.status_code == 201, created.text
+    card = created.json()
+    assert card["text"] == "Call   Dr Singh"
+    assert card["lang"] == "en"
+    assert card["slot"] == max(row["slot"] for row in existing) + 1
+    duplicate = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "call dr singh", "category": "personal",
+    }, headers=headers)
+    assert duplicate.status_code == 409
+    assert "already" in duplicate.text.lower()
+    blank = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "   ",
+    }, headers=headers)
+    assert blank.status_code == 422
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.card.add",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None and audit.meta_json is None
+
+
+async def test_the_phrase_board_is_bounded_so_it_remains_navigable(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    seeded = (await client.get(
+        f"/awaaz/{patient.id}/board", headers=headers,
+    )).json()["cards"]
+    session.add_all([
+        PhraseCard(
+            patient_id=patient.id,
+            text=f"Personal phrase {index}",
+            lang="en",
+            category="personal",
+            slot=len(seeded) + index,
+        )
+        for index in range(36 - len(seeded))
+    ])
+    await session.commit()
+
+    refused = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "One phrase too many",
+    }, headers=headers)
+
+    assert refused.status_code == 409
+    assert "36" in refused.text
+
+
+async def test_an_authorised_patient_can_remove_a_non_emergency_phrase(session, client):
+    caregiver, patient = await _patient(session)
+    caregiver_headers = await _headers(client, caregiver)
+    created = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "My personal phrase", "category": "personal",
+    }, headers=caregiver_headers)
+    patient_user = User(
+        email=f"patient-{uuid.uuid4().hex[:8]}@example.com",
+        pw_hash=hash_password("a-real-password"),
+        role=Role.patient,
+    )
+    session.add(patient_user)
+    await session.flush()
+    patient.user_id = patient_user.id
+    await session.commit()
+    patient_headers = await _headers(client, patient_user)
+
+    deleted = await client.delete(
+        f"/awaaz/cards/{created.json()['id']}", headers=patient_headers,
+    )
+
+    assert deleted.status_code == 200, deleted.text
+    assert await session.get(PhraseCard, uuid.UUID(created.json()["id"])) is None
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.card.delete",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None and audit.actor_id == patient_user.id
+    assert audit.meta_json is None
+
+
 async def test_a_new_profile_defaults_to_unassessed_and_auto_speak_off(session, client):
     caregiver, patient = await _patient(session)
     headers = await _headers(client, caregiver)
