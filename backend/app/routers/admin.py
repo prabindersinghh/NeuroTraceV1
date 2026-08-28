@@ -26,12 +26,15 @@ from ..db import get_session
 from ..schemas import ProvisionUser
 from ..models import (
     AuditLog,
+    ClinicianProfile,
     ExamSession,
     ModuleResult,
     Patient,
+    PatientClinicianLink,
     Role,
     Score,
     User,
+    VerificationStatus,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -145,6 +148,83 @@ async def identity_health(admin: Admin, db: Session) -> dict:
             ),
         ),
         "note": "Threshold is calibrated on synthetic geometry only — D-017.",
+    }
+
+
+@router.get("/doctors")
+async def doctor_census(admin: Admin, db: Session) -> dict:
+    """How many clinicians are onboarded, and who they are — Part 3.7e.
+
+    THIS IS THE ONE ROSTER AN ADMIN GETS, AND IT IS A ROSTER OF STAFF, NOT PATIENTS.
+    A clinician's name, registration number and affiliation are operational metadata about
+    a person who works on the deployment: an operator legitimately needs to know who has
+    accounts, whether their profiles are filled in, and how the load is distributed. That
+    is categorically different from patient data, which D-041 and INV-11 keep out of every
+    admin surface.
+
+    So the patient dimension here is a COUNT AND NOTHING ELSE. `patients_linked` is an
+    integer. There is deliberately no drill-down: no patient ids, no names, no bands, no
+    per-patient rows, and no route anywhere that takes a clinician id and returns their
+    patients. An admin who could expand a doctor into their patient list would have exactly
+    the backdoor this file exists to refuse, wearing an org-chart costume.
+
+    `verification_status` is surfaced verbatim, always SELF_DECLARED — the registration
+    number is what the clinician typed, checked against nothing. Rendering the number
+    without the status beside it would imply a verification that never happened.
+    """
+    profiles = {
+        p.user_id: p
+        for p in await db.scalars(select(ClinicianProfile))
+    }
+    clinicians = list(await db.scalars(
+        select(User).where(User.role == Role.clinician).order_by(User.created_at.asc())
+    ))
+
+    link_counts = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(PatientClinicianLink.clinician_id,
+                       func.count(PatientClinicianLink.id))
+                .where(PatientClinicianLink.unlinked_at.is_(None))
+                .group_by(PatientClinicianLink.clinician_id)
+            )
+        ).all()
+    }
+
+    doctors = []
+    for user in clinicians:
+        profile = profiles.get(user.id)
+        doctors.append({
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": (profile.full_name if profile else None) or user.full_name,
+            "qualification": profile.qualification if profile else None,
+            "registration_number": profile.registration_number if profile else None,
+            "registering_authority": profile.registering_authority if profile else None,
+            "specialty": profile.specialty if profile else None,
+            "affiliation": profile.affiliation if profile else None,
+            # Always SELF_DECLARED. Never render the number without this beside it.
+            "verification_status": (
+                profile.verification_status.value if profile
+                else VerificationStatus.SELF_DECLARED.value
+            ),
+            "profile_complete": profile is not None,
+            # A COUNT. Never a list, never expandable — see the docstring.
+            "patients_linked": link_counts.get(user.id, 0),
+            "created_at": user.created_at.isoformat(),
+        })
+
+    return {
+        "total": len(doctors),
+        "with_profile": sum(1 for d in doctors if d["profile_complete"]),
+        "unverified": len(doctors),   # every one of them: nothing is checked
+        "doctors": doctors,
+        "note": (
+            "Registration numbers are self-declared and verified against no medical "
+            "register. Patient counts are counts only — this surface exposes no patient "
+            "identity or clinical content (D-041, INV-11)."
+        ),
     }
 
 

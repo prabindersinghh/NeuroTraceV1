@@ -205,3 +205,263 @@ def test_the_scanner_ignores_the_safety_disclaimer_that_replaced_the_bad_copy():
 def test_the_scanner_ignores_the_onboarding_disclaimer_that_replaced_the_bad_copy():
     text = "It does not diagnose anything."
     assert not any(p.search(text) for p in FORBIDDEN_PATTERNS)
+
+
+# =====================================================================================
+# Part 8.1 — the OVERCLAIM family
+# =====================================================================================
+#
+# INV-13 above bans regulatory-exemption claims. This section bans the other way the
+# product could lie: claiming a capability it does not have.
+#
+# THE TRAP THIS SECTION IS BUILT AROUND. Every prohibited phrase here has a legitimate
+# NEGATED form that the product not only may say but MUST say. "It cannot detect a stroke
+# that is happening now" is the single most safety-critical sentence in the onboarding
+# flow; a scanner that flagged it would pressure someone into weakening the warning to
+# make a test pass. That is precisely the failure mode D-030 records for INV-11's first
+# scanner.
+#
+# So each match is checked against the text preceding it on the same line, and a negation
+# there means the sentence is a disclaimer rather than a claim.
+
+#: Claim shapes. Each is matched, then negation-filtered — see `_overclaims`.
+OVERCLAIM_PATTERNS = [
+    re.compile(r"detects?\s+(?:a\s+)?strokes?\b", re.I),
+    re.compile(r"predicts?\s+(?:your|the|a|their)?\s*(?:next\s+)?strokes?\b", re.I),
+    re.compile(r"diagnos(?:e|es|ing)\s+\w+", re.I),
+    re.compile(r"replaces?\s+(?:a\s+|your\s+|the\s+)?"
+               r"(?:neurologist|doctor|physician|clinician)", re.I),
+    re.compile(r"clinically\s+proven", re.I),
+    re.compile(r"clinically\s+(?:equivalent|validated)", re.I),
+    re.compile(r"equivalent\s+to\s+hospital\s+equipment", re.I),
+    re.compile(r"medical[\s-]grade\s+(?:accuracy|diagnosis|assessment)", re.I),
+]
+
+#: A match preceded by any of these on the same line is a disclaimer, not a claim.
+NEGATIONS = re.compile(
+    r"\b(?:cannot|can\s*not|can't|does\s*not|doesn't|do\s*not|don't|did\s*not|"
+    r"will\s*not|won't|is\s*not|isn't|are\s*not|aren't|was\s*not|never|no|not|"
+    r"nothing|none|without|neither|nor|unable|refuses?|must\s*not|"
+    r"forbidden|prohibited|banned|avoid|instead\s+of)\b",
+    re.I,
+)
+
+#: An accuracy-style figure. Legitimate ONLY when the surrounding text says it is
+#: synthetic — every model in this product is trained on synthetic fixtures
+#: (docs/ML_STATUS.md), so a bare number presents a synthetic result as a real one.
+ACCURACY_CLAIM = re.compile(
+    r"\b(?:accuracy|accurate|sensitivity|specificity|AUC|F1|precision|recall)\b"
+    r"[^.\n]{0,40}\b\d{1,3}(?:\.\d+)?\s*%"
+    r"|\b\d{1,3}(?:\.\d+)?\s*%[^.\n]{0,40}"
+    r"\b(?:accuracy|accurate|sensitivity|specificity|AUC|F1)\b",
+    re.I,
+)
+
+#: Words that make an accuracy figure honest rather than a claim.
+SYNTHETIC_MARKERS = re.compile(
+    r"\b(?:synthetic|fixture|simulated|fabricated|placeholder|not\s+real|"
+    r"no\s+clinical\s+validation|unvalidated|illustrative|example)\b", re.I,
+)
+
+#: A figure is only OUR claim if it is talking about OUR system.
+#:
+#: Without this the scanner flagged `docs/CLINICAL_REFERENCE.md`'s published VNG reference
+#: ranges — "Saccade precision 94-112%" is a physiological measurement of an eye, not a
+#: model metric, and `precision`/`sensitivity` are simply words that belong to both
+#: vocabularies. Demanding a model-claim context is what separates "the literature says a
+#: healthy saccade lands within 94-112% of target" from "our classifier is 94% accurate".
+MODEL_CONTEXT = re.compile(
+    r"\b(?:model|classifier|detector|algorithm|achiev\w*|reach\w*|"
+    r"AUC|F1|train\w*|test\s+set|held[\s-]out|benchmark\w*|"
+    r"NeuroTrace)\b", re.I,
+)
+
+
+def _overclaims(text: str) -> list[tuple[int, str]]:
+    """Matches that are ASSERTIONS, with negated disclaimers filtered out.
+
+    The negation window includes the PREVIOUS line, because prose wraps. The repo's own
+    README says "It does not detect strokes and does not\\nreplace a clinician." — the
+    negation and the claim phrase land on different lines, and a line-scoped check flagged
+    it as an overclaim. That is the D-030 failure mode arriving in a new costume: a scanner
+    that flags a correct disclaimer pressures someone into weakening it.
+    """
+    hits: list[tuple[int, str]] = []
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
+        for pattern in OVERCLAIM_PATTERNS:
+            for match in pattern.finditer(line):
+                previous = lines[i - 2] if i >= 2 else ""
+                window = f"{previous} {line[:match.start()]}"
+                if NEGATIONS.search(window):
+                    continue
+                hits.append((i, line.strip()[:140]))
+                break
+    return hits
+
+
+def _unlabelled_accuracy(text: str) -> list[tuple[int, str]]:
+    """Accuracy figures with no synthetic/unvalidated label nearby.
+
+    Looks at the preceding lines too: these numbers usually sit in tables or lists where
+    the caveat is on the heading rather than repeated on every row.
+    """
+    hits: list[tuple[int, str]] = []
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
+        if not ACCURACY_CLAIM.search(line):
+            continue
+        window = "\n".join(lines[max(0, i - 3):i + 1])
+        if SYNTHETIC_MARKERS.search(window):
+            continue
+        # Not a claim about our system at all — e.g. a published clinical reference range.
+        if not MODEL_CONTEXT.search(window):
+            continue
+        hits.append((i, line.strip()[:140]))
+    return hits
+
+
+def _claim_bearing_files() -> list[str]:
+    """User-facing surfaces plus the documents a reader takes as claims.
+
+    Deliberately not the whole repo: `backend/tests/` quotes prohibited phrases in order to
+    forbid them, and the allowlisted docs exist to discuss them.
+    """
+    out = []
+    for rel in _tracked_files():
+        if rel in DOCUMENTATION_ALLOWLIST or rel.startswith("backend/tests/"):
+            continue
+        if rel.startswith("frontend/src/") and rel.endswith((".tsx", ".ts")):
+            out.append(rel)
+        elif rel.startswith("docs/") and rel.endswith(".md"):
+            out.append(rel)
+        elif rel in ("README.md", "frontend/README.md"):
+            out.append(rel)
+    return out
+
+
+def test_no_user_facing_surface_overclaims():
+    """Part 8.1. `Landing.tsx` is explicitly in scope — it is the most claim-dense surface
+    in the product and the one a judge or a family reads first."""
+    offenders: list[str] = []
+    for rel in _claim_bearing_files():
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        offenders += [f"{rel}:{n}: {line}" for n, line in _overclaims(text)]
+    assert offenders == [], (
+        "Capability overclaim found (Part 8.1 / docs/CLAIMS_MATRIX.md). This product "
+        "observes change over days against a personal baseline. It does not detect, "
+        "predict, diagnose, or replace anyone.\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_no_synthetic_metric_is_presented_as_a_real_result():
+    """Every model in this product is trained on synthetic fixtures (docs/ML_STATUS.md).
+    An accuracy figure without that label reads as a measured clinical result."""
+    offenders: list[str] = []
+    for rel in _claim_bearing_files():
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        offenders += [f"{rel}:{n}: {line}" for n, line in _unlabelled_accuracy(text)]
+    assert offenders == [], (
+        "A performance figure appears with no synthetic/unvalidated label within three "
+        "lines. Every model here is trained on synthetic fixtures — docs/ML_STATUS.md.\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_the_built_bundle_carries_no_overclaim():
+    """Source that never ships a bad string is necessary but not sufficient — a stale
+    chunk or a templated file could reintroduce one. Same skip policy as the INV-13
+    bundle check above."""
+    dist = REPO / "frontend" / "dist"
+    if not dist.is_dir():
+        pytest.skip("frontend/dist not built - run `npm run build` first for this check")
+    offenders = []
+    for path in dist.rglob("*"):
+        if not path.is_file() or path.suffix.lower() in SKIP_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if _overclaims(text):
+            offenders.append(str(path.relative_to(REPO)))
+    assert offenders == [], f"capability overclaim shipped in the built bundle: {offenders}"
+
+
+# ------------------------------------------------------- the overclaim scanner itself
+# Both directions, same discipline as the INV-13 self-tests above. The negated cases are
+# the ones that matter: these are sentences the product MUST be able to say.
+
+@pytest.mark.parametrize("text", [
+    "NeuroTrace detects stroke early.",
+    "It predicts your next stroke.",
+    "The app diagnoses Parkinsons disease from a selfie.",
+    "It replaces a neurologist for routine follow-up.",
+    "Clinically proven to catch deterioration.",
+    "Clinically equivalent to hospital equipment.",
+    "Medical-grade accuracy in your pocket.",
+])
+def test_the_overclaim_scanner_catches_each_prohibited_claim(text):
+    assert _overclaims(text), f"missed overclaim: {text!r}"
+
+
+@pytest.mark.parametrize("text", [
+    # Every one of these is REQUIRED copy somewhere in the product.
+    "It CANNOT detect a stroke that is happening now.",
+    "It does not diagnose anything.",
+    "This never replaces a neurologist.",
+    "Nothing here replaces their doctor.",
+    "It is not clinically proven, and no model here has been clinically validated.",
+    "It reasons over days, so it cannot see a stroke that is happening now.",
+    "No claim of medical-grade accuracy is made anywhere.",
+])
+def test_the_overclaim_scanner_ignores_the_required_disclaimers(text):
+    assert not _overclaims(text), (
+        f"flagged a required safety disclaimer as an overclaim: {text!r} - this is how a "
+        "scanner pressures someone into weakening a warning"
+    )
+
+
+def test_the_overclaim_scanner_handles_a_negation_that_wrapped_to_the_previous_line():
+    """The real false positive this scanner produced on its first run, against the repo's
+    own README. Prose wraps; the negation and the claim landed on different lines."""
+    text = ("This is a monitoring aid, not a diagnostic device. It does not detect strokes "
+            "and does not\nreplace a clinician. It exists so that somebody notices in time.")
+    assert not _overclaims(text), (
+        "flagged a wrapped disclaimer — the negation window must span the previous line"
+    )
+
+
+def test_the_accuracy_scanner_catches_a_bare_metric():
+    assert _unlabelled_accuracy("Our model reaches 94% accuracy on held-out data.")
+
+
+@pytest.mark.parametrize("text", [
+    # The real false positives, from docs/CLINICAL_REFERENCE.md and docs/GAP_ANALYSIS.md.
+    # These are published physiological reference ranges, not claims about our system.
+    "| Precision leftward / rightward | ~96% / ~109% |",
+    "| Saccade precision | VNG | 94-112% | M3 | `saccade_precision_{dir}` |",
+    "latency **309-370 ms**, velocity **184-304 deg/s**, precision **94-112%**",
+    # The real GAP_ANALYSIS.md line. It says "we now have real numbers" beside a clinical
+    # reference range, and a bare we/our turned out to be far too weak a signal for a claim
+    # about OUR model - almost any prose about the project contains those words.
+    ('| **D-5** | Saccade values | "abnormal", qualitative | latency **309-370 ms**, '
+     'velocity **184-304 deg/s**, precision **94-112%** | **High** - we now have real numbers'),
+])
+def test_the_accuracy_scanner_ignores_published_clinical_reference_ranges(text):
+    assert not _unlabelled_accuracy(text), (
+        f"flagged a clinical reference range as a model claim: {text!r} — `precision` and "
+        "`sensitivity` belong to both vocabularies, so a model-claim context is required"
+    )
+
+
+@pytest.mark.parametrize("text", [
+    "Accuracy 94% on SYNTHETIC fixtures only - no clinical validation.",
+    "The synthetic evaluation reports\nsensitivity of 91%.",
+    "Illustrative only: 88% accuracy.",
+])
+def test_the_accuracy_scanner_accepts_a_labelled_metric(text):
+    assert not _unlabelled_accuracy(text), f"flagged a labelled metric: {text!r}"

@@ -316,16 +316,29 @@ async def session_modules(session_id: uuid.UUID, user: CurrentUser,
 
 
 async def _assert_can_access(db: AsyncSession, patient_id: uuid.UUID, user) -> Patient:
+    """Same access rule as `get_patient_for_user` (`app/auth/deps.py`), reimplemented here
+    because these three routes resolve `patient_id` from an already-fetched `ExamSession`
+    rather than a path parameter, so it cannot be wired in as a FastAPI dependency directly.
+
+    Until this fix, this local copy still granted access to `user.role is Role.clinician`
+    unconditionally — the exact pre-Part-3.2 hole `get_patient_for_user` was fixed to close,
+    reintroduced here because the fix was never propagated to this duplicate. An unlinked
+    clinician could read AND write another patient's raw module features
+    (`POST /sessions/{id}/module/{code}`, `POST /sessions/{id}/finalize`) and read them back
+    (`GET /sessions/{id}/modules`). Found in the Part 5.1 endpoint data audit.
+    """
+    from ..auth.deps import clinician_may_access_patient
     from ..models import Role
 
     patient = await db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Patient not found")
     allowed = (
-        user.role is Role.clinician
-        or patient.caregiver_id == user.id
+        patient.caregiver_id == user.id
         or (patient.user_id is not None and patient.user_id == user.id)
     )
+    if not allowed and user.role is Role.clinician:
+        allowed = await clinician_may_access_patient(db, user.id, patient.id)
     if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to access this patient")
     return patient

@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.deps import CurrentUser, get_patient_for_user, require_roles
 from ..db import get_session
 from ..engine.baseline import EnrolmentError, check_enrolment
-from ..models import AuditLog, Patient, Role, User
+from ..models import AuditLog, ConsentType, Patient, PatientClinicianLink, Role, User
+from ..services.consent import consent_currently_granted
+from ..services.erasure import erase_patient_data
 from ..schemas import (
     IdentitySignatureSave,
     MessageResponse,
@@ -89,11 +91,32 @@ async def create_patient(payload: PatientCreate, caregiver: Caregiver,
 
 @router.get("", response_model=list[PatientRead])
 async def list_patients(user: CurrentUser, db: Session) -> list[PatientRead]:
+    """Scoped per role. Until this fix, any role OTHER than caregiver/patient fell through
+    the if/elif with no `WHERE` applied at all — a clinician or admin account calling this
+    route received every patient in the deployment (name, age, sex, stroke details).
+    Clinicians have a proper roster at `/clinic/patients`, scoped to active links; admin
+    must never see clinical rows here at all (INV-11); asha_worker's household view is
+    `/asha/households`. Found in the Part 5.1 endpoint data audit.
+    """
     stmt = select(Patient).order_by(Patient.created_at.asc())
     if user.role is Role.caregiver:
         stmt = stmt.where(Patient.caregiver_id == user.id)
     elif user.role is Role.patient:
         stmt = stmt.where(Patient.user_id == user.id)
+    elif user.role is Role.clinician:
+        stmt = stmt.join(
+            PatientClinicianLink, PatientClinicianLink.patient_id == Patient.id,
+        ).where(
+            PatientClinicianLink.clinician_id == user.id,
+            PatientClinicianLink.unlinked_at.is_(None),
+        )
+        rows = list(await db.scalars(stmt))
+        # Part 4: a link is not enough — C3 (CLINICIAN_SHARING) must also be in force.
+        rows = [p for p in rows
+               if await consent_currently_granted(db, p.id, ConsentType.CLINICIAN_SHARING)]
+        return [PatientRead.model_validate(p) for p in rows]
+    else:
+        return []
     rows = await db.scalars(stmt)
     return [PatientRead.model_validate(p) for p in rows]
 
@@ -112,6 +135,16 @@ async def update_patient(
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "Only the owning caregiver can edit this patient")
     updates = payload.model_dump(exclude_unset=True)
+    # `clinician_id` is the legacy column `patient_clinician_links` superseded (Part 3.2) —
+    # nothing reads it for authorisation any more, but until this fix it could still be set
+    # to ANY user id with no check it names a clinician at all, unlike `POST /patients`
+    # which validates this. Found alongside the Part 5.1 endpoint data audit's wearable.py
+    # gap, which is what made this column's staleness actually exploitable.
+    if updates.get("clinician_id") is not None:
+        target = await db.get(User, updates["clinician_id"])
+        if target is None or target.role is not Role.clinician:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                "clinician_id must reference a clinician account")
     # `calibration_json` REPLACES the stored dict, which is the right semantics for the
     # device calibration a caller owns — but the enrolment vector lives in the same column
     # under `identity` and is written by a different endpoint. Without this, a routine
@@ -134,14 +167,27 @@ async def update_patient(
 @router.delete("/{patient_id}", response_model=MessageResponse)
 async def delete_patient(
     patient: Annotated[Patient, Depends(get_patient_for_user)],
-    user: CurrentUser, db: Session,
+    user: CurrentUser, db: Session, reason: str | None = None,
 ) -> MessageResponse:
+    """Erase this patient's clinical data — Part 5.4.
+
+    Every measurement is really deleted. The audit trail is retained (INV-8), and the
+    patient row survives as a stripped tombstone carrying no identifying field, because
+    `audit_log.patient_id` cascades on delete and removing the row would destroy the record
+    of who accessed this person's data before the erasure. See `services/erasure.py` and
+    `docs/DATA_INVENTORY.md` for the full retained/deleted split.
+    """
     if patient.caregiver_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "Only the owning caregiver can delete this patient")
-    await db.delete(patient)
+    if patient.erased:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This patient's data is already erased")
+    removed = await erase_patient_data(db, patient, user.id, reason)
     await db.commit()
-    return MessageResponse(detail="Patient deleted")
+    return MessageResponse(
+        detail="Patient data erased. Audit records are retained: "
+               + ", ".join(f"{k}={v}" for k, v in sorted(removed.items()) if v)
+    )
 
 
 @router.post("/{patient_id}/identity", response_model=MessageResponse)
