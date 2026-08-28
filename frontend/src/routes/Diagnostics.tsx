@@ -145,9 +145,9 @@ export default function Diagnostics() {
                   <span
                     className={
                       p.verdict === "bad"
-                        ? "text-red-600"
+                        ? "text-alert"
                         : p.verdict === "warn"
-                          ? "text-amber-600"
+                          ? "text-watch"
                           : ""
                     }
                   >
@@ -165,7 +165,7 @@ export default function Diagnostics() {
       </Button>
 
       {error && (
-        <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p className="rounded-lg border border-alert/40 bg-alert-soft p-3 text-sm text-foreground">
           {error} — if this says permission denied, allow camera access and run it again.
         </p>
       )}
@@ -175,12 +175,17 @@ export default function Diagnostics() {
           <p className="text-lg">
             Requested {r.requested} fps →{" "}
             <strong
+              // Token palette, not raw Tailwind. These were red-600/amber-600/green-700,
+              // which are visibly different hues from --alert/--watch and taught a reader
+              // a second, conflicting colour vocabulary. Green is also forbidden as a
+              // status colour anywhere in this product, and `stable` IS the accent blue
+              // for exactly that reason (index.css).
               className={
                 verdictFor(r.measured) === "bad"
-                  ? "text-red-600"
+                  ? "text-alert"
                   : verdictFor(r.measured) === "warn"
-                    ? "text-amber-600"
-                    : "text-green-700"
+                    ? "text-watch"
+                    : "text-stable"
               }
             >
               {r.measured} fps measured
@@ -191,7 +196,7 @@ export default function Diagnostics() {
             {r.worstGapMs} ms · clock: {r.timing_source}
           </p>
           {r.timing_source === "raf" && (
-            <p className="mt-2 text-sm text-amber-600">
+            <p className="mt-2 text-sm text-watch">
               Measured with requestAnimationFrame — this browser lacks per-frame callbacks,
               so the number above is the DISPLAY rate, not the camera rate. Treat it as an
               upper bound only.
