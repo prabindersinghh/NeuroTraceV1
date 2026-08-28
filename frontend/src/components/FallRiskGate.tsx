@@ -4,7 +4,7 @@
  * The next four tasks deliberately destabilise an elderly stroke survivor: feet together,
  * then eyes closed, then heel-to-toe, then arms out with eyes closed. Each removes one of
  * the systems a person uses to stay upright. That is the point of the tests, and it is also
- * exactly why they are the most dangerous ninety seconds in the product.
+ * exactly why they are the most dangerous moments in the whole protocol.
  *
  * TWO DESIGN DECISIONS THAT LOOK LIKE FRICTION AND ARE NOT
  *

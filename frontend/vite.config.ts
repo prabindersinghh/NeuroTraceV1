@@ -20,7 +20,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "mediapipe/**/*"],
+      includeAssets: ["favicon.svg", "icon-192.png", "icon-512.png", "mediapipe/**/*"],
       workbox: {
         // The face model is ~4 MB; the default 2 MB cap would silently skip it and the
         // offline claim would fail in the one place it matters.
@@ -40,28 +40,30 @@ export default defineConfig({
         name: "NeuroTrace",
         short_name: "NeuroTrace",
         description:
-          "A 90-second daily neurological check-in that runs entirely on your phone.",
+          "A ~3-minute daily neurological check-in that runs entirely on your phone.",
         theme_color: "#173a7a",
         background_color: "#f8fbff",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
-        // BOTH PNGs referenced here were declared and never existed - `public/` has only
-        // favicon.svg and icons.svg. The browser logged "Download error or resource isn't a
-        // valid image" for every install, so "Add to home screen" produced a blank icon and
-        // on some Android versions the install prompt is suppressed outright when a
-        // manifest's icons cannot be fetched. That is not cosmetic for this product: the
-        // installed PWA IS the offline/airplane-mode story.
+        // These two PNGs were DECLARED AND MISSING for the whole life of the manifest -
+        // `public/` held only favicon.svg and icons.svg. Every load logged "Download error
+        // or resource isn't a valid image", so "Add to home screen" produced a blank icon,
+        // and some Android versions suppress the install prompt outright when a manifest's
+        // icons cannot be fetched. That is not cosmetic here: the installed PWA IS the
+        // airplane-mode demo.
         //
-        // Pointed at the brand asset that actually exists rather than inventing artwork.
-        // An SVG icon is valid in a web manifest and scales to every launcher size;
-        // `sizes: "any"` is the correct declaration for one.
+        // They now exist, rasterised from the repo's own favicon.svg rather than invented:
+        // square, flattened onto white (a maskable icon must not rely on transparency, or a
+        // launcher applying its own shape mask shows the OS background through the corners)
+        // and inset to 56% so the mark survives the maskable safe-zone crop.
         icons: [
-          { src: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
           {
-            src: "/favicon.svg",
-            sizes: "any",
-            type: "image/svg+xml",
+            src: "/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
             purpose: "maskable",
           },
         ],

@@ -321,6 +321,22 @@ def _unlabelled_accuracy(text: str) -> list[tuple[int, str]]:
     return hits
 
 
+#: Shipped files that carry user-visible claims but are NOT `frontend/src/**`.
+#:
+#: `frontend/index.html` is here because leaving it out was a real miss: the `<title>` and
+#: the meta description shipped "a 90-second neurological exam" long after D-045 corrected
+#: that figure, and this scanner never looked at the file. It is the browser tab and the
+#: text that appears when the link is shared - about as user-facing as a string gets.
+#:
+#: `frontend/vite.config.ts` is here for the same reason one step removed: the PWA manifest
+#: `description` is authored there and shipped in `manifest.webmanifest`, so a claim can be
+#: made in a build config and never appear in any component.
+EXTRA_CLAIM_BEARING = (
+    "frontend/index.html",
+    "frontend/vite.config.ts",
+)
+
+
 def _claim_bearing_files() -> list[str]:
     """User-facing surfaces plus the documents a reader takes as claims.
 
@@ -337,7 +353,99 @@ def _claim_bearing_files() -> list[str]:
             out.append(rel)
         elif rel in ("README.md", "frontend/README.md"):
             out.append(rel)
+        elif rel in EXTRA_CLAIM_BEARING:
+            out.append(rel)
     return out
+
+
+#: The corrected Daily Pulse duration, D-045. `registry.py`'s per-module seconds had been
+#: reverse-engineered to sum to exactly 90; the numbers that actually drive the live timer
+#: sum to 195. Trimming a clinical task to make a marketing number true would have degraded
+#: the measurement to protect a claim about it, so the number moved instead.
+#:
+#: This pattern exists because the wrong figure survived the correction in five separate
+#: places - the shipped `<title>`, the meta description, the PWA manifest description, three
+#: sites on the landing page and the demo script - for weeks, purely because nothing
+#: checked. A decision that is not enforced by a test is a decision that drifts back.
+STALE_DURATION = re.compile(
+    r"\b(?:90|ninety)[\s-]?(?:second|sec\b|s\b)"
+    r"|\bninety[\s-]seconds?\b",
+    re.I,
+)
+
+
+#: Files permitted to contain the old figure because their job is to record that it WAS the
+#: old figure. `docs/PRD.md` §7 reads: `(Was "<=90s" for an undifferentiated "full session"
+#: - a target the protocol never met...)`. Deleting that would erase the correction's own
+#: history, which is the opposite of what D-045 is for.
+#:
+#: An explicit file list rather than a cleverer regex, for the same reason
+#: `DOCUMENTATION_ALLOWLIST` above is one: a pattern smart enough to tell "asserting 90s"
+#: from "recording that we used to say 90s" is exactly the kind that fails open (D-030).
+STALE_DURATION_HISTORICAL_OK = {
+    "docs/PRD.md",
+}
+
+
+def test_the_stale_duration_allowlist_still_resolves():
+    """An allowlist entry for a renamed file silently stops checking anything."""
+    missing = [f for f in STALE_DURATION_HISTORICAL_OK if not (REPO / f).is_file()]
+    assert missing == [], f"allowlisted files no longer exist: {missing}"
+
+
+def test_no_surface_still_claims_the_corrected_ninety_second_figure():
+    """D-045: the real Daily Pulse figure is ~195s of raw task time - roughly three minutes
+    wall clock. Ninety seconds was a target reverse-engineered into a constant, and it is
+    not what a patient experiences."""
+    offenders: list[str] = []
+    for rel in _claim_bearing_files():
+        if rel in STALE_DURATION_HISTORICAL_OK:
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            if STALE_DURATION.search(line):
+                offenders.append(f"{rel}:{i}: {line.strip()[:140]}")
+    assert offenders == [], (
+        "A surface still claims the ninety-second figure D-045 corrected. Daily Pulse is "
+        "~195s of raw task time, realistically three to four minutes wall clock once "
+        "instructions are included.\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_stale_duration_scanner_actually_catches_each_form_it_missed():
+    """Both directions, against the exact strings that shipped."""
+    for text in [
+        "<title>NeuroTrace - a 90-second neurological exam, at home, every day</title>",
+        'content="NeuroTrace - a 90-second daily neurological check-in."',
+        "runs a ninety-second neurological check on the survivor's own phone",
+        "ninety mornings - ninety seconds each - nothing leaves the phone",
+        "Six run every day inside the ninety-second budget",
+    ]:
+        assert STALE_DURATION.search(text), f"missed the stale figure in: {text!r}"
+
+    for text in [
+        "a ~3-minute daily neurological check-in",
+        "ninety mornings - three minutes each",
+        "Ninety consecutive days, every one of them measured at home.",
+        "195 seconds of raw task time",
+    ]:
+        assert not STALE_DURATION.search(text), f"flagged corrected copy: {text!r}"
+
+
+def test_index_html_is_actually_in_scope():
+    """The miss this scope change exists for. If `frontend/index.html` ever drops out of
+    `_claim_bearing_files` again, the shipped page title stops being checked and nothing
+    else would notice."""
+    scanned = _claim_bearing_files()
+    assert "frontend/index.html" in scanned, (
+        "frontend/index.html is not being scanned - the browser tab title and the meta "
+        "description shipped an uncorrected claim for weeks because of exactly this gap"
+    )
+    assert "frontend/vite.config.ts" in scanned, (
+        "the PWA manifest description is authored here and ships in manifest.webmanifest"
+    )
 
 
 def test_no_user_facing_surface_overclaims():
