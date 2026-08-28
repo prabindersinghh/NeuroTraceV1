@@ -42,6 +42,15 @@ class Role(str, enum.Enum):
     #: read patient data is a backdoor around INV-11 with a friendlier name, so the admin
     #: endpoints return numbers and never rows. See `routers/admin.py`.
     admin = "admin"
+    #: Family, ADDITIONAL to the caregiver who enrolled the patient. The second sibling, the
+    #: relative abroad. They see everything clinical about their own linked patient and
+    #: nothing about anyone else's — enforced by `auth.deps.caretaker_may_access_patient`,
+    #: which requires an active link AND current C7 consent.
+    #:
+    #: NOT the owner. The caregiver keeps consent management, linking and erasure; a
+    #: caretaker holding those would make the caregiver role meaningless. See
+    #: `docs/plans/PLAN_caretaker_onboarding.md` §1a (Reading A).
+    caretaker = "caretaker"
 
 
 class DeploymentTier(str, enum.Enum):
@@ -169,6 +178,38 @@ class ConsentType(str, enum.Enum):
     MEDIA_TESTIMONIAL = "MEDIA_TESTIMONIAL"
     #: C6 — teleconsultation, where applicable.
     TELECONSULTATION = "TELECONSULTATION"
+    #: C7 — sharing this patient's full clinical picture with a linked family caretaker.
+    #: Same shape and same enforcement path as CLINICIAN_SHARING: withdrawing it stops
+    #: caretaker access immediately, independently of whether the link row is still active
+    #: (`services.consent.consent_currently_granted`, read by
+    #: `auth.deps.caretaker_may_access_patient`).
+    #:
+    #: Deliberately NOT default-off. C4/C5 are opt-in because the product works without
+    #: them; a caretaker who can see nothing is not a feature. It is granted explicitly in
+    #: the same transaction that creates the link, and withdrawn from the same settings
+    #: surface as every other consent.
+    CARETAKER_SHARING = "CARETAKER_SHARING"
+
+
+class CaretakerRelationship(str, enum.Enum):
+    """What this caretaker is to the patient. Recorded because "who is this person" is the
+    first thing a clinician or an operator asks about an account with access, and because
+    OTHER exists rather than forcing a wrong answer."""
+
+    SON = "SON"
+    DAUGHTER = "DAUGHTER"
+    SPOUSE = "SPOUSE"
+    SIBLING = "SIBLING"
+    OTHER = "OTHER"
+
+
+class NotificationChannel(str, enum.Enum):
+    """How a caretaker asked to be reached. The destination itself is health-adjacent PII —
+    see `CaretakerChannel`."""
+
+    WHATSAPP = "WHATSAPP"
+    SMS = "SMS"
+    EMAIL = "EMAIL"
 
 
 class Band(str, enum.Enum):
@@ -1037,3 +1078,108 @@ class Consent(Base):
     @property
     def in_force(self) -> bool:
         return self.granted and self.withdrawn_at is None
+
+
+
+class PatientCaretakerLink(Base):
+    """An explicit, consented, revocable family link — the caretaker access boundary.
+
+    A SEPARATE table from `patient_clinician_links`, deliberately, even though the shape is
+    copied field for field. That table is named, indexed and *queried* as clinician linkage:
+    `clinician_is_linked`, `/clinic/patients`, and the admin doctor census counts its rows.
+    Putting family in it would make the census report family members as doctors — a wrong
+    number on an operator surface, which is the quiet kind of drift this project keeps
+    finding. See `docs/plans/PLAN_caretaker_onboarding.md` §1.
+
+    ONE DIFFERENCE FROM THE CLINICIAN LINK, ON PURPOSE: `consent_ref` is populated at
+    creation, not nullable-then-backfilled. D-046 exists because Part 3 shipped links whose
+    consent lived only in an audit event and needed a later migration to reference it
+    properly. There is no reason to repeat that — the consent table already exists, so the
+    link and its C7 row are written in the same transaction.
+    """
+
+    __tablename__ = "patient_caretaker_links"
+    __table_args__ = (
+        sa.Index("ix_pcl_care_patient_active", "patient_id", "unlinked_at"),
+        sa.Index("ix_pcl_care_caretaker_active", "caretaker_id", "unlinked_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    caretaker_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    relationship: Mapped[CaretakerRelationship] = mapped_column(
+        _enum(CaretakerRelationship, "caretaker_relationship_enum"), nullable=False)
+
+    #: Who established the link. Always the owning caregiver — a caretaker minting another
+    #: caretaker would void the boundary the moment one account is compromised.
+    linked_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    linked_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+
+    #: NULL means active. Set on revocation; the row is never deleted, so who could see this
+    #: patient and until when stays recoverable (INV-8).
+    unlinked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    unlinked_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    unlink_reason: Mapped[str | None] = mapped_column(sa.String(400))
+
+    #: The `consents.id` of the C7 grant made when this link was created. Never NULL for a
+    #: link created through `POST /caretakers/links`.
+    consent_ref: Mapped[str | None] = mapped_column(sa.String(64))
+
+    @property
+    def active(self) -> bool:
+        return self.unlinked_at is None
+
+
+class CaretakerChannel(Base):
+    """Where a caretaker asked to be told about their patient — HEALTH-ADJACENT PII.
+
+    A phone number on its own is contact metadata. A phone number JOINED TO A PATIENT LINK
+    says *this person is caring for a stroke survivor*, which is a health inference about a
+    named individual. It is treated as clinical data everywhere it matters:
+
+      - **Deleted on erasure**, not retained (`services/erasure.py`). The link is revoked and
+        kept, as clinician links are; the destination is destroyed.
+      - **Invisible to admin** (D-041). No admin surface returns a destination, a per-patient
+        count of destinations, or anything from which one could be derived.
+      - **Never written into an `audit_log.meta_json`.** The audit trail is append-only and
+        survives erasure by design (D-050) — putting a phone number there would make that
+        number un-erasable, turning the retention property into a liability. Log
+        `channel_id`, never `destination`.
+
+    SCOPED PER PATIENT, not merely per caretaker: a caretaker linked to two parents may want
+    different routing for each, and — the load-bearing reason — erasing one patient must
+    remove that patient's channel without touching the other's.
+    """
+
+    __tablename__ = "caretaker_channels"
+    __table_args__ = (
+        sa.Index("ix_caretaker_channels_active", "caretaker_id", "patient_id", "revoked_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    caretaker_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    channel: Mapped[NotificationChannel] = mapped_column(
+        _enum(NotificationChannel, "notification_channel_enum"), nullable=False)
+    #: The number or address. PII — see the class docstring for the four rules that follow
+    #: from that.
+    destination: Mapped[str] = mapped_column(sa.String(190), nullable=False)
+
+    #: NULL until the channel is proven reachable. Verification itself is part of the
+    #: deferred auth pass; the column exists now so the flow does not need a later migration.
+    verified_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+    #: NULL means active.
+    revoked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+    @property
+    def active(self) -> bool:
+        return self.revoked_at is None

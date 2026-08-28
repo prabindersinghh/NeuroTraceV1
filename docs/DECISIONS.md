@@ -758,3 +758,127 @@ worth weighing at that point:
 No recommendation is recorded here on purpose. Whoever picks this up should decide it with
 the consent surface in front of them, because the right answer depends as much on what the
 caregiver is shown as on what the server enforces.
+
+---
+
+**D-054 · 2026-08-29 · The caretaker is ADDITIONAL family, on its own link table, behind the
+same link-plus-consent rule as a clinician.**
+
+Four owner decisions, locked before any code:
+
+1. **Only the owning caregiver creates a caretaker.** Not the patient, not another
+   caretaker. A caretaker able to mint caretakers voids the boundary the moment one account
+   is compromised — the same reasoning that stops a clinician linking themselves.
+2. **A caretaker may acknowledge a FALL but not an ALERT.** They are the person in the house
+   and a fall needs answering now; an alert is a clinical loop to close. Family *see*
+   everything, including the alert — they simply cannot silence it.
+3. **Caretaker is a COMMON role**, and onboarding leads with *"I'm setting this up for my
+   parent"*.
+4. **Reading A**: the first family member to enrol the patient stays the `caregiver`/owner;
+   every family member after them is a caretaker.
+
+**Why Reading A rather than renaming the family role.** Decision 3 makes the enrolling person
+the son or daughter — who is therefore already the `caregiver`, with full access, consent
+control and erasure. That raised a genuine fork: is "caretaker" additional family, or does it
+replace `caregiver`? Replacing it would migrate every `caregiver` row and rewrite every
+"owning caregiver" check in `patients.py`, `consent.py`, `erasure.py` and `clinician.py` —
+churning tested code across the consent and erasure authorisation paths, the two places where
+a mistake is worst, for no functional gain. Renames that cross authorisation boundaries are
+how the six-route bug happened. Reading A delivers family transparency scoped per patient and
+touches none of it.
+
+**A separate `patient_caretaker_links` table, not a reuse.** Reusing `caregiver` fails
+immediately: `Patient.caregiver_id` is a single non-nullable FK, so a second one has nowhere
+to live and every "owning caregiver" check would silently start admitting them to consent
+changes and erasure — a privilege widening disguised as a reuse. Reusing
+`patient_clinician_links` fails differently and more quietly: that table is *queried* as
+clinician linkage, and the admin doctor census counts its rows, so family would be reported
+as doctors on an operator surface.
+
+The SHAPE is copied field for field, because it already encodes lessons this feature would
+otherwise re-learn — `unlinked_at IS NULL` as the access rule, revocation that retains the
+row (INV-8). **One deliberate difference: `consent_ref` is populated at creation, not
+nullable-then-backfilled.** D-046 exists because Part 3 shipped links whose consent lived
+only in an audit event and needed a later migration to reference it. The consent table
+already exists now, so the link and its C7 row are written in one transaction and that debt
+is simply not incurred.
+
+**C7 reuses the consent machinery rather than adding a parallel one.** No
+`caretaker_can_view` boolean anywhere: a second mechanism answering the same question is how
+the two end up disagreeing. C7 is deliberately not default-OFF — C4/C5 are opt-in because the
+product works without them, but a caretaker who can see nothing is not a feature.
+
+**The WhatsApp destination is health-adjacent PII, not contact metadata.** A number on its own
+is a number; joined to a family link it says *this person is caring for a stroke survivor* — a
+health inference about a named individual. So it is deleted on erasure (the link is only
+revoked, as clinician links are), invisible to admin (D-041), and **never written into an
+`audit_log.meta_json`**: the audit trail is append-only and survives erasure by design
+(D-050), so a number there would be un-erasable — the retention property becomes a liability.
+The audit row records `channel_id` and nothing else.
+
+**Auth is deferred; authorisation is not.** Caretaker accounts are created disabled — the
+password hash is a sentinel no password can match — because invite and credential setup
+belong to the auth pass. The boundary is built and tested now regardless, because it has to
+be provably correct *before* the first real caretaker can sign in, not after.
+
+
+---
+
+**D-055 · 2026-08-29 · OPEN — a migrated SQLite schema carries stale duplicate CHECK
+constraints, and `patients` is un-insertable because of it.**
+
+**Status: ONE HALF FIXED, ONE HALF OPEN. The open half is a deploy risk and needs a
+reviewed change.**
+
+Found while writing the caretaker migration tests — the first tests in this repo that insert
+a privileged user or a patient into an **alembic-migrated** database rather than one built by
+`Base.metadata.create_all()`. Every functional test uses `create_all` (see `conftest.py`), so
+the migrated schema had effectively never been exercised with real rows.
+
+### The mechanism
+`sa.Enum(..., name="x", native_enum=False, create_constraint=True)` used inside a migration
+is **not attached to `Base.metadata`**, so the `ck_%(table_name)s_%(constraint_name)s`
+convention never applies and the CHECK lands under the **bare** name `x`.
+`batch_alter_table`, however, **does** apply the convention. So a later migration that says
+`drop_constraint("x")` actually targets `ck_<table>_x` — a name that has never existed.
+
+On **SQLite** the batch rebuild then keeps the real (old) constraint and adds a correctly
+named new one, leaving two. On **Postgres** the same statement renders as
+`ALTER TABLE ... DROP CONSTRAINT ck_<table>_x`, which errors on a constraint that is not
+there. This is the third distinct variant of the trap D-014 records, and the first one that
+arrives from *reflection* rather than from a hand-passed name.
+
+### Half A — `users`, FIXED in 0018
+Since 0005 the table carried `ck_users_ck_users_role_enum` (the original three roles) beside
+`ck_users_role_enum` (the current set). Both enforced, so the effective rule was their AND:
+an alembic-migrated SQLite database **could not create an `asha_worker`, `admin` or
+`caretaker` account at all**. Verified by inserting each role. 0018 now drops the stale
+duplicate under a SQLite-only guard, and all five roles insert cleanly.
+
+### Half B — `patients`, OPEN
+`baseline_state_enum` (lowercase `not_started/collecting/locked`, from 0002) sits beside
+`ck_patients_baseline_state_enum` (uppercase five, from 0015). **No value satisfies both** —
+`NOT_STARTED` fails the first, `not_started` fails the second — so a migrated SQLite database
+cannot insert a patient row at all. Verified directly with both values.
+
+**And the Postgres consequence is worse than the SQLite one.** Rendering 0015 for Postgres
+emits `ALTER TABLE patients DROP CONSTRAINT ck_patients_baseline_state_enum`, which does not
+exist there either — so **0015 should be expected to fail on the next Neon deploy**. 0014–0019
+have never been deployed, so this has not shipped; it is a pre-deploy blocker, not an
+incident.
+
+**Why it is not fixed here.** The obvious fix — passing
+`naming_convention={"ck": "%(constraint_name)s"}` to `batch_alter_table` so the real name is
+targeted — **was tried and did not work**: the duplicate survived on SQLite. The mechanism
+resists a one-line correction and needs someone to work through alembic's batch reflection
+semantics properly, against a real Postgres as well as SQLite. Doing that unattended, on the
+table every other table references, is exactly what the plan-first rule exists to prevent, so
+the attempt was reverted rather than left in place looking like a fix.
+
+`test_downgrading_0019_deletes_only_caretaker_consents` is marked `xfail(strict=True)` naming
+this defect, so it converts to a hard failure the moment the defect is repaired rather than
+being quietly forgotten.
+
+**Not affected:** every functional test and the running application, which build the schema
+from `Base.metadata` where the convention applies uniformly and only one constraint exists.
+The bug lives strictly in the migration path.

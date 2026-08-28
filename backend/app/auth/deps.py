@@ -10,7 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import PatientClinicianLink, Patient, Role, User
+from ..models import (
+    Patient,
+    PatientCaretakerLink,
+    PatientClinicianLink,
+    Role,
+    User,
+)
 from .jwt import TokenError, decode_token
 
 bearer_scheme = HTTPBearer(auto_error=False, description="JWT access token")
@@ -79,6 +85,13 @@ async def get_patient_for_user(
     patient` below. A link answers "is there a relationship"; consent answers "may it see
     data right now", and withdrawing the second must take effect even if nobody touches
     the first.
+
+    The caretaker branch is the same rule with a different pair: an active
+    `patient_caretaker_links` row AND current C7 (`CARETAKER_SHARING`). Family see
+    everything clinical about their own linked patient and nothing whatsoever about anyone
+    else's — a caretaker reaching a second patient is the same class of defect as the six
+    routes the Part 5.1 audit found, so it goes through one function here rather than being
+    reimplemented per route.
     """
     patient = await session.scalar(select(Patient).where(Patient.id == patient_id))
     if patient is None:
@@ -90,6 +103,8 @@ async def get_patient_for_user(
     )
     if not allowed and user.role is Role.clinician:
         allowed = await clinician_may_access_patient(session, user.id, patient.id)
+    if not allowed and user.role is Role.caretaker:
+        allowed = await caretaker_may_access_patient(session, user.id, patient.id)
     if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to access this patient")
     return patient
@@ -125,3 +140,43 @@ async def clinician_may_access_patient(
     if not await clinician_is_linked(session, clinician_id, patient_id):
         return False
     return await consent_currently_granted(session, patient_id, ConsentType.CLINICIAN_SHARING)
+
+
+
+async def caretaker_is_linked(
+    session: AsyncSession, caretaker_id: uuid.UUID, patient_id: uuid.UUID,
+) -> bool:
+    """True when an ACTIVE family link exists.
+
+    DO NOT CALL THIS FROM A ROUTE. It answers only half the question — the half that does
+    not include consent. `caretaker_may_access_patient` is the entry point, and a source
+    assertion in `test_caretaker_link.py` pins that this function has exactly one caller,
+    because a route obtaining the link check without the consent check is precisely how the
+    clinician equivalent went wrong across six routes.
+    """
+    found = await session.scalar(
+        select(PatientCaretakerLink.id).where(
+            PatientCaretakerLink.caretaker_id == caretaker_id,
+            PatientCaretakerLink.patient_id == patient_id,
+            PatientCaretakerLink.unlinked_at.is_(None),
+        ).limit(1)
+    )
+    return found is not None
+
+
+async def caretaker_may_access_patient(
+    session: AsyncSession, caretaker_id: uuid.UUID, patient_id: uuid.UUID,
+) -> bool:
+    """Active link AND current C7 consent. Neither alone is sufficient.
+
+    The single choke point for family access, mirroring `clinician_may_access_patient`
+    exactly. Every caretaker-facing route delegates here, so withdrawing C7 takes effect
+    everywhere at once instead of needing each call site updated — which is the property
+    that made the clinician fix hold rather than half-land.
+    """
+    from ..models import ConsentType
+    from ..services.consent import consent_currently_granted
+
+    if not await caretaker_is_linked(session, caretaker_id, patient_id):
+        return False
+    return await consent_currently_granted(session, patient_id, ConsentType.CARETAKER_SHARING)

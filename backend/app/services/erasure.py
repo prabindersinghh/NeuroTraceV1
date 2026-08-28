@@ -37,12 +37,14 @@ from ..models import (
     AuditLog,
     AwaazProfile,
     Baseline,
+    CaretakerChannel,
     BaselineReview,
     Deviation,
     ExamSession,
     FallEvent,
     ModuleResult,
     Patient,
+    PatientCaretakerLink,
     PatientClinicianLink,
     PhraseCard,
     Questionnaire,
@@ -73,6 +75,11 @@ _PATIENT_SCOPED = (
     PhraseCard,
     VoiceSample,
     AwaazProfile,
+    # The caretaker's WhatsApp/SMS destination. Health-adjacent PII: a number joined to a
+    # family link says "this person is caring for a stroke survivor". It is DELETED, while
+    # the link itself is only revoked below — the same split as clinician links, and for
+    # the same INV-8 reason.
+    CaretakerChannel,
 )
 
 #: These hang off a SESSION, not off the patient, so they need the join. Verified against
@@ -128,6 +135,18 @@ async def erase_patient_data(
         link.unlinked_by = actor_id
         link.unlink_reason = "patient data erased"
     removed["clinician_links_revoked"] = len(links)
+
+    care_links = list(await db.scalars(
+        select(PatientCaretakerLink).where(
+            PatientCaretakerLink.patient_id == patient.id,
+            PatientCaretakerLink.unlinked_at.is_(None),
+        )
+    ))
+    for link in care_links:
+        link.unlinked_at = now
+        link.unlinked_by = actor_id
+        link.unlink_reason = "patient data erased"
+    removed["caretaker_links_revoked"] = len(care_links)
 
     # --- the tombstone ---
     patient.name = ""

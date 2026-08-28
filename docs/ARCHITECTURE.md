@@ -77,7 +77,9 @@ per-request cost to users with intermittent data.
 | `clinician_profiles` | registration number, qualification, authority — all `SELF_DECLARED` |
 | `patient_clinician_links` | **who may read this patient**; active while `unlinked_at IS NULL` |
 | `baseline_reviews` | append-only CONFIRM / EXTEND / FLAG_CONCERN, with the snapshot reviewed |
-| `consents` | six independent, versioned, withdrawable consents — C3 gates clinician access |
+| `consents` | seven independent, versioned, withdrawable consents — C3 gates clinician access, C7 gates family |
+| `patient_caretaker_links` | **which family may read this patient**; active while `unlinked_at IS NULL` |
+| `caretaker_channels` | a caretaker's WhatsApp/SMS destination — health-adjacent PII, deleted on erasure |
 | `awaaz_profiles` | speech profile and auto-speak settings — gates INV-9 |
 | `phrase_cards` | the patient's phrase board |
 | `voice_samples` | voice-clone **metadata only**; the audio never enters this database |
@@ -105,6 +107,7 @@ routine PATCH silently un-enrols the patient and the check stops running unrepor
 | patient | own exam | run the battery |
 | caregiver | own patients: band, explanation, trends, FAST | enrol, run exams, log symptoms and vertigo, acknowledge falls |
 | clinician | **only linked patients**: roster, deviations, drift, typed cards | acknowledge alerts, export reports, confirm baselines |
+| caretaker | **only their own linked patients**: everything clinical the caregiver sees | acknowledge falls. NOT alerts, consent, linking or erasure |
 | asha_worker | **only assigned households**: name, age, due modules | run deep assessment, sync visits |
 
 Enforced server-side on every route (INV-6). UI hiding is never the boundary.
@@ -131,6 +134,20 @@ That centralisation is itself the control: the Part 5.1 endpoint audit found **s
 that had each hand-rolled the check and never received the Part 3.2 fix, one of which still
 allowed any clinician account to read *and write* any patient's raw module features. See
 `docs/ENDPOINT_DATA_AUDIT.md`.
+
+**Family access is a link plus a consent, exactly like clinician access.** A caretaker is
+family ADDITIONAL to the caregiver who enrolled the patient — the second sibling, the
+relative abroad (D-054, Reading A). They read everything clinical about their own linked
+patient and get 403 on anyone else's, enforced by `auth.deps.caretaker_may_access_patient`:
+an active `patient_caretaker_links` row **and** current C7 (`CARETAKER_SHARING`).
+`caretaker_is_linked` is callable from exactly one place — inside that function — and a
+source assertion pins it, because a route obtaining the link check without the consent check
+is precisely how the clinician equivalent went wrong across six routes.
+
+**What family may do is narrower than what they may see.** They acknowledge a fall — they are
+the person in the house — but never an alert. Seeing an alert is right; silencing one is a
+clinical action, and a worried family member dismissing a real deterioration is the failure
+that split refuses. Consent management, linking and erasure stay with the owning caregiver.
 
 **Erasure tombstones, it does not delete** (Part 5.4, D-050). `audit_log.patient_id` cascades
 on delete — verified by probing, not assumed — so removing a `patients` row destroys the
@@ -176,7 +193,7 @@ Domains that **can** establish laterality: `cranial_nerves`, `motor`, `coordinat
 
 Bands: `STABLE`, `WATCH`, `ALERT`, `PATTERN_ATYPICAL`.
 
-Migrations applied: 0001–0017.
+Migrations applied: 0001–0019.
 
 **Two yardsticks, every session.** The adaptive baseline answers "is today unlike recently";
 the frozen reference answers "how far from the normal we established". A slow decline keeps

@@ -1,4 +1,4 @@
-"""Part 4 — six independent consents, and the one that actually gates access.
+"""Part 4 — the independent consents, and the ones that actually gate access.
 
 THE TEST THAT MATTERS MOST: withdrawing C3 (CLINICIAN_SHARING) must actually stop a linked
 clinician reading this patient's data — not just record that someone said no. A link and a
@@ -45,14 +45,20 @@ async def link_clinician(client, care_token: str, patient_id: str, clinician_id:
     return resp.json()["id"]
 
 
-# --------------------------------------------------------------------------- the six
+# --------------------------------------------------------------------------- the set
 async def test_nothing_is_granted_by_default(client, provision):
     """Silence must not read as yes — including for the two that default OFF in the UI."""
     care = await register_caregiver(client)
     patient_id = await make_patient(client, care)
 
     status = (await client.get(f"/consents/{patient_id}", headers=auth(care))).json()
-    assert len(status) == 6
+    # Derived from the enum, not hardcoded. This assertion read `== 6` and broke the moment
+    # C7 (CARETAKER_SHARING) was added — a count that has to be edited every time the set
+    # grows tests the number, not the behaviour. What matters is that EVERY type is present
+    # and none of them is granted.
+    from app.models import ConsentType
+
+    assert set(status) == {t.value for t in ConsentType}
     assert all(not entry["granted"] for entry in status.values())
     assert status["RESEARCH"]["default_off"] is True
     assert status["MEDIA_TESTIMONIAL"]["default_off"] is True
