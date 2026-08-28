@@ -83,6 +83,35 @@ def test_inv1_no_table_has_a_binary_column():
     assert binary == [], f"binary columns found, media could be stored here: {binary}"
 
 
+def test_inv1_the_file_upload_library_is_not_a_dependency():
+    """INV-1, enforced structurally rather than only by convention.
+
+    `python-multipart` is the library FastAPI requires in order to accept file uploads. It
+    was pinned in requirements and completely unused - zero matches anywhere in `app/` -
+    which meant the single dependency whose only purpose is the thing INV-1 forbids was
+    sitting installed and ready.
+
+    With it absent, a future `UploadFile` parameter fails at import time rather than
+    passing review and shipping. That is the difference between an invariant a test
+    watches for and an invariant the runtime cannot violate.
+
+    Checked against the MANIFESTS, not the live interpreter: a developer who happens to
+    have it installed transitively should not fail this, and a manifest that re-pins it
+    should.
+    """
+    for name in ("requirements.txt", "requirements.lock.txt"):
+        text = (BACKEND / name).read_text(encoding="utf-8")
+        pinned = [
+            line for line in text.splitlines()
+            if line.strip().lower().startswith(("python-multipart", "python_multipart"))
+        ]
+        assert pinned == [], (
+            f"{name} pins python-multipart again. It exists only to accept file uploads, "
+            "which INV-1 forbids - raw audio, video and frames are turned into numbers on "
+            f"the device and never sent. Offending line(s): {pinned}"
+        )
+
+
 def test_inv1_no_registered_route_declares_a_binary_request_body():
     """The same invariant, checked against the app FastAPI actually built (Part 5.2).
 

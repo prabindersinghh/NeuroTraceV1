@@ -8,7 +8,11 @@
 # ---------------------------------------------------------------- web / api
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-python-multipart==0.0.20
+# python-multipart is DELIBERATELY ABSENT. It is the library FastAPI needs in order to
+# accept file uploads - i.e. the one dependency whose only purpose is the thing INV-1
+# forbids. It was installed and completely unused (zero matches in app/). With it gone, a
+# future `UploadFile` parameter fails at import rather than passing review, which makes
+# INV-1 structurally true instead of only test-true. Do not re-add it.
 pydantic==2.10.4
 pydantic-settings==2.7.0
 email-validator==2.2.0
