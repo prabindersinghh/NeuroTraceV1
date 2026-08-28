@@ -13,7 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       className={cn(
-        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] shadow-sm",
+        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem]",
         "placeholder:text-muted-foreground focus-ring disabled:opacity-50",
         className,
       )}
@@ -28,7 +28,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     <select
       ref={ref}
       className={cn(
-        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] shadow-sm focus-ring",
+        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] focus-ring",
         className,
       )}
       {...props}

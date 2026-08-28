@@ -180,9 +180,16 @@ export default function AshaHome() {
         <span
           className={[
             "rounded-full px-3 py-1 text-sm font-medium",
+            // Connectivity is NOT a clinical status, so it must not borrow the band
+            // palette — a green "Online" pill also breaks the rule that green never
+            // signals all-clear in this product. Online is deliberately quiet (it is the
+            // normal case and needs no colour); offline uses the watch tokens, because it
+            // is the state a worker actually needs to notice.
+            // The dropped `dark:` variants were dead: darkMode is configured as "class"
+            // but no .dark palette exists in index.css and nothing adds the class.
             online
-              ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-              : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+              ? "bg-secondary text-secondary-foreground"
+              : "bg-watch-soft text-foreground border border-watch/40",
           ].join(" ")}
         >
           {online ? "Online" : "No connection — visits are saved"}

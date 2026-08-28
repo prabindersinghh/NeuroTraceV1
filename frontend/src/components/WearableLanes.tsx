@@ -53,7 +53,7 @@ function Sparkline({ points }: { points: number[] }) {
       <path
         d={path}
         fill="none"
-        className="stroke-slate-500 dark:stroke-slate-400"
+        className="stroke-muted-foreground"
         strokeWidth={1.5}
         strokeLinejoin="round"
       />
@@ -96,29 +96,35 @@ export function WearableLanes({
           {unacknowledged.map((f) => (
             <div
               key={f.id}
-              className="rounded-lg border-2 border-rose-400 bg-rose-50 p-4
-                         dark:border-rose-700 dark:bg-rose-950/40"
+              /*
+               * Token palette, not raw rose. A fall bypasses the engine entirely (INV-3),
+               * which makes this the most urgent thing a caregiver ever sees — and it was
+               * painted in a red that matched nothing else in the product, so it did not
+               * read as "the same kind of serious" as an ALERT band. The `dark:` variants
+               * dropped with it were dead code: darkMode is configured as "class" but no
+               * .dark palette exists in index.css and nothing ever adds the class.
+               */
+              className="rounded-lg border-2 border-alert/50 bg-alert-soft p-4"
             >
-              <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">
+              <p className="text-sm font-semibold text-foreground">
                 A fall was reported {new Date(f.ts).toLocaleString()}
               </p>
-              <p className="mt-1 text-sm text-rose-900 dark:text-rose-100">{f.message}</p>
+              <p className="mt-1 text-sm text-foreground">{f.message}</p>
               {f.dismissed_by_patient && (
-                <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
+                <p className="mt-1 text-xs text-muted-foreground">
                   They dismissed it on the watch. Check anyway — people dismiss falls they
                   are embarrassed by, or confused after.
                 </p>
               )}
-              <p className="mt-2 text-xs text-rose-800/80 dark:text-rose-200/80">
+              <p className="mt-2 text-xs text-muted-foreground">
                 {f.claim_notice}
               </p>
               {onAcknowledgeFall && (
                 <button
                   type="button"
                   onClick={() => onAcknowledgeFall(f.id)}
-                  className="mt-3 min-h-11 w-full rounded-lg border border-rose-400
-                             bg-white px-4 text-sm font-medium text-rose-900
-                             dark:bg-rose-900/40 dark:text-rose-50"
+                  className="mt-3 min-h-11 w-full rounded-lg border border-alert/50
+                             bg-card px-4 text-sm font-medium text-foreground focus-ring"
                 >
                   I have checked on them
                 </button>

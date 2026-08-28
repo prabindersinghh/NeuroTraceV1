@@ -88,7 +88,7 @@ export function StepBalance({ task, seconds, raw, onDone, onError }: Props) {
             st.visibleStreak = 0;
             if (st.captureOn) { st.total += 1; st.lost += 1; }
           }
-          // ~1s of continuous visibility flips the framing light green.
+          // ~1s of continuous visibility lights the framing outline (border-accent).
           setInFrame(st.visibleStreak > 20);
         });
       } catch (e) {

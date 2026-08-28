@@ -40,6 +40,7 @@ import { emptyBalanceRaw } from "@/lib/ondevice/pose";
 import { loadPlan, runnableSteps, type Intensity, type PlanStep, type SessionPlan } from "@/lib/protocol";
 import { speak, warmUpVoices } from "@/lib/speech-synthesis";
 import { taskLabel } from "@/lib/taskLabels";
+import { MAX_RETRIES } from "@/lib/taskFlow";
 import type { FastCard as FastCardData, ModuleFeatures, Patient, SessionType } from "@/lib/types";
 
 import { StepAttention } from "./StepAttention";
@@ -70,7 +71,6 @@ const QUALITY_MESSAGE: Record<string, StringKey> = {
   finger_moved_off_lens: "qualityFinger",
 };
 
-const MAX_RETRIES = 2;
 
 interface Props {
   /** Practice sessions run a short subset, are stored, and are never scored (0009). */
@@ -209,6 +209,35 @@ export function ProtocolRunner({ practice = false }: Props) {
     return false;
   }, [step, t]);
 
+  /**
+   * The per-module completion handler, MEMOISED — and that is the point, not tidiness.
+   *
+   * This was rebuilt on every render, so each step received a new `onDone` identity every
+   * time the runner re-rendered. A step whose finish effect depends on that identity then
+   * re-fires it: `gateQuality` sets state -> the runner re-renders -> `done` is a new
+   * function -> the effect fires again. StepTapping (M7) did exactly this and consumed
+   * BOTH retries in a few synchronous passes, so the patient saw the retry banner flash
+   * and the session move on without ever being offered the retry they were just promised.
+   *
+   * `useMemo` over a map rather than `useCallback` per code, because the codes are known
+   * and this keeps one stable function per module for the life of the dependencies.
+   */
+  const done = useMemo(() => {
+    const cache = new Map<string, (f: ModuleFeatures, q: Quality) => void>();
+    return (code: string) => {
+      let handler = cache.get(code);
+      if (!handler) {
+        handler = (features: ModuleFeatures, quality: Quality) => {
+          if (!gateQuality(quality)) return;
+          record(code, features, quality);
+          advance();
+        };
+        cache.set(code, handler);
+      }
+      return handler;
+    };
+  }, [gateQuality, record, advance]);
+
   const rewindOcular = useCallback(() => {
     const st = store.current;
     st.ocular.pursuit.length = st.ocularMark.pursuit;
@@ -303,7 +332,12 @@ export function ProtocolRunner({ practice = false }: Props) {
       setBusy(false);
       setFinished(true);
     }
-  }, [gateSkipped, lang, patientId, practice]);
+    // `sessionType` MUST be here. Without it `submit` closes over the value from the
+    // render that created it — which is the "COMPREHENSIVE" useState default, not the
+    // type the scheduler actually returned — so every Daily Pulse session would be posted
+    // mislabelled as Comprehensive, and the offline queue would store it wrong too.
+    // Caught by oxlint's exhaustive-deps warning, not by any test.
+  }, [gateSkipped, lang, patientId, practice, sessionType]);
 
   // Reaching past the last step submits.
   useEffect(() => {
@@ -373,11 +407,6 @@ export function ProtocolRunner({ practice = false }: Props) {
   if (!step) return <Frame patientId={patientId}><LoadingState /></Frame>;
 
   // ---- per-step render ----
-  const done = (code: string) => (features: ModuleFeatures, quality: Quality) => {
-    if (!gateQuality(quality)) return;
-    record(code, features, quality);
-    advance();
-  };
   const demo = demoClipFor(step.module, step.task);
 
   return (
@@ -412,7 +441,7 @@ export function ProtocolRunner({ practice = false }: Props) {
       )}
 
       {step.task === "simple_and_choice_rt" && (
-        <StepAttention onDone={done("M10")} onSkip={advance} />
+        <StepAttention key={`m10-${attempt}`} onDone={done("M10")} onSkip={advance} />
       )}
       {step.task === "word_encoding" && (
         <StepRecall mode="encode" seconds={step.seconds}
@@ -493,7 +522,7 @@ export function ProtocolRunner({ practice = false }: Props) {
           }} />
       )}
       {step.task === "finger_tapping" && (
-        <StepTapping onDone={done("M7")} onSkip={advance} />
+        <StepTapping key={`m7-${attempt}`} onDone={done("M7")} onSkip={advance} />
       )}
       {(step.task === "phq2" || step.task === "medication_confirm") && (
         <StepQuestions

@@ -155,19 +155,39 @@ function TracePlot({ series }: { series: TraceSeries }) {
         <path
           d={path}
           fill="none"
-          className="stroke-sky-600 dark:stroke-sky-400"
+          className="stroke-accent"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
         />
 
-        <circle cx={ox} cy={oy} r={4} className="fill-emerald-600" />
-        <circle cx={ex} cy={ey} r={4} className="fill-rose-600" />
+        {/*
+          * Start and end markers. Previously emerald and rose — raw Tailwind colours that
+          * bypassed the token palette, and in a CLINICAL trace a green dot and a red dot
+          * read as a verdict ("began well, ended badly"). Neither endpoint is good or bad;
+          * they mark where a stepping path started and finished. Accent and ink carry the
+          * direction without implying one.
+          *
+          * `<title>` gives each marker an accessible name, because colour alone was the
+          * only thing distinguishing them — the caption named neither.
+          */}
+        <circle cx={ox} cy={oy} r={4} className="fill-accent">
+          <title>Start of path</title>
+        </circle>
+        <circle cx={ex} cy={ey} r={5} className="fill-foreground">
+          <title>End of path</title>
+        </circle>
       </svg>
 
       <figcaption className="mt-1.5 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">
           {TEST_LABEL[series.test] ?? series.test}
+        </span>
+        {" · "}
+        <span className="whitespace-nowrap">
+          <span aria-hidden className="text-accent">●</span> start
+          {" "}
+          <span aria-hidden>●</span> end
         </span>
         {Math.abs(deviationDeg) > 0.5 && (
           <>
