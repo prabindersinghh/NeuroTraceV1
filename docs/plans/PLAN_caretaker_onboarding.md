@@ -17,9 +17,10 @@
 **All four decisions are locked. No open question blocks build.** The plan below is complete
 as specified; §9 lists the one remaining non-blocking question.
 
-The caretaker is the family member who actually holds the phone most days — a son or
-daughter, with the patient being their parent. They are not a clinician and not the
-existing `caregiver` role (see §1, which is the first thing to settle).
+The caretaker is family — a second son or daughter, a sibling, a relative abroad — attached
+to a patient somebody else has already enrolled. Under Reading A (§1a) the family member who
+sets the product up and holds the phone day to day is the `caregiver`/owner; the caretaker is
+everyone *after* them. They are not a clinician and not the owner (see §1).
 
 **The one part of this that is not deferrable is the access boundary.** A caretaker
 reaching another patient's data is the same class of defect as the six-route bug the

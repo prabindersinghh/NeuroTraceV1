@@ -714,3 +714,47 @@ does not produce a false failure.
 `docs/SBOM.md`; deliberately not acted on, because migrating password hashing is a
 security-relevant change that deserves its own reviewed piece of work.
 
+
+---
+
+**D-053 · 2026-08-29 · OPEN — should a consent that depends on C2 (`DATA_PROCESSING`) be
+treated as moot when C2 is withdrawn?**
+
+**Status: OPEN. Not resolved, and deliberately not resolved inside the caretaker feature.**
+
+The six consents (Part 4, D-049) are independent by construction: `set_consent` writes and
+withdraws each type on its own, and `consent_currently_granted` reads exactly one type. That
+independence is right for most pairs — C4 (research) and C5 (media) genuinely have nothing to
+do with each other.
+
+But C2 is not like the others. `DATA_PROCESSING` is consent to process personal and health
+data *at all*. If it is withdrawn while C3 (`CLINICIAN_SHARING`) remains granted, the current
+code will happily keep serving a linked clinician this patient's measurements — sharing data
+whose processing the caregiver has just refused. Nothing in the system flags the combination.
+
+**This is a property of the existing consent model, not something the caretaker feature
+introduces.** It applies to C3 today, in production code, and it would apply identically to a
+future C7 (`CARETAKER_SHARING`). The caretaker work therefore inherits the question rather
+than creating it, and resolving it there would fix half the problem in the wrong place — C3
+would keep the gap while C7 did not, which is worse than a consistent gap because nobody
+would expect the asymmetry.
+
+**To be resolved for C3 and C7 together, in one place**, when it is picked up. The options
+worth weighing at that point:
+
+- **Dependency at read time** — `consent_currently_granted` returns False for any dependent
+  type when C2 is not in force. One change, applies everywhere, but makes a "granted" row
+  read as not-granted, which the consent status surface must then explain honestly rather
+  than showing a confusing toggle.
+- **Cascade at write time** — withdrawing C2 withdraws its dependents as real, attributed
+  withdrawal rows. More explicit and fully auditable, but it puts words in the caregiver's
+  mouth: they withdrew one thing and the record shows them withdrawing three.
+- **Block the withdrawal** — refuse to withdraw C2 while dependents are active, and require
+  them to be withdrawn first. Honest, but refusing to let someone withdraw consent is a bad
+  posture for a consent system to take.
+- **Surface only** — leave enforcement alone and warn in the UI. Cheapest, and the weakest:
+  it leaves the actual access path unchanged, which is the thing that matters.
+
+No recommendation is recorded here on purpose. Whoever picks this up should decide it with
+the consent surface in front of them, because the right answer depends as much on what the
+caregiver is shown as on what the server enforces.
