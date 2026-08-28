@@ -13,7 +13,7 @@
  *  - WATCH is visible but never notifies. Alert fatigue is the failure mode that kills
  *    adherence, and a muted product detects nothing.
  */
-import { BellRing, Pill, ShieldCheck, Stethoscope } from "lucide-react";
+import { AlertTriangle, BellRing, Pill, ShieldCheck, Stethoscope } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -29,6 +29,7 @@ import { api } from "@/lib/api";
 import { SessionSettings } from "@/components/SessionSettings";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { NOTIFY_MESSAGE_KEY, notificationsFor } from "@/lib/notify";
 import type { Band, Dashboard as DashboardData } from "@/lib/types";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
@@ -114,6 +115,37 @@ export function Dashboard() {
   // Only chart domains that were actually measured.
   const domains = [...new Set(data.trends.flatMap((p) => Object.keys(p.domain_devs)))];
 
+  // What should actually reach this family (Part 6.2). The rules live in `lib/notify.ts`
+  // and are unit-tested there, because the one that matters most is a NEGATIVE: WATCH does
+  // not notify. A rule like that erodes silently inside a component - somebody widens a
+  // condition to "surface more", and a family is trained to ignore the card that counts.
+  //
+  // `monitoring` is the Part 3 gate: a baseline still collecting, awaiting a doctor, or
+  // abandoned has no band the product stands behind, so it must not produce one here
+  // either. Bands are already suppressed server-side in that state; this keeps the
+  // caregiver surface consistent with that rather than trusting it.
+  const monitoring = data.baseline.state === "LOCKED";
+  const recent = data.history.slice(0, 3);
+  const lowQualityStreak = (() => {
+    let streak = 0;
+    for (const row of recent) {
+      if (row.confounders?.includes("low_quality_capture")) streak += 1;
+      else break;
+    }
+    return streak;
+  })();
+  const notifications = notificationsFor({
+    band,
+    // The server does not currently expose a consecutive-missed-days count, so this stays
+    // 0 rather than being guessed from `history` - a gap in the record and a gap in
+    // reporting are different things, and inferring one from the other here would produce
+    // a "missed sessions" card on a patient who simply enrolled last week.
+    missedSessionDays: 0,
+    lowQualityStreak,
+    adherence: data.adherence_rate_30d ?? null,
+    monitoring,
+  });
+
   return (
     <AppShell>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -139,7 +171,33 @@ export function Dashboard() {
         </div>
       </div>
 
-      {data.baseline.state !== "locked" && (
+      {/* What actually needs this family's attention, above everything else on the page.
+          Rules live in `lib/notify.ts` and are unit-tested; WATCH is deliberately absent.
+          No entry here reassures - silence means "nothing crossed a threshold", which is
+          the only thing silence is entitled to mean. */}
+      {notifications.length > 0 && (
+        <Card className="mb-6 border-alert/30 bg-alert-soft">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-5 w-5 text-alert" aria-hidden />
+              {t("needsAttention")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ul className="flex flex-col gap-2">
+              {notifications.map((n) => (
+                <li key={n.reason} className="flex gap-2 text-sm leading-relaxed">
+                  {/* Colour is never the only carrier of meaning - the sentence says it. */}
+                  <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-alert" />
+                  <span>{t(NOTIFY_MESSAGE_KEY[n.reason] as Parameters<typeof t>[0])}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {data.baseline.state !== "LOCKED" && (
         <Card className="mb-6 border-accent/30 bg-accent/5">
           <CardContent className="flex flex-wrap items-center gap-4 p-5">
             <div className="flex-1">

@@ -122,7 +122,7 @@ function PatientCard({ patient }: { patient: Patient }) {
             {t("finishSetup")}
           </Link>
         )}
-        {patient.baseline_state !== "locked" && (
+        {patient.baseline_state !== "LOCKED" && (
           <span className="inline-flex w-fit items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
             {t("buildingBaseline")}
           </span>

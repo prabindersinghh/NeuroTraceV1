@@ -85,7 +85,7 @@ export function Clinic() {
                   <p className="text-lg font-semibold">{row.name}</p>
                   <p className="text-sm text-muted-foreground">
                     {row.age ? `${row.age} · ` : ""}
-                    {row.baseline_state === "locked"
+                    {row.baseline_state === "LOCKED"
                       ? `${t("lastSession")}: ${row.last_session ? formatDateTime(row.last_session, locale) : "—"}`
                       : t("buildingBaseline")}
                   </p>
