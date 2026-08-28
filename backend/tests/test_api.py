@@ -81,7 +81,7 @@ async def test_enrolment_blocks_a_patient_who_is_too_recent(client):
 async def test_enrolment_accepts_a_patient_past_three_months(client):
     token, _ = await register(client)
     patient = await make_patient(client, token)
-    assert patient["baseline_state"] == "not_started"
+    assert patient["baseline_state"] == "NOT_STARTED"
     assert patient["stroke_side"] == "left"
 
 
@@ -287,7 +287,7 @@ async def test_the_dashboard_carries_the_fast_card_and_baseline_progress(client)
     assert resp.status_code == 200
     body = resp.json()
     assert body["fast"]["items"]                      # TRD §8, on every dashboard
-    assert body["baseline"]["state"] == "collecting"
+    assert body["baseline"]["state"] == "IN_PROGRESS"
     assert body["baseline"]["modules_locked"] == 0
     assert len(body["trends"]) == 3
     assert len(body["history"]) == 3
@@ -316,14 +316,22 @@ async def test_the_clinic_list_is_clinician_only(client, provision):
 
 async def test_the_clinic_list_ranks_by_sustained_deviation(client, provision):
     caregiver, _ = await register(client)
-    clinician, _ = await provision(client, "dr@example.com", "clinician")
-    await make_patient(client, caregiver, name="Quiet")
-    await make_patient(client, caregiver, name="Also quiet")
+    clinician, doctor = await provision(client, "dr@example.com", "clinician")
+    for patient in (
+        await make_patient(client, caregiver, name="Quiet"),
+        await make_patient(client, caregiver, name="Also quiet"),
+    ):
+        # Part 3.2: the roster is scoped to an active link — the owning caregiver grants it.
+        linked = await client.post("/clinician/links", json={
+            "patient_id": patient["id"], "clinician_id": doctor["id"],
+            "clinician_role": "TREATING_PHYSICIAN",
+        }, headers=auth(caregiver))
+        assert linked.status_code == 201, linked.text
 
     rows = (await client.get("/clinic/patients", headers=auth(clinician))).json()["patients"]
     assert len(rows) == 2
     assert all(r["band"] is None for r in rows)          # no sessions yet
-    assert all(r["baseline_state"] == "not_started" for r in rows)
+    assert all(r["baseline_state"] == "NOT_STARTED" for r in rows)
 
 
 async def test_the_audit_trail_records_access_and_is_not_patient_facing(client):
@@ -426,7 +434,12 @@ async def test_another_caregiver_cannot_reach_the_patient(client):
 async def test_a_clinician_has_read_access_but_cannot_edit(client, provision):
     token, _ = await register(client)
     patient = await make_patient(client, token)
-    clinician, _ = await provision(client, "dr@example.com", "clinician")
+    clinician, doctor = await provision(client, "dr@example.com", "clinician")
+    linked = await client.post("/clinician/links", json={
+        "patient_id": patient["id"], "clinician_id": doctor["id"],
+        "clinician_role": "TREATING_PHYSICIAN",
+    }, headers=auth(token))
+    assert linked.status_code == 201, linked.text
 
     assert (await client.get(f"/dashboard/{patient['id']}",
                              headers=auth(clinician))).status_code == 200
@@ -445,6 +458,45 @@ async def test_the_demo_seed_produces_the_pitch_story(client):
     seeded = (await client.post("/demo/seed")).json()
     assert seeded["bands"][-1] == "ALERT"
     assert seeded["bands"].count("ALERT") >= 1
+
+
+async def test_the_demo_seed_passes_through_the_doctor_gate(client):
+    """Part 3 guardrail: a seed that SKIPS the doctor gate must fail.
+
+    The 21-day story ending in ALERT is not sufficient evidence that the gate exists —
+    exactly the lesson of the wrong-reference-date seed, which produced the right bands
+    from the wrong mechanism. If `_refresh_baseline_state` ever went back to auto-locking,
+    the bands would still come out right and nothing else here would notice.
+
+    So this asserts the MECHANISM: a recorded CONFIRM exists, it was made by a clinician,
+    and LOCKED was reached through it rather than around it.
+    """
+    seeded = (await client.post("/demo/seed")).json()
+
+    assert seeded["baseline_confirmed_on_day"] is not None, (
+        "the demo never passed through DOCTOR_REVIEW_PENDING — the baseline locked "
+        "without a clinician, which is the thing Part 3 exists to prevent"
+    )
+
+    login = await client.post("/auth/login",
+                              json={"email": seeded["email"], "password": seeded["password"]})
+    token = login.json()["tokens"]["access_token"]
+    body = (await client.get(f"/dashboard/{seeded['patient_id']}",
+                             headers=auth(token))).json()
+
+    # LOCKED, and only because a human said so.
+    assert body["baseline"]["state"] == "LOCKED"
+
+    reviews = (await client.get(f"/clinician/reviews/{seeded['patient_id']}",
+                                headers=auth(token))).json()
+    confirms = [r for r in reviews["reviews"] if r["action"] == "CONFIRM"]
+    assert len(confirms) == 1, (
+        f"expected exactly one recorded CONFIRM, got {len(confirms)} — a baseline may "
+        "be confirmed once"
+    )
+    assert confirms[0]["clinician_id"] is not None, "the CONFIRM has no attributed author"
+    assert confirms[0]["reviewed_at"] is not None
+    assert confirms[0]["sessions_in_window"] > 0
 
 
 async def test_the_demo_seed_runs_the_real_two_layer_schedule_not_just_the_right_ending(client):
@@ -479,7 +531,7 @@ async def test_the_demo_seed_runs_the_real_two_layer_schedule_not_just_the_right
     token = login.json()["tokens"]["access_token"]
     body = (await client.get(f"/dashboard/{seeded['patient_id']}",
                              headers=auth(token))).json()
-    assert body["baseline"]["state"] == "locked", (
+    assert body["baseline"]["state"] == "LOCKED", (
         "the 21-day baseline must LOCK inside the promised window even though the "
         "Comprehensive-only modules are measured only twice weekly — this is the "
         "aggregate-lock-on-slowest-module regression (D-043)"
@@ -492,7 +544,7 @@ async def test_the_demo_seed_runs_the_real_two_layer_schedule_not_just_the_right
     body = (await client.get(f"/dashboard/{seeded['patient_id']}",
                              headers=auth(token))).json()
     assert body["latest"]["band"] == "ALERT"
-    assert body["baseline"]["state"] == "locked"
+    assert body["baseline"]["state"] == "LOCKED"
     assert len(body["alerts"]) == 1
     assert body["adherence_streak"] > 0
     assert body["fast"]["items"]

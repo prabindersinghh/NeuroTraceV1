@@ -146,14 +146,18 @@ async def _upsert_baseline(session: AsyncSession, patient_id: uuid.UUID,
     row.locked = built.locked
     row.reason = built.reason[:256]
 
-    # Snapshot ONCE, the first time this module's baseline locks, and never again. The
-    # adaptive values above keep moving; these do not. If this ever became an update the
-    # frozen reference would inherit the exact blind spot it exists to cover.
-    if row.locked and row.reference_locked_at is None:
-        row.reference_median_json = dict(built.median)
-        row.reference_mad_json = dict(built.mad)
-        row.reference_n_sessions = built.n_sessions
-        row.reference_locked_at = datetime.now(timezone.utc)
+    # THE FROZEN REFERENCE IS NOT WRITTEN HERE ANY MORE (Part 3, D-048).
+    #
+    # It used to be snapshotted the first time a MODULE locked. With a doctor gate in
+    # front of the patient-level lock, that moment now arrives while the patient is still
+    # DOCTOR_REVIEW_PENDING — before anyone has approved anything — and INV-4 forbids
+    # rewriting it. A clinician pressing EXTEND would then be extending a baseline whose
+    # permanent yardstick had already been sealed against the shorter window they just
+    # rejected.
+    #
+    # It is now written by `services.baseline_review.freeze_reference`, once, on CONFIRM.
+    # That makes INV-4 stronger rather than weaker: the reference gains an attributable
+    # author and a timestamp tied to a human decision.
     return row
 
 
@@ -336,6 +340,19 @@ async def compute_session(
     history_sessions.append(today)
     gate: GateResult = evaluate_gates(history_sessions)
 
+    # Suppression is a PATIENT-level fact now, not a per-module one (Part 3.3).
+    #
+    # It used to mean "some module is still collecting". It now means "this patient's
+    # baseline has not been confirmed by a clinician", which additionally covers
+    # DOCTOR_REVIEW_PENDING (criteria met, nobody has approved it) and ABANDONED
+    # (invalidated). A patient waiting on a doctor is not a patient being monitored, and
+    # must not receive a band.
+    #
+    # `_refresh_baseline_state` runs AFTER scoring, so this reads the state as it was
+    # before today's session — which is right: the session that completes the criteria is
+    # itself still part of the unconfirmed window.
+    baseline_phase = patient.baseline_state is not BaselineState.LOCKED
+
     if baseline_phase:
         # Never band a patient whose baseline is still forming.
         gate = GateResult(band=BAND_STABLE, reason="baseline still being collected")
@@ -509,12 +526,20 @@ async def _refresh_baseline_state(db: AsyncSession, patient: Patient) -> None:
     rows = list(await db.scalars(
         select(BaselineRow).where(BaselineRow.patient_id == patient.id)
     ))
+    # Terminal states are a human's to set and a human's to leave. LOCKED was decided by a
+    # clinician CONFIRM; ABANDONED by an invalidation. Neither may be recomputed away by a
+    # session arriving afterwards.
+    if patient.baseline_state in (BaselineState.LOCKED, BaselineState.ABANDONED):
+        return
+
     if not rows:
-        patient.baseline_state = BaselineState.not_started
+        patient.baseline_state = BaselineState.NOT_STARTED
     elif all(r.locked for r in rows):
-        patient.baseline_state = BaselineState.locked
+        # Criteria met — but this is NOT a lock. It is a request for review. Bands and
+        # alerts stay suppressed until a clinician confirms (Part 3.3).
+        patient.baseline_state = BaselineState.DOCTOR_REVIEW_PENDING
     else:
-        patient.baseline_state = BaselineState.collecting
+        patient.baseline_state = BaselineState.IN_PROGRESS
 
 
 async def _is_episode_onset(db: AsyncSession, patient_id: uuid.UUID,

@@ -103,6 +103,74 @@ class SessionType(str, enum.Enum):
     asha_visit = "ASHA_VISIT"
 
 
+class ClinicianRole(str, enum.Enum):
+    """What this clinician IS to this patient — Part 3.1.
+
+    Deliberately not a generic "doctor". The three are different relationships with
+    different authority: the treating physician owns the care plan, a consulting
+    neurologist advises on it, and a clinical reviewer reads the data without holding
+    clinical responsibility for the patient. Recording which one signed off a baseline is
+    part of what makes the sign-off meaningful.
+    """
+
+    TREATING_PHYSICIAN = "TREATING_PHYSICIAN"
+    CONSULTING_NEUROLOGIST = "CONSULTING_NEUROLOGIST"
+    CLINICAL_REVIEWER = "CLINICAL_REVIEWER"
+
+
+class VerificationStatus(str, enum.Enum):
+    """Whether a medical registration number has been checked. It has not.
+
+    ONE VALUE, ON PURPOSE. We store and display the registration number the clinician
+    typed, and we have verified nothing about it. A single-value enum makes that explicit
+    and makes adding VERIFIED later a deliberate migration with a verification mechanism
+    behind it, rather than a string somebody writes optimistically one afternoon.
+
+    Every surface that renders the number must render this beside it.
+    """
+
+    SELF_DECLARED = "SELF_DECLARED"
+
+
+class BaselineReviewAction(str, enum.Enum):
+    """What the doctor did at the baseline gate — Part 3.4. Append-only (INV-8)."""
+
+    #: The baseline is a fair picture of this patient's normal. Locks it, and is the ONLY
+    #: thing that writes the frozen reference (INV-4).
+    CONFIRM = "CONFIRM"
+    #: Not enough, or not representative. Returns to IN_PROGRESS with a reason.
+    EXTEND = "EXTEND"
+    #: Something in the data worries the clinician. Records it and HOLDS the patient at
+    #: review — it is not a rejection and does not restart collection.
+    FLAG_CONCERN = "FLAG_CONCERN"
+
+
+class ConsentType(str, enum.Enum):
+    """Six independent consents, Part 4 — not one blanket agreement.
+
+    A single "I agree" cannot express "share my measurements with my doctor: yes" and
+    "use my data for research: no" as two different, independently revocable answers. Each
+    of these is its own grant, its own withdrawal, and its own audit trail. `CLINICIAN_
+    SHARING` is the load-bearing one: withdrawing it must actually stop a linked clinician
+    from reading this patient's data, not just record that someone said no (4.2, 4.5).
+    """
+
+    #: C1 — using NeuroTrace at all, for neurological follow-up.
+    FOLLOW_UP = "FOLLOW_UP"
+    #: C2 — processing personal and health data to run the product.
+    DATA_PROCESSING = "DATA_PROCESSING"
+    #: C3 — sharing measurements with the linked clinician. Withdrawing this gates access
+    #: server-side (`app.services.consent.consent_currently_granted`), independently of
+    #: whether the `patient_clinician_links` row is still active.
+    CLINICIAN_SHARING = "CLINICIAN_SHARING"
+    #: C4 — research / validation participation. Default OFF.
+    RESEARCH = "RESEARCH"
+    #: C5 — photo / video / testimonial use. Default OFF.
+    MEDIA_TESTIMONIAL = "MEDIA_TESTIMONIAL"
+    #: C6 — teleconsultation, where applicable.
+    TELECONSULTATION = "TELECONSULTATION"
+
+
 class Band(str, enum.Enum):
     STABLE = "STABLE"
     WATCH = "WATCH"
@@ -114,9 +182,27 @@ class Band(str, enum.Enum):
 
 
 class BaselineState(str, enum.Enum):
-    not_started = "not_started"
-    collecting = "collecting"
-    locked = "locked"
+    """How far along this patient's baseline is — Part 3.3.
+
+    Extended from three values to five rather than adding a parallel `baseline_phase`
+    column: two fields that both mean "how far along is the baseline" drift apart, and the
+    one the engine reads would eventually stop matching the one the UI shows.
+
+    The engine suppresses bands and alerts for EVERY value except LOCKED, so both new
+    states are correctly silent — a patient waiting on a doctor is not a patient being
+    monitored.
+    """
+
+    NOT_STARTED = "NOT_STARTED"
+    #: Collecting. No alerts fire, no bands are shown to the caregiver.
+    IN_PROGRESS = "IN_PROGRESS"
+    #: Criteria met; waiting on a human. Still silent — nothing has been approved yet.
+    DOCTOR_REVIEW_PENDING = "DOCTOR_REVIEW_PENDING"
+    #: A clinician has CONFIRMED. Monitoring begins and the frozen reference is written.
+    LOCKED = "LOCKED"
+    #: Invalidated — a new clinical event during the window (3.6), or a second failure to
+    #: complete (D-047). Carries a reason and is visible to caregiver and clinician.
+    ABANDONED = "ABANDONED"
 
 
 class Instrument(str, enum.Enum):
@@ -233,8 +319,21 @@ class Patient(Base):
         sa.ForeignKey("users.id", ondelete="SET NULL"), index=True)
     baseline_state: Mapped[BaselineState] = mapped_column(
         _enum(BaselineState, "baseline_state_enum"),
-        default=BaselineState.not_started, nullable=False)
+        default=BaselineState.NOT_STARTED, nullable=False)
+
+    #: Set when this patient's data was erased (Part 5.4). A non-NULL value means this row
+    #: is a TOMBSTONE: every clinical measurement is gone and every identifying field has
+    #: been cleared. The row itself survives because `audit_log.patient_id` cascades on
+    #: delete — removing it would destroy the record of who accessed this person's data
+    #: before erasure, which is the opposite of what an erasure should leave behind (INV-8).
+    erased_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    erasure_reason: Mapped[str | None] = mapped_column(sa.String(200))
+
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+
+    @property
+    def erased(self) -> bool:
+        return self.erased_at is not None
 
     caregiver: Mapped[User] = relationship(back_populates="managed_patients",
                                            foreign_keys=[caregiver_id])
@@ -754,3 +853,187 @@ class UtteranceLog(Base):
     ts: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
         nullable=False)
+
+
+# --------------------------------------------------- Part 3: doctor in the loop
+class ClinicianProfile(Base):
+    """Registration details for a clinician user — Part 3.1.
+
+    A separate table rather than columns on `users`, because only a small fraction of
+    users are clinicians and every auth query reads `users`. Nothing here is verified by
+    NeuroTrace; see `verification_status`.
+    """
+
+    __tablename__ = "clinician_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True,
+        nullable=False)
+
+    full_name: Mapped[str] = mapped_column(sa.String(160), nullable=False)
+    qualification: Mapped[str | None] = mapped_column(sa.String(120))
+    #: Stored and displayed exactly as typed. NOT checked against any registry.
+    registration_number: Mapped[str | None] = mapped_column(sa.String(64))
+    registering_authority: Mapped[str | None] = mapped_column(sa.String(160))
+    specialty: Mapped[str | None] = mapped_column(sa.String(120))
+    affiliation: Mapped[str | None] = mapped_column(sa.String(200))
+    contact: Mapped[str | None] = mapped_column(sa.String(200))
+
+    #: Always SELF_DECLARED today. Every surface rendering `registration_number` must
+    #: render this beside it — implying we checked a credential we did not is worse than
+    #: not collecting it.
+    verification_status: Mapped[VerificationStatus] = mapped_column(
+        _enum(VerificationStatus, "verification_status_enum"),
+        default=VerificationStatus.SELF_DECLARED, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), default=utcnow, onupdate=utcnow,
+        server_default=sa.func.now(), nullable=False)
+
+
+class PatientClinicianLink(Base):
+    """An explicit, consented, revocable doctor-patient link — Part 3.2.
+
+    A table rather than `Patient.clinician_id`, because a nullable FK cannot express "was
+    linked, then unlinked, on these dates, by this actor, for this reason". Link and
+    unlink both write audit rows.
+
+    THIS IS ALSO AN ACCESS FIX, NOT ONLY A FEATURE. Before Part 3, `get_patient_for_user`
+    allowed any user whose role was `clinician` to read ANY patient, and the clinic roster
+    ran a bare `select(Patient)`. `Patient.clinician_id` existed and was never consulted
+    for authorisation. An active row here is now what grants access.
+
+    CONSENT (Part 4 hand-off): `consent_ref` is intentionally nullable in Part 3. A
+    Part-3-era link records a caregiver-granted consent EVENT in `audit_log`
+    (`clinician.link.granted`, carrying the granting caregiver and timestamp), and
+    **Part 4's migration is responsible for backfilling `consent_ref` for every link
+    created before its consent tables existed** — see D-046. Without that backfill there
+    is a cohort of consented-but-unreferenced links, which is exactly the gap Part 4 must
+    close rather than inherit.
+    """
+
+    __tablename__ = "patient_clinician_links"
+    __table_args__ = (
+        sa.Index("ix_pcl_patient_active", "patient_id", "unlinked_at"),
+        sa.Index("ix_pcl_clinician_active", "clinician_id", "unlinked_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    clinician_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    clinician_role: Mapped[ClinicianRole] = mapped_column(
+        _enum(ClinicianRole, "clinician_role_enum"), nullable=False)
+
+    #: Who established the link — normally the owning caregiver, who is the one able to
+    #: consent on the patient's behalf.
+    linked_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    linked_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+
+    #: NULL means active. Set on revocation; the row is never deleted, so the history of
+    #: who could see this patient and when is recoverable.
+    unlinked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    unlinked_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    unlink_reason: Mapped[str | None] = mapped_column(sa.String(400))
+
+    #: Filled by Part 4. See the class docstring and D-046.
+    consent_ref: Mapped[str | None] = mapped_column(sa.String(64))
+
+    @property
+    def active(self) -> bool:
+        return self.unlinked_at is None
+
+
+class BaselineReview(Base):
+    """One doctor action at the baseline gate — Part 3.4. APPEND-ONLY (INV-8).
+
+    There is no update or delete path. A change of mind is a NEW row, so the sequence of
+    what a clinician thought and when stays readable — including an EXTEND followed later
+    by a CONFIRM.
+
+    `baseline_snapshot_json` stores what the reviewer was actually shown. Without it, a
+    later reader cannot tell whether the doctor saw the same data the database now holds,
+    which is the difference between an auditable sign-off and a checkbox.
+    """
+
+    __tablename__ = "baseline_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+    clinician_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+
+    action: Mapped[BaselineReviewAction] = mapped_column(
+        _enum(BaselineReviewAction, "baseline_review_action_enum"), nullable=False)
+    #: Required for EXTEND and FLAG_CONCERN — enforced at the API, not by the column, so
+    #: the failure is a readable 400 rather than an IntegrityError.
+    note: Mapped[str | None] = mapped_column(sa.String(2000))
+
+    #: What the clinician saw, at the moment they saw it.
+    baseline_snapshot_json: Mapped[dict | None] = mapped_column(sa.JSON)
+    sessions_in_window: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+
+    reviewed_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), index=True, **_TS)
+
+
+class Consent(Base):
+    """One decision, for one of the six consents, at one version — Part 4.
+
+    Not a single row toggled in place. A grant and a later withdrawal are different rows'
+    worth of history worth keeping (this is legally significant evidence, the same reason
+    `audit_log` is append-only, INV-8), and a version bump on the SAME consent type gets its
+    own new row too — so the full sequence of what a caregiver agreed to, at which wording,
+    and when, is reconstructable rather than overwritten.
+
+    The row that matters most operationally is the latest `CLINICIAN_SHARING` row for a
+    patient: `services.consent.consent_currently_granted` reads it to decide whether a
+    linked clinician may actually see this patient's data RIGHT NOW, independently of
+    whether `patient_clinician_links.unlinked_at` is still NULL. Withdrawing consent and
+    revoking a link are two different actions with two different meanings — this table owns
+    the first, `patient_clinician_links` the second — and access requires both to hold.
+    """
+
+    __tablename__ = "consents"
+    __table_args__ = (
+        sa.Index("ix_consents_patient_type", "patient_id", "consent_type"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    consent_type: Mapped[ConsentType] = mapped_column(
+        _enum(ConsentType, "consent_type_enum"), nullable=False)
+    #: The wording version this decision was made against. A material text change bumps
+    #: this so the product can detect "the caregiver agreed to an older version" (4.3) —
+    #: detecting staleness is a UX prompt-to-re-consent, not by itself a backend access gate.
+    version: Mapped[str] = mapped_column(sa.String(24), nullable=False)
+
+    granted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+
+    #: NULL means still in force. Only meaningful when `granted` is True — a declined
+    #: consent (`granted=False`, the default posture for C4/C5) has nothing to withdraw.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    withdrawn_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+
+    #: Server-observed at the time of the decision, not client-asserted.
+    ip_address: Mapped[str | None] = mapped_column(sa.String(64))
+    #: Caller-supplied free text (e.g. "Android 14, Chrome 128") — informational only,
+    #: never parsed for a decision.
+    device_context: Mapped[str | None] = mapped_column(sa.String(256))
+
+    @property
+    def in_force(self) -> bool:
+        return self.granted and self.withdrawn_at is None

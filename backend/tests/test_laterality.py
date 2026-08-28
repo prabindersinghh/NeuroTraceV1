@@ -33,7 +33,22 @@ from app.engine.gates import (
     is_lateralised,
 )
 from app.exam.registry import MODULES
-from app.models import Alert, Band, ExamSession, ModuleResult, Patient, Role, SessionType, StrokeSide, User
+from app.models import (
+    Alert,
+    Band,
+    BaselineReviewAction,
+    ClinicianRole,
+    ConsentType,
+    ExamSession,
+    ModuleResult,
+    Patient,
+    PatientClinicianLink,
+    Role,
+    SessionType,
+    StrokeSide,
+    User,
+)
+from app.services.baseline_review import record_review
 from app.services.session_pipeline import compute_session
 from app.services.synthetic import make_rng, synthetic_session
 
@@ -316,6 +331,17 @@ async def _make_patient(session) -> Patient:
     return patient
 
 
+async def _confirm_baseline(session, patient) -> None:
+    """Drive the Part 3 doctor gate. Without it the patient sits at DOCTOR_REVIEW_PENDING,
+    bands stay forced STABLE, and there is no frozen reference to score against."""
+    clinician = User(email=f"dr-{uuid.uuid4().hex[:8]}@example.com",
+                     pw_hash=hash_password("a-real-password"), role=Role.clinician)
+    session.add(clinician)
+    await session.flush()
+    await record_review(session, patient, clinician.id, BaselineReviewAction.CONFIRM, None)
+    await session.commit()
+
+
 async def _run_day(session, patient, day, drift, *, modules, lateralised):
     exam = ExamSession(patient_id=patient.id, ts=START + timedelta(days=day),
                        type=SessionType.daily_pulse)
@@ -335,6 +361,7 @@ async def test_a_simulated_parkinsons_course_never_alerts(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=PD_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
 
     bands = []
     for i, drift in enumerate([1.8, 2.2, 2.6, 3.0, 3.4]):
@@ -353,6 +380,7 @@ async def test_a_simulated_stroke_course_still_alerts(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=FOCAL_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
 
     bands = []
     for i, drift in enumerate([1.8, 2.2, 2.6, 3.0, 3.4]):
@@ -368,6 +396,7 @@ async def test_the_atypical_band_is_persisted_and_explained(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=PD_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
 
     result = None
     for i, drift in enumerate([2.2, 2.6, 3.0]):
@@ -390,6 +419,7 @@ async def test_the_band_enum_accepts_the_new_value(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=PD_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
     for i, drift in enumerate([2.2, 2.6, 3.0]):
         await _run_day(session, patient, LOCK_AT_N_SESSIONS + 3 + i, drift,
                        modules=PD_MODULES, lateralised=False)
@@ -401,18 +431,33 @@ async def test_the_band_enum_accepts_the_new_value(session):
 
 
 # --------------------------------------------------------------------------- clinic card
-async def _clinic_rows(session):
+async def _clinic_rows(session, patient):
     """Call the clinician roster route directly.
 
     Building 20 sessions of history over HTTP would be slow and would test the exam
     endpoints rather than the roster. Calling the route function exercises the real
     card-typing logic against DB state built in-process.
+
+    Part 3.2 scopes the roster to active `patient_clinician_links`, so the clinician must
+    be explicitly linked here or the roster comes back empty regardless of what the
+    patient's cards should look like. Part 4 additionally requires CLINICIAN_SHARING (C3)
+    to be in force — the real `/clinician/links` route grants it in the same transaction
+    as the link, so this direct-ORM construction must do the same or the roster comes back
+    empty for a different reason than the one each test is actually checking.
     """
     from app.routers.dashboard import clinic_patients
+    from app.services.consent import set_consent
 
     clinician = User(email=f"dr-{uuid.uuid4().hex[:8]}@example.com",
                      pw_hash=hash_password("a-real-password"), role=Role.clinician)
     session.add(clinician)
+    await session.flush()
+    session.add(PatientClinicianLink(
+        patient_id=patient.id, clinician_id=clinician.id,
+        clinician_role=ClinicianRole.TREATING_PHYSICIAN, linked_by=patient.caregiver_id,
+    ))
+    await set_consent(session, patient, ConsentType.CLINICIAN_SHARING, True,
+                      patient.caregiver_id)
     await session.commit()
     return (await clinic_patients(clinician, session)).patients
 
@@ -426,11 +471,12 @@ async def test_the_atypical_pattern_gets_its_own_clinician_card(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=PD_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
     for i, drift in enumerate([2.2, 2.6, 3.0]):
         await _run_day(session, patient, LOCK_AT_N_SESSIONS + 3 + i, drift,
                        modules=PD_MODULES, lateralised=False)
 
-    row = next(r for r in await _clinic_rows(session) if r.patient_id == patient.id)
+    row = next(r for r in await _clinic_rows(session, patient) if r.patient_id == patient.id)
 
     assert row.band is Band.PATTERN_ATYPICAL
     assert row.card_type == "atypical_pattern"
@@ -444,11 +490,12 @@ async def test_a_focal_finding_still_gets_the_deviation_card(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=FOCAL_MODULES, lateralised=True)
+    await _confirm_baseline(session, patient)
     for i, drift in enumerate([2.2, 2.6, 3.0, 3.4]):
         await _run_day(session, patient, LOCK_AT_N_SESSIONS + 3 + i, drift,
                        modules=FOCAL_MODULES, lateralised=True)
 
-    row = next(r for r in await _clinic_rows(session) if r.patient_id == patient.id)
+    row = next(r for r in await _clinic_rows(session, patient) if r.patient_id == patient.id)
 
     assert row.card_type == "deviation"
     assert row.card_note is None
