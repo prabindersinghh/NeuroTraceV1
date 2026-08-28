@@ -91,7 +91,7 @@ Two, both deliberate:
 
 | | |
 |---|---|
-| **INV-1** | Raw media never leaves the device. No endpoint accepts an upload, no table has a binary column, and no registered route declares a binary request body — three independent tests. This is the product's central privacy claim: the moment one endpoint accepts an upload "just for debugging", the claim is false for every patient on that build and nobody outside the repo can tell. |
+| **INV-1** | Raw media never leaves the device. No endpoint accepts an upload, no table has a binary column, and no registered route declares a binary request body — three independent tests. And since D-052 the library FastAPI needs in order to accept an upload at all (`python-multipart`) is not a dependency, so a future `UploadFile` fails at import rather than at review. This is the product's central privacy claim: the moment one endpoint accepts an upload "just for debugging", the claim is false for every patient on that build and nobody outside the repo can tell. |
 | **INV-8** | Audit is append-only. No code path deletes from `audit_log`. Erasure *adds* to it. |
 | **INV-11** | No patient identifier in this repository. Enforced by `test_privacy.py`, plus a `git push` preflight (`scripts/preflight_push.sh`, 7 checks) because untracked real medical photos live under the git root. **Never bypass the preflight** — a failure is the invariant working. |
 
@@ -160,7 +160,8 @@ Migration safety is the recovery property that has actually been exercised here:
   Worth adding before real-patient deployment.
 - **No account lockout** or failed-attempt tracking.
 - **No live dependency-advisory scan** has been run — see `SBOM.md`.
-- **`python-multipart` is installed but unused** — removing it would make INV-1
-  structurally enforced rather than test-enforced. See `SBOM.md` finding 1.
+- ~~`python-multipart` is installed but unused~~ — **removed** (D-052). INV-1 is now
+  structurally enforced: the library FastAPI needs in order to accept an upload at all is
+  absent, so a future `UploadFile` fails at import rather than at review.
 - **No time-based retention policy.** Nothing expires automatically; data persists until
   erasure is requested. See `DATA_INVENTORY.md`.

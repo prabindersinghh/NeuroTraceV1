@@ -5,14 +5,14 @@ The authoritative machine-readable sources are `backend/requirements.txt` (direc
 `backend/requirements.lock.txt` (full transitive freeze, 79 packages) and
 `frontend/package.json`.
 
-Generated 2026-08-28 by reading those manifests. **No dependency was added, removed or
-upgraded during this run** — this is an inventory, not a remediation.
+Generated 2026-08-28 by reading those manifests. One dependency was **removed** —
+`python-multipart`, see finding 1 and D-052. Nothing was added or upgraded.
 
 ---
 
 ## Findings that need a decision
 
-### 1. `python-multipart==0.0.20` is installed and completely unused
+### 1. `python-multipart` — REMOVED (D-052)
 Grepping `backend/app/` for `multipart` returns **zero** matches. This is the library FastAPI
 requires in order to accept file uploads — i.e. the single dependency whose only purpose is
 the thing INV-1 forbids.
@@ -23,8 +23,10 @@ would make INV-1 **structurally** true rather than only test-true: with the libr
 a future `UploadFile` parameter fails at import rather than passing review. That is
 defence-in-depth on the product's central privacy claim, for the cost of deleting one line.
 
-**Not done in this run** — removing a dependency is outside the stated scope ceiling, and it
-warrants its own verification that no transitive consumer needs it. Flagged for the owner.
+**Done.** Removed from `requirements.txt` and `requirements.lock.txt`, and actually
+uninstalled to verify rather than assume: the app imports, all 76 routes register, and the
+OpenAPI document still generates. `test_inv1_the_file_upload_library_is_not_a_dependency`
+asserts neither manifest re-pins it. See D-052.
 
 ### 2. `bcrypt==4.0.1` is pinned well behind current
 Held back deliberately: `passlib==1.7.4` is unmaintained and breaks against bcrypt ≥ 4.1
@@ -63,7 +65,6 @@ is an outstanding item, listed as blocked in the run report.**
 |---|---|---|
 | fastapi | 0.115.6 | HTTP framework |
 | uvicorn[standard] | 0.34.0 | ASGI server |
-| python-multipart | 0.0.20 | **Unused — see finding 1** |
 | pydantic | 2.10.4 | Request/response validation |
 | pydantic-settings | 2.7.0 | Typed settings from env |
 | email-validator | 2.2.0 | Email field validation |
@@ -137,4 +138,4 @@ which is what makes the offline demo possible (Part 7.4 verification is outstand
 
 - Run `pip-audit` and `npm audit` against a live advisory feed. Not possible in this
   environment; listed as blocked in `COMPLETION_RUN_REPORT.md`.
-- Decide on finding 1 (drop `python-multipart`) and finding 2 (migrate off `passlib`).
+- Decide on finding 2 (migrate off `passlib`). Finding 1 is **done** — see D-052.

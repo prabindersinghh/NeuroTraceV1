@@ -152,6 +152,32 @@ Part 9's deploy-and-verify, and the Part 3 clinician frontend.
 
 ---
 
+### Owner-directed close-out (2026-08-28, final)
+
+Three actions after the run report, all verified:
+
+1. **D-045 is enforced everywhere now (D-051).** The corrected Daily Pulse figure had
+   survived in **eight** places, including the shipped `<title>`, the meta description, the
+   PWA manifest and BOTH landing hero headlines. **Four were found by the new test, after I
+   had already corrected what I could see by hand.** The Part 8 scanner's file scope did not
+   include `frontend/index.html` or `frontend/vite.config.ts`; both are now in scope with a
+   test that keeps them there. `docs/PRD.md` is allowlisted because its line records that
+   90s *was* the old target.
+2. **`python-multipart` removed (D-052).** INV-1 is now structural, not only tested: the
+   library FastAPI needs to accept an upload at all is simply absent, so a future
+   `UploadFile` fails at import. Removed from both manifests and actually uninstalled to
+   verify. `passlib` stays (unmaintained, why bcrypt is pinned at 4.0.1) — logged only.
+3. **PWA install fixed for real.** The manifest had declared two PNGs that never existed.
+   Committing real PNGs tripped `test_privacy.py` — which treats any tracked image as a
+   possible patient photograph, and is right to. The commit was reset, the blobs purged, and
+   the need for a raster removed instead: `public/icon-maskable.svg`, square with an opaque
+   ground, generated from the repo's own `favicon.svg`.
+
+**Noted, not acted on:** `favicon.svg` is a purple gradient bolt, nothing like the blue
+medical brand and using a gradient the design system otherwise forbids. Probably a template
+leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
+owner's call.
+
 **Last updated:** 2026-08-28 · Part 3 (doctor-in-the-loop baseline) backend complete —
 see "Part 3, as built" above. Before it, Part 2 (`6739186`) and a **whole-system frontend UX
 pass** (`d40ae6f`, branch `ux/system-upgrade`) landed: an offline/sync strip on the caregiver

@@ -4,6 +4,102 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 (final) — D-045 enforced everywhere, python-multipart removed, PWA install fixed
+
+Three owner-directed actions closing out the autonomous run.
+
+### D-045's carve-out closed: the true duration goes everywhere (D-051)
+D-045 corrected Daily Pulse from 90s to ~195s of raw task time and deliberately left the
+public-facing copy alone. That is now decided the other way, and it turned out the old figure
+had survived in **eight** places — only one of which was the landing page D-045 named:
+
+the shipped `<title>`, the meta description, the PWA manifest `description`, **both** landing
+hero headlines ("Ninety seconds a day is more.", "Ninety seconds a day, they can."), the body
+copy, the `NinetyDays` mark, and `docs/DEMO_SCRIPT.md`.
+
+**Four of those I found only because I wrote the test.** I corrected what I could see by hand
+first, then the scanner immediately failed on four more. A decision that is not enforced by a
+test is a decision that drifts back — which is the actual lesson, and it is recorded in D-051
+rather than left as a war story.
+
+`docs/PRD.md` §7 keeps its `(Was "<=90s" ...)` note and is explicitly allowlisted: recording
+that the figure used to be wrong is the opposite of asserting it.
+
+### The Part 8 scanner's scope had a hole exactly where the miss was
+It covered `frontend/src/**`, `docs/**` and both READMEs — and **not `frontend/index.html`**,
+which is the browser tab and the text that appears when the link is shared. Nor
+`frontend/vite.config.ts`, where the PWA manifest description is authored and from which it
+ships. Both are now in scope, with a test asserting they stay there, because that scope gap is
+the whole reason a corrected figure shipped for weeks.
+
+New `STALE_DURATION` guard with self-tests in both directions, against the exact strings that
+shipped.
+
+### python-multipart removed — INV-1 is now structural (D-052)
+Pinned, installed, and completely unused (zero matches in `app/`), and it is the one
+dependency whose only purpose is accepting file uploads — precisely what INV-1 forbids.
+
+Three tests already asserted no endpoint accepts media. Those catch a violation *after*
+somebody writes it. With the library absent, a future `UploadFile` parameter fails at
+**import**: the runtime cannot express the violation at all.
+
+Removed from `requirements.txt` **and** `requirements.lock.txt` (leaving the lock entry would
+restore it on the next byte-identical rebuild), and **actually uninstalled to verify rather
+than assume** — the app imports, all 76 routes register, the OpenAPI document still
+generates. New INV-1 test asserts neither manifest re-pins it, checked against the manifests
+rather than the live interpreter so a transitively-installed copy is not a false failure.
+
+`passlib` remains unmaintained (why `bcrypt` is held at 4.0.1) — logged in `docs/SBOM.md`,
+deliberately not acted on.
+
+### The PWA could not install, and the first fix was only half a fix
+`/icon-192.png` and `/icon-512.png` had been declared in the manifest since it was written and
+**neither file had ever existed**. Every load logged "Download error or resource isn't a valid
+image": "Add to home screen" produced a blank icon, and some Android versions suppress the
+install prompt outright when a manifest's icons cannot be fetched.
+
+An earlier pass pointed the manifest at `favicon.svg`, which silenced the console but left it
+half-fixed — that file is 48×46 and non-square, so a launcher's circular maskable crop would
+have cut the mark.
+
+**What happened next is worth recording.** I generated real PNGs, committed them, and
+`test_privacy.py` failed: it treats every tracked image as a possible photograph of a real
+patient's records. That scanner is deliberately blunt and it is **right** to be (INV-11). So
+the commit was reset, the blobs purged from the object store (`git reflog expire` + `git gc`,
+verified by re-running the privacy suite), and the need for a raster removed instead of the
+test being weakened.
+
+`public/icon-maskable.svg` is generated from the repo's own `favicon.svg`: square, opaque
+ground (a maskable icon must not rely on transparency, or a launcher applying its own shape
+shows the OS background through the corners), mark inset to 56% so it survives the crop.
+
+`index.html` also declared no icon link at all, so every load probed `/favicon.ico` and 404'd.
+Now declared, plus `apple-touch-icon`.
+
+### Verified
+- backend: `test_privacy.py`, `test_regulatory_claims.py`, `test_invariants.py` — exit 0
+- frontend: `tsc -b` exit 0 · `vitest` 74 passed · `oxlint` exit 0 (9 pre-existing warnings,
+  none new) · `npm run build` exit 0
+- live, against the production build: title and both descriptions carry the corrected figure;
+  both manifest icon entries return 200 as `image/svg+xml` and decode to **512×512 square**
+  with an opaque ground; a maskable entry is present; favicon 200; console **0 errors, 0
+  warnings**.
+
+**One non-finding, stated because I nearly reported it as a bug.** `getRegistrations()`
+returned 0 in the automated browser, which would mean no offline caching. Registering the
+service worker manually in the same page succeeded, and the injected `registerSW.js` is
+correct and standard — so that was a measurement artefact of the automated context, not a
+defect. Part 7.4 (proving offline model loading with the network genuinely disabled) remains
+outstanding and unverified either way.
+
+### Noted, not acted on
+`frontend/public/favicon.svg` is a purple gradient bolt — nothing like the blue medical brand
+(`#173a7a` / `#1E5AA8`), and gradients are otherwise forbidden by the design system. It looks
+like a template leftover. The new icon inherits it faithfully rather than inventing a logo,
+because artwork is the owner's call.
+
+---
+
 ## 2026-08-28 (later still) — Part 6, the beautification pass, and four bugs the browser found
 
 Branch `finish/autonomous-completion`, continued.

@@ -212,8 +212,11 @@ Numbered. Each has a test in `backend/tests/test_invariants.py`. A failure here 
 the product depends on has been broken.
 
 **INV-1 · Raw media never leaves the device.** No endpoint accepts a file upload; no table
-has a binary column. Audio, video and frames are converted to numbers on the phone and
-discarded. *This is the product's central privacy claim.*
+has a binary column; no registered route declares a binary request body. Audio, video and
+frames are converted to numbers on the phone and discarded. *This is the product's central
+privacy claim.* Since D-052 it is **structural**: `python-multipart` — the library FastAPI
+needs in order to accept an upload at all — is deliberately not a dependency, so a future
+`UploadFile` parameter fails at import rather than at review.
 
 **INV-2 · No ALERT without a lateralised finding.** Stroke is lateralised; Parkinson's is
 symmetric. Without this a PD patient generates our highest-confidence alert.

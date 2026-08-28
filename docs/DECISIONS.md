@@ -664,3 +664,53 @@ Two fields had to be RESET rather than nulled because they are NOT NULL —
 `stroke_side` (to `unknown`) and `other_movement_disorder` (to `False`). Found by a failing
 test, not by reading the model; `unknown` is also the more honest value, since after erasure
 we genuinely do not know.
+
+---
+
+**D-051 · 2026-08-28 · The corrected Daily Pulse figure goes everywhere, including the
+browser tab. D-045's carve-out for public-facing copy is closed.**
+D-045 corrected Daily Pulse from 90s to ~195s of raw task time and deliberately left
+pitch and landing copy alone, because the public-facing figure was the owner's to decide.
+That carve-out has now been decided the other way: **the true number goes everywhere.**
+
+It turned out the old figure had survived in **eight** places, and only one of them was
+the landing page D-045 actually named: the shipped `<title>`, the meta description, the PWA
+manifest `description`, both landing hero headlines, the body copy, the `NinetyDays` mark,
+and `docs/DEMO_SCRIPT.md`. Four of those were found by the scanner rather than by hand,
+after I had already "finished" correcting them manually.
+
+`docs/PRD.md` §7 keeps its `(Was "<=90s" …)` note and is explicitly allowlisted. Recording
+that the figure used to be wrong is the opposite of asserting it, and deleting it would
+erase the correction's own history.
+
+**The lesson recorded, because it is more general than this number:** a decision that is not
+enforced by a test is a decision that drifts back. D-045 was made, written down, and
+partially applied — and the wrong figure then shipped in the browser tab for weeks. The new
+`STALE_DURATION` guard in `test_regulatory_claims.py` is what makes D-045 real rather than
+aspirational.
+
+---
+
+**D-052 · 2026-08-28 · `python-multipart` is removed, so INV-1 is structural rather than
+only tested.**
+It was pinned, installed, and completely unused — zero matches anywhere in `app/`. It is
+also the single dependency whose *only* purpose is accepting file uploads, which is exactly
+what INV-1 forbids.
+
+Three tests already asserted that no endpoint accepts media (a source scan, a schema scan,
+and an OpenAPI scan). Those catch a violation *after* somebody writes it. With the library
+absent, a future `UploadFile` parameter fails at **import** — the runtime cannot express the
+violation at all. That is a different and stronger kind of guarantee, and it cost one
+deleted line.
+
+Removed from `requirements.txt` **and** `requirements.lock.txt` — leaving the lock entry
+would have restored it on the next byte-identical rebuild. Verified by actually
+uninstalling it and confirming the app imports, all 76 routes register, and the OpenAPI
+document still generates. A new INV-1 test asserts neither manifest re-pins it, checked
+against the manifests rather than the live interpreter so a transitively-installed copy
+does not produce a false failure.
+
+`passlib` remains unmaintained and is why `bcrypt` is held at 4.0.1. Recorded in
+`docs/SBOM.md`; deliberately not acted on, because migrating password hashing is a
+security-relevant change that deserves its own reviewed piece of work.
+

@@ -5,6 +5,77 @@ Run date 2026-08-28.
 
 ---
 
+## 0. Owner-directed close-out (after the report below was written)
+
+Three actions requested after the main run. All verified; the report from §1 onward still
+describes the run itself and is unchanged except where noted.
+
+**1 · The corrected duration now goes everywhere (D-051).** D-045's carve-out for
+public-facing copy is closed. The old figure had survived in **eight** places, not the one
+D-045 named: the shipped `<title>`, the meta description, the PWA manifest `description`,
+**both** landing hero headlines, the body copy, the `NinetyDays` mark, and
+`docs/DEMO_SCRIPT.md`. **Four of those I found only because I wrote the test** — I had
+already corrected what I could see by hand, and the scanner failed immediately on four more.
+
+The Part 8 scanner's scope now includes `frontend/index.html` and `frontend/vite.config.ts`,
+with `test_index_html_is_actually_in_scope` asserting they stay there — that gap is exactly
+why the miss survived. A new `STALE_DURATION` guard has self-tests in both directions against
+the real strings. `docs/PRD.md` is explicitly allowlisted because its line *records* that 90s
+was the old target; an explicit reviewable file list, not a cleverer regex, for the same
+reason as `DOCUMENTATION_ALLOWLIST` (D-030).
+
+**2 · `python-multipart` removed (D-052).** INV-1 becomes structural rather than only tested:
+with the library absent a future `UploadFile` fails at **import**, not at review. Removed from
+`requirements.txt` **and** `requirements.lock.txt` — leaving the lock entry would have
+restored it on the next rebuild — and **actually uninstalled to verify rather than assume**:
+app imports, 76 routes register, OpenAPI generates. A new INV-1 test asserts neither manifest
+re-pins it, checked against the manifests so a transitive copy is not a false failure.
+`passlib` logged in `SBOM.md`, not acted on.
+
+**3 · PWA install confirmed working, and my first fix was only half a fix.** Pointing the
+manifest at `favicon.svg` silenced the console but left it broken: that file is 48×46 and
+non-square, so a launcher's circular maskable crop would have cut the mark.
+
+I then generated real PNGs, committed them, and **`test_privacy.py` failed** — it treats every
+tracked image as a possible photograph of a real patient's records. That scanner is
+deliberately blunt and it is right to be (INV-11). So I reset the commit, purged the blobs
+from the object store (`git reflog expire` + `git gc`, re-verified by running the privacy
+suite), and removed the *need* for a raster rather than weakening the test.
+`public/icon-maskable.svg` is square, opaque-grounded, inset to 56%, and generated from the
+repo's own brand asset. `index.html` also declared no icon link at all, which is why
+`/favicon.ico` 404'd on every load.
+
+**Verified live against the production build:** both manifest entries 200 as
+`image/svg+xml`, decoding to **512×512 square** with an opaque ground; a maskable entry
+present; favicon 200; title and all three descriptions carry the corrected figure; console
+**0 errors, 0 warnings**.
+
+**One non-finding, stated because I nearly reported it as a bug.** `getRegistrations()`
+returned 0 in the automated browser, which would have meant no offline caching. Registering
+the service worker manually in the same page succeeded and the injected `registerSW.js` is
+correct, so that was an artefact of the automated context, not a defect. Part 7.4 remains
+genuinely unverified either way.
+
+**Noted, not acted on:** `frontend/public/favicon.svg` is a purple gradient bolt — nothing
+like the blue medical brand, and using a gradient the design system otherwise forbids. It
+reads as a template leftover. The new icon inherits it faithfully rather than inventing a
+logo, because artwork is your call.
+
+### Close-out verification
+```
+backend   pytest test_privacy.py test_regulatory_claims.py test_invariants.py   EXIT=0
+frontend  tsc -b            EXIT=0
+frontend  vitest            74 passed          EXIT=0
+frontend  oxlint            EXIT=0 (9 pre-existing warnings, none new)
+frontend  npm run build     EXIT=0
+scripts/preflight_push.sh   7 passed, 0 failed
+```
+The 2-hour backend suite was **not** re-run in full: the backend change is a dependency
+removal plus two test files, and the three affected suites pass. The full-suite result in §9a
+(1047 tests, exit 0) predates only those changes.
+
+---
+
 ## 1. Executive summary
 
 Parts 3 (finished), 3.7e, 4, 5, 7 (prep) and 8 are built, tested and committed. Part 6 and
@@ -344,15 +415,8 @@ supplied hard evidence for its central requirement rather than an assertion.
    and correctness half; the broad spacing/typography sweep is not done. This is the largest
    remaining gap and it is mine, not a blocker — everything it depends on is green.
 
-2. **The shipped page title and meta description still say "90-second".** `frontend/index.html`
-   carries *"a 90-second neurological exam"* in the `<title>` and *"a 90-second daily
-   neurological check-in"* in the meta description — the figure D-045 corrected to 195s of raw
-   task time. **I did not change it**, because D-045 explicitly reserves the public-facing
-   figure for you and says the landing copy stays as it is. But that decision was recorded
-   about `Landing.tsx`, and this is the browser tab title and the SEO/social description,
-   which you may not have had in view. Related: my Part 8 scanner's file scope covers
-   `frontend/src/**` and `docs/**` but **not `index.html`**, so it would not have caught this
-   — that scope gap is mine.
+2. ~~**The shipped title and meta description still say "90-second".**~~ **DONE** — see §0.
+   Corrected in eight places, scanner scope widened, guard test added (D-051).
 3. **Physical-phone validation.** `/diagnostics` and `PHONE_TEST_RESULTS.md` are prepared so
    the first run yields a complete record. **Nothing has executed on a handset.** Unverifiable
    until you run it: camera framing at real distances, MediaPipe FaceMesh/PoseLandmarker on
@@ -371,11 +435,9 @@ supplied hard evidence for its central requirement rather than an assertion.
 6. **The six consent texts (4.4) in EN/HI/PA.** The mechanism is complete; the strings are
    not written. Plain-language medical consent copy in three languages should not be drafted
    unattended.
-7. **Two dependency decisions** (`docs/SBOM.md`): `python-multipart` is installed and
-   **completely unused** — the one dependency whose sole purpose is what INV-1 forbids;
-   deleting one line would make the invariant structurally true rather than only test-true.
-   And `passlib` is unmaintained, which is why `bcrypt` is pinned at 4.0.1; migrating off it
-   is worth scheduling.
+7. **One dependency decision remains** (`docs/SBOM.md`): `passlib` is unmaintained, which is
+   why `bcrypt` is pinned at 4.0.1; migrating off it is worth scheduling.
+   ~~`python-multipart`~~ **removed** — see §0 and D-052.
 8. **Run `pip-audit` and `npm audit`** against a live advisory feed. No network access to
    advisory databases here, so the SBOM says so rather than implying a clean scan.
 9. **Approve or reject the three plans** in `docs/plans/`.
