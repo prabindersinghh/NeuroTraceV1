@@ -34,7 +34,17 @@ first, then this line, then `git log` since the last part closed.
       **six real access-control gaps found and fixed**), INV-1 re-verified and
       strengthened, `DATA_INVENTORY.md`, erasure (migration 0017, D-050), `SECURITY.md`,
       offline-ordering verification, `SBOM.md`.
-- [ ] Part 6 — UX and session flow completion  *(functional work outstanding)*
+- [~] **Part 6 — UX and session flow completion. PARTIAL.** 6.2 (caregiver notification
+      rules, pure and unit-tested in `frontend/src/lib/notify.ts` — **WATCH does not
+      notify**, and no message reassures) and 6.6 (the patient sees which check-in is due
+      and roughly how long it takes, from the server's `estimated_seconds`, never a
+      hardcoded number). **6.1, 6.3, 6.4 and 6.5 are not done.**
+- [~] **Final beautification pass. PARTIAL.** Design tokens, `.patient-scale` and colour
+      semantics untouched — `index.css` and `tailwind.config.js` are unmodified. Done:
+      every band pairs colour + word + icon so colour is never the only carrier;
+      `aria-live="polite"` on the status line; `main` landmark and `h1` on login/register;
+      a PWA manifest that pointed at two non-existent icons, fixed. **The broad
+      spacing/typography/density sweep is not done.**
 - [x] **Part 7 — phone readiness PREP.** `/diagnostics` extended with FaceMesh /
       PoseLandmarker init time, detection rate and per-frame cost, plus parsed browser/OS;
       the JSON report is now always copyable, including when every probe failed.

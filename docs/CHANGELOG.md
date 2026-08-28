@@ -4,6 +4,82 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 (later still) — Part 6, the beautification pass, and four bugs the browser found
+
+Branch `finish/autonomous-completion`, continued.
+
+### A stale lowercase enum had four surfaces lying at once
+`frontend/src/lib/types.ts` still declared `BaselineState` as the three pre-0015 lowercase
+values. Migration 0015 replaced them with five uppercase ones, so
+`baseline_state !== "locked"` compared against a string the server can no longer send. The
+caregiver home, clinic list, clinician report and dashboard therefore showed the "still
+collecting" banner **permanently** — including for patients a clinician had confirmed.
+
+TypeScript could not catch this: the type itself was the thing that was wrong, so every
+comparison type-checked cleanly against a lie. Found by reading the Part 3 enum change back
+against the frontend instead of assuming a backend migration had been propagated.
+
+### Part 6.2 — what reaches a caregiver, and what deliberately does not
+`frontend/src/lib/notify.ts`: pure, no React, no network, unit-tested — the same shape as
+`taskFlow.ts`, and for the same reason. The rule worth pinning is a **negative**: WATCH does
+not notify. WATCH is the band the engine sits in while it waits for a second corroborating
+domain; pushing it to a family trains them to ignore the one that matters, and a rule like
+that erodes silently inside a component when somebody widens a condition to "surface more".
+
+A patient who is not being monitored — baseline collecting, awaiting a doctor, or abandoned —
+produces no band-derived notification, keeping the caregiver surface consistent with the
+Part 3 suppression rather than trusting it. Adherence and quality signals *do* survive that
+suppression, because they are facts about the record rather than claims about the person.
+
+No message reassures. "Everything looks fine" is a claim this product cannot make.
+
+### Part 6.6 — the patient knows what they are starting
+Before pressing begin: which check-in is due, roughly how many minutes, how many tasks, and
+that they can pause. The duration is the server's own `estimated_seconds`, rounded **up** —
+never a number typed into the frontend, which is exactly the drift D-045 records. Fetching it
+is deliberately non-fatal: offline, the patient still gets their button.
+
+### The beautification pass, within the locked design system
+`index.css` and `tailwind.config.js` are **untouched**. No token, no `.patient-scale` rule and
+no colour semantic changed. STABLE stays accent-blue; green stays forbidden.
+
+- Every band now pairs its colour with a word **and an icon**, so a colour-blind reader, a
+  screen in sunlight, or a greyscale print of the report reach the same conclusion.
+- `aria-live="polite"` on the status line, so a band that changes while the page is open is
+  announced rather than only re-painted. Polite, not assertive — a status change must not
+  interrupt someone mid-sentence, and this is never the emergency path.
+
+The broad spacing/typography/density sweep is **not** done.
+
+### Two bugs found only by loading the built app in a browser
+**The PWA could not install.** `vite.config.ts` declared `/icon-192.png` and `/icon-512.png`;
+`public/` has only `favicon.svg` and `icons.svg`. Every load logged "Download error or
+resource isn't a valid image", so "Add to home screen" produced a blank icon — and some
+Android versions suppress the install prompt outright when a manifest's icons cannot be
+fetched. For this product that is not cosmetic: the installed PWA *is* the airplane-mode
+demo. Pointed at the brand asset that exists rather than inventing artwork.
+
+**Login and register had no `main` landmark and started at `h3`.** Both render their own
+shell rather than `AppShell`. `CardTitle` gained an `as` escape hatch (default `h3`
+unchanged, so no other card is affected) and both screens declare their title as the `h1`.
+
+### Verified
+- frontend: `tsc -b` exit 0 · `vitest` **74 passed** (was 62) · `oxlint` exit 0, no new
+  warnings · `npm run build` exit 0
+- live, against the production build in a real browser: `/diagnostics` renders the new
+  browser/OS/form-factor rows; the model probe completes (FaceMesh 496 ms, PoseLandmarker
+  274 ms, both 100% detection on **Playwright's synthetic camera** — desktop, not a phone,
+  and not a real face); the report JSON is copyable with zero probes run; `/login` now
+  reports `main` and `heading [level=1]`; console clean, 0 errors 0 warnings.
+
+### Not changed, deliberately
+`frontend/index.html` still says "90-second" in its `<title>` and meta description. D-045
+reserves the public-facing figure for the owner, so it was left alone and flagged in
+`COMPLETION_RUN_REPORT.md` instead — that decision was recorded about `Landing.tsx`, and the
+tab title may not have been in view when it was made.
+
+---
+
 ## 2026-08-28 (later) — Parts 3.7e, 4, 5, 7, 8: an endpoint audit that found six real holes
 
 Branch `finish/autonomous-completion`, **not merged** — left for review.
