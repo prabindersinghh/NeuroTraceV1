@@ -436,7 +436,7 @@ backend/   pytest tests/test_laterality.py                   32 passed  EXIT=0
 backend/   pytest tests/test_domains_and_reference.py        16 passed  EXIT=0
 backend/   pytest tests/test_session_pipeline.py             18 passed  EXIT=0
 backend/   pytest tests/test_migration.py \
-           tests/test_migration_portability.py               38 passed  EXIT=0
+           tests/test_migration_portability.py               38 passed  EXIT=0  (**)
 backend/   pytest tests/test_offline_ordering.py \
            tests/test_regulatory_claims.py                   39 passed  EXIT=0
 backend/   pytest tests/test_erasure.py + test_invariants.py            EXIT=0
@@ -465,10 +465,19 @@ reports real measurements. They are **not** evidence about phone performance: th
 Chromium, and the 100% detection rate is against Playwright's synthetic camera pattern, not a
 human face in a real room. Nothing here substitutes for §6 item 3.
 
+(*)  21 is the count observed BEFORE Part 3.7e added `/admin/doctors` to `ADMIN_ROUTES`
+     and three new tests. The file passed in a later combined run, but I did not observe a
+     standalone count afterwards, so I am not quoting one. The full suite settles it.
+(**) 38 was observed BEFORE migration 0017 existed. 0017's round-trip is covered by the
+     full-suite run (`test_migration.py` does `upgrade head` -> `downgrade base`), not by a
+     separate verification -- see §9a.
+
 **Full-suite result: see §9a below.**
 
-Migration round-trip: `alembic upgrade head` → `alembic downgrade base` clean across
-0001–0017, both directions, INV-7 held.
+Migration round-trip: verified clean across **0001-0016** in a standalone run. **0017 is
+covered by the full-suite result in §9a rather than a separate run** -- stated this way
+because claiming a round-trip I did not separately observe is exactly the kind of small
+overstatement this report exists to avoid.
 
 ```
 git diff --stat main...HEAD
