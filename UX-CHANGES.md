@@ -54,6 +54,21 @@ swept.
   the patient saw one chip on the finish screen, tapped Finish, and the record was never
   sent or mentioned again, while the caregiver in another city watched a dashboard simply
   stop updating. It renders **nothing** when online with an empty queue.
+
+  *Coverage (verified):* it appears wherever `AppShell` renders — **CaregiverHome,
+  Dashboard, ReviewQueue, Clinic**, PatientHome, Admin, Awaaz and Enrol — so the remote
+  caregiver, who is realistically the person who would notice, sees it on both their home
+  and the dashboard. Two deliberate exceptions: `AshaHome` does not use `AppShell` (it has
+  its own connectivity pill, retokenised in this pass), and `ProtocolRunner` uses its own
+  `Frame`, so no strip appears mid-session — a patient part-way through a task should not
+  be shown sync chrome.
+
+  *Trustworthiness (verified):* `pendingCount()` reads the real IndexedDB queue
+  (`getAll()`, ordered by `capturedAt`), so the number is the queue, not a cache. On a
+  successful send `syncPending` calls `removeSession(localId)` and the row is deleted; on
+  failure it calls `markAttempt` and **breaks**, preserving consecutive ordering. The strip
+  re-reads the count in its `finally`, so it updates correctly after a full *or* partial
+  drain. See the known limitation on failure reporting under Deferred.
   *Files:* `components/ui/SyncStatus.tsx`, `components/AppShell.tsx`, `lib/i18n.tsx`.
 
 - **`AppShell` sign-out had no accessible name on phones** — the label was
@@ -200,11 +215,46 @@ duplicate of it. Added `sendNow` and `sending` in EN/HI/PA.
   enforced in `ProtocolRunner` and pinned by `lib/taskFlow.test.ts`, and `TaskShell`'s header
   no longer claims to be live.
 
-- **Automatic drain of the offline queue on reconnect.** `SyncStatus` sends on an explicit
-  tap only. Replaying captured clinical sessions unattended is a data-path behaviour change,
-  not UX polish: `syncPending` replays in strict capture order *because the alert gate is a
-  function of consecutive sessions*, so an unattended retry loop needs its own thinking about
-  concurrency, partial failure and duplicate submission.
+- **🔴 Automatic drain of the offline queue on reconnect — DATA INTEGRITY, HIGH PRIORITY.**
+
+  **This is not a UX nicety. It is a silent data-loss bug against the exact rural,
+  low-connectivity workflow the product's positioning rests on.** Before this branch,
+  a session captured offline was written to IndexedDB and then *never sent* — `syncPending`
+  and `pendingCount` were written, exported, documented, and called from nowhere. The
+  patient completed their check-in and believed it was done; the measurement never reached
+  the server; the caregiver saw a dashboard that had simply stopped updating. Nothing
+  anywhere reported a problem.
+
+  **The strip added in this pass is an interim mitigation, not the fix.** It makes the
+  queue *visible and drainable*, which is strictly better than invisible — but it still
+  requires somebody to notice a count and tap "Send now". **A queue that only drains when
+  a human taps still loses data when nobody taps**, and the people most affected are
+  exactly those least likely to be watching a status strip: a survivor who has finished
+  their session and put the phone down, in a household with intermittent connectivity.
+
+  Until automatic drain exists, **the "works offline" positioning claim is not fully
+  supported by the implementation** and should be stated carefully.
+
+  Why it needs its own PLAN rather than a quick patch — the ordering constraint is
+  load-bearing:
+  - `syncPending` replays in **strict capture order**, deliberately, *because the alert
+    gate is a function of consecutive sessions*. Replaying yesterday after today computes
+    the persistence window against the wrong history and **can manufacture or suppress an
+    alert**. Any retry design must preserve that ordering.
+  - It stops at the first failure for the same reason, so a single stuck session blocks
+    every later one — a retry loop needs a policy for that, not just a timer.
+  - An unattended loop firing on the `online` event needs concurrency guarding (two drains
+    interleaving replays the same sessions) and a duplicate-submission story, since a
+    session may have reached the server before the client learned it had.
+
+  Scope when planned: automatic drain on reconnect and on app start, in-flight guarding,
+  bounded backoff, a surfaced failure state, and a decision on server-side idempotency for
+  replayed sessions. **Belongs near the top of the technical list, not the bottom.**
+
+  *Known limitation of the interim strip, for whoever picks this up:* on a failed send
+  `syncPending` returns `{ failed: n }` but `SyncStatus` currently swallows it — the count
+  stays non-zero (truthful, and the strip stays visible) but the user is told nothing about
+  *why*. Surfacing that failure is small and should be part of the same PLAN.
 
 - **Doc-vs-practice drift on border radius.** `index.css` states "8px radius" and
   `tailwind.config.js` maps only `lg`/`md`/`sm` to `--radius`. But 47 sites use `rounded-xl`
