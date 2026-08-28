@@ -13,7 +13,17 @@
  *  - WATCH is visible but never notifies. Alert fatigue is the failure mode that kills
  *    adherence, and a muted product detects nothing.
  */
-import { AlertTriangle, BellRing, Pill, ShieldCheck, Stethoscope } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  BellRing,
+  Eye,
+  GitBranch,
+  Pill,
+  ShieldCheck,
+  Stethoscope,
+  type LucideIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -33,12 +43,28 @@ import { NOTIFY_MESSAGE_KEY, notificationsFor } from "@/lib/notify";
 import type { Band, Dashboard as DashboardData } from "@/lib/types";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
-const BAND_STYLE: Record<Band, { ring: string; bg: string; text: string }> = {
-  STABLE: { ring: "border-stable/35", bg: "bg-stable-soft", text: "text-stable" },
-  WATCH: { ring: "border-watch/40", bg: "bg-watch-soft", text: "text-watch" },
-  ALERT: { ring: "border-alert/40", bg: "bg-alert-soft", text: "text-alert" },
+// Colour, WORD and ICON for every band - colour is never the only thing carrying the
+// meaning. A colour-blind reader, a washed-out screen in sunlight, or a greyscale print of
+// the report all have to reach the same conclusion as everyone else.
+//
+// STABLE is accent-blue on purpose and green is a forbidden status colour here: green
+// reads as "all clear", which is a reassurance this product is not entitled to give.
+const BAND_STYLE: Record<
+  Band,
+  { ring: string; bg: string; text: string; Icon: LucideIcon }
+> = {
+  STABLE: {
+    ring: "border-stable/35", bg: "bg-stable-soft", text: "text-stable", Icon: Activity,
+  },
+  WATCH: {
+    ring: "border-watch/40", bg: "bg-watch-soft", text: "text-watch", Icon: Eye,
+  },
+  ALERT: {
+    ring: "border-alert/40", bg: "bg-alert-soft", text: "text-alert", Icon: AlertTriangle,
+  },
   PATTERN_ATYPICAL: {
     ring: "border-atypical/40", bg: "bg-atypical-soft", text: "text-atypical",
+    Icon: GitBranch,
   },
 };
 
@@ -224,7 +250,16 @@ export function Dashboard() {
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             {t("status")}
           </p>
-          <p className={cn("text-4xl font-bold tracking-tight", style.text)}>{bandLabel}</p>
+          {/* aria-live so a band that changes while the page is open is announced rather
+              than only re-painted. "polite" deliberately - a status change must not
+              interrupt someone mid-sentence, and this is never the emergency path. */}
+          <p
+            className={cn("flex items-center gap-3 text-4xl font-bold tracking-tight", style.text)}
+            aria-live="polite"
+          >
+            <style.Icon className="h-9 w-9 shrink-0" aria-hidden />
+            {bandLabel}
+          </p>
 
           {explanation && (
             <p className="mt-5 border-t border-current/10 pt-4 text-lg leading-relaxed text-foreground">
