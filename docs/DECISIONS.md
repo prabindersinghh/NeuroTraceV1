@@ -471,3 +471,16 @@ backend-only endpoint. A successful request immediately removes the link from th
 makes the public view 404 indistinguishably from expiry. Retrying is safe and audits only the
 first state change. Unknown tokens still return the generic success response so revocation
 cannot be used to enumerate live capability tokens.
+
+**D-050 · 2026-08-28 · One patient has one recoverable active listener capability.**
+A revoke control that disappears on page refresh is not meaningful revocability, and letting
+each refresh mint a second token creates invisible read capabilities the owner cannot see.
+The authenticated patient-scoped GET therefore returns the current active session, allowing
+the sharing screen to recover its control without persisting another capability secret in
+browser storage.
+
+Minting a new listener link first marks every older active link for that patient revoked.
+The replacement is then the sole current capability; old public pages receive the same 404
+as expiry. This is an in-memory conversation boundary, not durable history: a server restart
+still revokes every link by design. The audit stores the expiry and number of superseded
+links, not any token.

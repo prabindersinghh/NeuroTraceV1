@@ -69,7 +69,7 @@ import {
   buildLocalTrainingArchive,
   trainingArchiveFilename,
 } from "@/lib/awaazTrainingExport";
-import { listenerSharePath } from "@/lib/awaazListener";
+import { listenerSharePath, normaliseListenerLanguage } from "@/lib/awaazListener";
 import {
   deleteLocalEmergencyAudio,
   getLocalEmergencyAudio,
@@ -714,8 +714,22 @@ export default function Awaaz() {
   useEffect(() => {
     // A capability belongs to exactly one patient. Never carry its URL into a route whose
     // patient parameter changed while React reused this component instance.
+    let live = true;
     setListenerCapability(null);
     setListenerStatus(null);
+    setListenerBusy(true);
+    void api.awaazActiveListener(patientId)
+      .then((session) => {
+        if (!live || !session.active || !session.token) return;
+        const sessionLang = normaliseListenerLanguage(session.lang);
+        setListenerCapability({
+          token: session.token,
+          url: `${window.location.origin}${listenerSharePath(session.token, sessionLang)}`,
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => { if (live) setListenerBusy(false); });
+    return () => { live = false; };
   }, [patientId]);
 
   /**

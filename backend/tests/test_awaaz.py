@@ -758,6 +758,9 @@ async def test_only_an_authorised_patient_user_can_revoke_a_listener_link(sessio
 
     refused = await client.delete(f"/awaaz/listener/{token}", headers=stranger_headers)
     assert refused.status_code == 403
+    assert (await client.get(
+        f"/awaaz/{patient.id}/listener", headers=stranger_headers,
+    )).status_code == 403
     assert (await client.get(f"/awaaz/listen/{token}")).status_code == 200
 
     revoked = await client.delete(f"/awaaz/listener/{token}", headers=owner_headers)
@@ -775,6 +778,33 @@ async def test_only_an_authorised_patient_user_can_revoke_a_listener_link(sessio
         )
     )
     assert audit_count == 1
+
+
+async def test_listener_link_is_recoverable_and_a_new_link_supersedes_it(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    first = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "pa", "ttl_minutes": 30,
+    }, headers=headers)
+    first_token = first.json()["token"]
+
+    recovered = await client.get(f"/awaaz/{patient.id}/listener", headers=headers)
+    assert recovered.status_code == 200
+    assert recovered.json()["active"] is True
+    assert recovered.json()["token"] == first_token
+    assert recovered.json()["lang"] == "pa"
+
+    second = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "hi", "ttl_minutes": 30,
+    }, headers=headers)
+    second_token = second.json()["token"]
+    assert second_token != first_token
+    assert (await client.get(f"/awaaz/listen/{first_token}")).status_code == 404
+    assert (await client.get(f"/awaaz/listen/{second_token}")).status_code == 200
+
+    current = await client.get(f"/awaaz/{patient.id}/listener", headers=headers)
+    assert current.json()["token"] == second_token
+    assert current.json()["lang"] == "hi"
 
 
 def test_coaching_tells_the_listener_to_wait_during_a_long_pause():

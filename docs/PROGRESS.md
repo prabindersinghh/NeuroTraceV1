@@ -22,8 +22,9 @@ The public listener capability now keeps its EN, HI, or PA language through shar
 loading/error/expired states, server-localized coaching, privacy copy, and per-utterance
 assistive-technology language. The active sharing URL now has a visible stop-sharing
 control; only a user authorized for that patient may revoke it, retry creates one audit row,
-and the public capability is immediately dead. Consented local pairs can now be SHA-256
-verified into a versioned tar only after the user acknowledges that the voice archive leaves protected app
+and the public capability is immediately dead. Reload retrieves the current active link,
+while minting a replacement kills the prior link and preserves one active capability per
+patient. Consented local pairs can now be SHA-256 verified into a versioned tar only after the user acknowledges that the voice archive leaves protected app
 storage; NeuroTrace does not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
 undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
 adapter command then exits without writing a model or non-synthetic metrics: real LoRA
@@ -211,7 +212,8 @@ so in the source. D-015, D-017.
   only after acceptance; the deployed provider still needs credentials and a field test.
 - **D2** expiring listener capability and localized public screen exist. A link sees only
   confirmed utterances created after it was minted, and the sharing UI can revoke it through
-  a patient-authorized, retry-idempotent endpoint. There is no live patient-speech
+  a patient-authorized, retry-idempotent endpoint. The active capability recovers after
+  reload and a replacement supersedes the previous URL. There is no live patient-speech
   recognition source yet.
 - **D3** adapter pipeline is synthetic scaffolding only; no model runs in the product.
 - **D4** explicitly-consented card/audio pairs now stay in an on-device IndexedDB vault;

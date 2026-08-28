@@ -29,7 +29,7 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |
 | 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed; `verify_deploy.sh` **7/7** — identical band sequence on the public URL. Neon still to swap in (SQLite bridge until then) |
 | 18 | EN / HI / PA throughout | **PARTIAL** | Awaaz board, review, emergency, and public listener shell are trilingual, including listener loading/error/expired/privacy states and server coaching. Full physical-device language QA across every non-Awaaz route is still pending |
-| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 invariants; full backend run on 2026-08-28: 899 collected / 896 passed / 3 skipped / 0 failed |
+| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 invariants; full backend run on 2026-08-28: 900 collected / 897 passed / 3 skipped / 0 failed |
 | 20 | Privacy invariant passing; PR open | **TEST** | INV-11 is covered by tests. The portable pre-push hook runs on the Awaaz branch; PR #1 is open against upstream `main` |
 | 21 | Living docs current | **LIVE** | 12 docs + 5 model cards |
 

@@ -4,6 +4,27 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz listener capability recovery
+
+Refreshing or revisiting the Awaaz page no longer loses control of an already-shared
+listener link. An authorized GET returns the one current active capability for that patient,
+and the frontend reconstructs the same language-bearing URL before enabling the share
+control. Unauthorized users receive the normal patient-access 403.
+
+Minting a replacement now revokes any prior active link for that patient before returning
+the new token. This enforces one live conversation capability per patient and prevents an
+older, hidden URL from continuing to expose confirmed messages after the owner thinks they
+replaced it. The mint audit records only the count of superseded links, never their tokens.
+
+Verified: backend **900 collected / 897 passed / 3 expected skips / 0 failed**. The new test
+pins authorized recovery, unauthorized refusal, language preservation, old-link 404 after
+replacement, new-link availability, and current-token authority. Frontend remains **47
+tests passed**; TypeScript and oxlint passed (known warnings only), and the production PWA
+bundle built. In rendered QA, a full Awaaz reload recovered the exact same URL and
+stop-sharing control; revocation still changed the live public page to the generic expired
+view on its next poll. Cross-device replacement/supersession is pinned by the backend
+integration test. Privacy preflight passed **7/7**.
+
 ## 2026-08-28 — Awaaz listener revocation closure
 
 The Awaaz sharing panel now keeps an explicit stop-sharing control beside the active

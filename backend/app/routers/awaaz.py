@@ -498,6 +498,19 @@ from ..awaaz.listener import (  # noqa: E402  (grouped with the endpoints they s
 _LISTENER_SESSIONS: dict[str, ListenerSession] = {}
 
 
+@router.get("/{patient_id}/listener")
+async def active_listener_link(patient: AuthorisedPatient) -> dict:
+    """Recover the one active capability after an owner refreshes the sharing screen."""
+    active = [
+        session for session in _LISTENER_SESSIONS.values()
+        if session.patient_id == str(patient.id) and session.active
+    ]
+    if not active:
+        return {"active": False}
+    session = max(active, key=lambda item: item.created_at)
+    return {**session.to_json(), "path": f"/listen/{session.token}"}
+
+
 @router.post("/{patient_id}/listener")
 async def mint_listener_link(
     payload: dict, patient: AuthorisedPatient, user: CurrentUser, db: Session,
@@ -511,6 +524,11 @@ async def mint_listener_link(
     display_name = str(payload.get("display_name") or "").strip()
     if not display_name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "display_name is required")
+    superseded = 0
+    for existing in _LISTENER_SESSIONS.values():
+        if existing.patient_id == str(patient.id) and existing.active:
+            existing.revoked = True
+            superseded += 1
     session = create_listener_session(
         patient_id=str(patient.id),
         display_name=display_name[:60],
@@ -519,7 +537,10 @@ async def mint_listener_link(
     )
     _LISTENER_SESSIONS[session.token] = session
     db.add(AuditLog(actor_id=user.id, action="awaaz.listener.mint", patient_id=patient.id,
-                    meta_json={"expires_at": session.expires_at.isoformat()}))
+                    meta_json={
+                        "expires_at": session.expires_at.isoformat(),
+                        "superseded_active_links": superseded,
+                    }))
     await db.commit()
     return {**session.to_json(), "path": f"/listen/{session.token}"}
 
