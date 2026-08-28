@@ -19,8 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.password import hash_password
 from ..exam.registry import DAILY_MODULES, MODULES, WEEKLY_MODULES
+from .baseline_review import record_review
 from ..exam.scheduler import session_type_due_today
 from ..models import (
+    BaselineReviewAction,
+    BaselineState,
     Adherence,
     AuditLog,
     ExamSession,
@@ -106,6 +109,10 @@ async def seed_demo(db: AsyncSession) -> dict:
     #: A seed anchored on the wrong reference date produced 21 Comprehensive sessions and
     #: still ended in ALERT — the story looked right while the mechanism was wrong.
     session_type_counts: dict[str, int] = {}
+    #: Which day the clinician confirmed. Returned so the demo's SHAPE is assertable —
+    #: a seed that silently skipped the doctor gate must be a test failure, not a
+    #: surprise in a pitch.
+    baseline_confirmed_on_day: int | None = None
 
     for index, (label, drift) in enumerate(DEMO_PLAN):
         ts = first_day + timedelta(days=index)
@@ -149,6 +156,20 @@ async def seed_demo(db: AsyncSession) -> dict:
         bands.append(result["band"])
         logger.info("seed day %2d (%-8s) -> %s", index + 1, label, result["band"])
 
+        # THE DOCTOR GATE (Part 3.3). Once the criteria are met the patient sits at
+        # DOCTOR_REVIEW_PENDING and every band stays suppressed until a clinician
+        # CONFIRMs — so without this the demo would never leave STABLE and the 21-day
+        # story would silently disappear. The demo doctor reviews promptly, which is what
+        # a real one is expected to do; the point is that the confirmation EXISTS and is
+        # recorded, not that it is instantaneous.
+        if patient.baseline_state is BaselineState.DOCTOR_REVIEW_PENDING:
+            await record_review(
+                db, patient, clinician.id, BaselineReviewAction.CONFIRM,
+                note="Demo baseline reviewed and confirmed.",
+            )
+            baseline_confirmed_on_day = index + 1
+            logger.info("seed day %2d -> baseline CONFIRMED by clinician", index + 1)
+
     db.add(AuditLog(actor_id=caregiver.id, action="demo.seed", patient_id=patient.id,
                     meta_json={"days": len(DEMO_PLAN)}))
     await db.commit()
@@ -163,6 +184,7 @@ async def seed_demo(db: AsyncSession) -> dict:
         "days": len(DEMO_PLAN),
         "bands": bands,
         "session_type_counts": session_type_counts,
+        "baseline_confirmed_on_day": baseline_confirmed_on_day,
         "detail": (f"Seeded {len(DEMO_PLAN)} days for {DEMO_PATIENT_NAME}, "
                    f"ending {bands[-1]}"),
     }

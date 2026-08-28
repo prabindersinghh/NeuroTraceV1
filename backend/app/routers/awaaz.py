@@ -349,8 +349,17 @@ async def mint_listener_link(
 
 @router.delete("/listener/{token}", response_model=MessageResponse)
 async def revoke_listener_link(token: str, user: CurrentUser, db: Session) -> MessageResponse:
+    """Until this fix, revocation needed only a valid login — no check tying the caller to
+    the token's patient at all, asymmetric with minting (`mint_listener_link`), which
+    correctly requires `get_patient_for_user`. Any authenticated user who obtained or
+    guessed a token could kill another patient's live listener session. Found in the
+    Part 5.1 endpoint data audit. An unknown/already-gone token still returns 200 as a
+    no-op, unchanged from before — only a REAL token now requires the caller to actually
+    be allowed to see that patient, via the same rule every other patient-scoped route uses.
+    """
     session = _LISTENER_SESSIONS.get(token)
     if session is not None:
+        await get_patient_for_user(uuid.UUID(session.patient_id), user, db)  # type: ignore[attr-defined]
         session.revoked = True  # type: ignore[attr-defined]
         db.add(AuditLog(actor_id=user.id, action="awaaz.listener.revoke",
                         patient_id=uuid.UUID(session.patient_id)))  # type: ignore[attr-defined]

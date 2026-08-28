@@ -20,7 +20,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "mediapipe/**/*"],
+      includeAssets: ["favicon.svg", "icon-maskable.svg", "mediapipe/**/*"],
       workbox: {
         // The face model is ~4 MB; the default 2 MB cap would silently skip it and the
         // offline claim would fail in the one place it matters.
@@ -40,19 +40,32 @@ export default defineConfig({
         name: "NeuroTrace",
         short_name: "NeuroTrace",
         description:
-          "A 90-second daily neurological check-in that runs entirely on your phone.",
+          "A ~3-minute daily neurological check-in that runs entirely on your phone.",
         theme_color: "#173a7a",
         background_color: "#f8fbff",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        // The manifest declared /icon-192.png and /icon-512.png since it was written and
+        // NEITHER FILE HAS EVER EXISTED - `public/` held only favicon.svg and icons.svg.
+        // Every load logged "Download error or resource isn't a valid image", so "Add to
+        // home screen" produced a blank icon, and some Android versions suppress the
+        // install prompt outright when a manifest's icons cannot be fetched. That is not
+        // cosmetic here: the installed PWA IS the airplane-mode demo.
+        //
+        // SVG rather than the declared PNGs, for a reason worth recording: committing
+        // raster icons trips `test_privacy.py`, which treats every tracked image as a
+        // possible photograph of a real patient's records. That scanner is deliberately
+        // blunt and it is right to be (INV-11), so the fix routes around the need for a
+        // raster instead of weakening it. `icon-maskable.svg` is square with an opaque
+        // ground and the mark inset to 56%, so it survives a launcher's circular crop;
+        // favicon.svg is 48x46 and could not.
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "/icon-maskable.svg", sizes: "any", type: "image/svg+xml" },
           {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
+            src: "/icon-maskable.svg",
+            sizes: "any",
+            type: "image/svg+xml",
             purpose: "maskable",
           },
         ],

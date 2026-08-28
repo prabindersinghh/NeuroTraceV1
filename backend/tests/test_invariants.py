@@ -83,6 +83,72 @@ def test_inv1_no_table_has_a_binary_column():
     assert binary == [], f"binary columns found, media could be stored here: {binary}"
 
 
+def test_inv1_the_file_upload_library_is_not_a_dependency():
+    """INV-1, enforced structurally rather than only by convention.
+
+    `python-multipart` is the library FastAPI requires in order to accept file uploads. It
+    was pinned in requirements and completely unused - zero matches anywhere in `app/` -
+    which meant the single dependency whose only purpose is the thing INV-1 forbids was
+    sitting installed and ready.
+
+    With it absent, a future `UploadFile` parameter fails at import time rather than
+    passing review and shipping. That is the difference between an invariant a test
+    watches for and an invariant the runtime cannot violate.
+
+    Checked against the MANIFESTS, not the live interpreter: a developer who happens to
+    have it installed transitively should not fail this, and a manifest that re-pins it
+    should.
+    """
+    for name in ("requirements.txt", "requirements.lock.txt"):
+        text = (BACKEND / name).read_text(encoding="utf-8")
+        pinned = [
+            line for line in text.splitlines()
+            if line.strip().lower().startswith(("python-multipart", "python_multipart"))
+        ]
+        assert pinned == [], (
+            f"{name} pins python-multipart again. It exists only to accept file uploads, "
+            "which INV-1 forbids - raw audio, video and frames are turned into numbers on "
+            f"the device and never sent. Offending line(s): {pinned}"
+        )
+
+
+def test_inv1_no_registered_route_declares_a_binary_request_body():
+    """The same invariant, checked against the app FastAPI actually built (Part 5.2).
+
+    The scan above reads source text for three markers. That catches the obvious way in,
+    but it is a grep: it would miss a schema field typed `bytes`, a custom media type, or
+    any future mechanism that does not spell `UploadFile`. This asserts against the
+    generated OpenAPI document instead — every route as REGISTERED, with its real request
+    body — so a media-shaped parameter is caught regardless of how it was written.
+    """
+    from app.main import app
+
+    schema = app.openapi()
+    offenders: list[str] = []
+
+    # 1. No operation may declare a binary/multipart request body.
+    for path, methods in schema.get("paths", {}).items():
+        for method, operation in methods.items():
+            body = operation.get("requestBody") or {}
+            for content_type in (body.get("content") or {}):
+                if content_type.startswith(("multipart/", "image/", "audio/", "video/")) \
+                        or content_type == "application/octet-stream":
+                    offenders.append(f"{method.upper()} {path} accepts {content_type}")
+
+    # 2. No component schema may carry a binary-format property. This is what a `bytes`
+    #    field on a Pydantic model renders as, and it is the shape the grep cannot see.
+    for name, component in (schema.get("components", {}).get("schemas", {})).items():
+        for prop_name, prop in (component.get("properties") or {}).items():
+            if prop.get("format") == "binary":
+                offenders.append(f"schema {name}.{prop_name} is binary")
+
+    assert not offenders, (
+        "A registered route or schema can carry raw media. INV-1 says audio, video and "
+        "frames are turned into numbers on the device and never uploaded.\n  "
+        + "\n  ".join(offenders)
+    )
+
+
 # --------------------------------------------------------------------------- INV-2
 def test_inv2_an_alert_always_has_a_lateralised_finding():
     """INV-2 — no ALERT without a one-sided change. See gates.py for why (Parkinson's).

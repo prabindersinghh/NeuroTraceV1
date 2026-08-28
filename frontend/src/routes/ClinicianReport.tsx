@@ -107,7 +107,7 @@ export default function ClinicianReport() {
 
       {/* A report built on an unlocked baseline compares against a moving target. Say so
           at the top, not in a footnote, because it changes how every row below reads. */}
-      {patient.baseline_state !== "locked" && (
+      {patient.baseline_state !== "LOCKED" && (
         <p className="mt-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm">
           <strong>Baseline is not locked.</strong> Deviations below are provisional: they are
           measured against a window that is still being collected, so both the median and the

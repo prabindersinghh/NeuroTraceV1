@@ -50,9 +50,10 @@ export function Register() {
         <LanguageToggle />
       </div>
 
-      <Card className="w-full max-w-md">
+      <main className="w-full max-w-md">
+        <Card>
         <CardHeader>
-          <CardTitle className="text-xl">{t("signUp")}</CardTitle>
+          <CardTitle as="h1" className="text-xl">{t("signUp")}</CardTitle>
           <CardDescription>{t("tagline")}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,6 +114,7 @@ export function Register() {
           </p>
         </CardContent>
       </Card>
+      </main>
     </div>
   );
 }

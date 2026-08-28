@@ -34,7 +34,17 @@ from app.engine.gates import (
 )
 from app.exam.registry import MODULES
 from app.models import Baseline as BaselineRow
-from app.models import ExamSession, ModuleResult, Patient, Role, SessionType, StrokeSide, User
+from app.models import (
+    BaselineReviewAction,
+    ExamSession,
+    ModuleResult,
+    Patient,
+    Role,
+    SessionType,
+    StrokeSide,
+    User,
+)
+from app.services.baseline_review import record_review
 from app.services.session_pipeline import compute_session
 from app.services.synthetic import make_rng, synthetic_session
 
@@ -145,6 +155,21 @@ async def _make_patient(session) -> Patient:
     return patient
 
 
+async def _confirm_baseline(session, patient) -> None:
+    """Drive the Part 3 doctor gate: modules locking is a request for review, not a lock.
+
+    Without this, `patient.baseline_state` sits at DOCTOR_REVIEW_PENDING forever, bands stay
+    forced STABLE, and no frozen reference exists for `cumulative_drift` to measure against
+    (`session_pipeline._refresh_baseline_state`, `baseline_review.record_review`).
+    """
+    clinician = User(email=f"dr-{uuid.uuid4().hex[:8]}@example.com",
+                     pw_hash=hash_password("a-real-password"), role=Role.clinician)
+    session.add(clinician)
+    await session.flush()
+    await record_review(session, patient, clinician.id, BaselineReviewAction.CONFIRM, None)
+    await session.commit()
+
+
 async def _run_day(session, patient, day, drift, *, modules, lateralised=True):
     exam = ExamSession(patient_id=patient.id, ts=START + timedelta(days=day),
                        type=SessionType.daily_pulse)
@@ -165,6 +190,7 @@ async def test_the_reference_is_snapshot_at_lock(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=DAILY)
+    await _confirm_baseline(session, patient)
 
     rows = list(await session.scalars(
         select(BaselineRow).where(BaselineRow.patient_id == patient.id)))
@@ -181,6 +207,7 @@ async def test_the_reference_never_moves_once_taken(session):
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=DAILY)
+    await _confirm_baseline(session, patient)
 
     row = await session.scalar(
         select(BaselineRow).where(BaselineRow.patient_id == patient.id,
@@ -247,6 +274,7 @@ async def test_a_slow_decline_the_adaptive_baseline_absorbs_is_still_caught(sess
     patient = await _make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await _run_day(session, patient, day, 0.0, modules=DAILY)
+    await _confirm_baseline(session, patient)
 
     drift_series: list[float] = []
     result = None

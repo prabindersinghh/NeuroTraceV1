@@ -140,7 +140,7 @@ export default function Landing() {
               <h1 className="mt-6 text-[clamp(2.05rem,5.6vw,3.9rem)] font-semibold leading-[1.03] tracking-[-0.032em]">
                 <LineReveal lines={["Twenty minutes of neurology,", "every three months."]} />
                 <LineReveal
-                  lines={["Ninety seconds a day is more."]}
+                  lines={["Three minutes a day is more."]}
                   className="block text-muted-foreground"
                   step={2}
                 />
@@ -149,7 +149,7 @@ export default function Landing() {
               <Reveal step={4} className="mt-6 max-w-xl">
                 <p className="text-[17px] leading-[1.6] text-muted-foreground sm:text-[19px]">
                   Recovery happens at home, where nobody is measuring anything. NeuroTrace
-                  runs a ninety-second neurological check on the survivor's own phone each
+                  runs a three-minute neurological check on the survivor's own phone each
                   morning and learns what normal looks like{" "}
                   <em className="not-italic text-foreground">for that one person</em>.
                 </p>
@@ -436,7 +436,7 @@ export default function Landing() {
               </h2>
               <Reveal step={2}>
                 <p className={LEAD}>
-                  Twenty-one tasks. Six run every day inside the ninety-second budget; the rest
+                  Twenty-one tasks. Six run every day inside the three-minute budget; the rest
                   are weekly or monthly. Speech and language have no left or right — they can
                   back up a one-sided finding, never establish one.
                 </p>
@@ -579,7 +579,7 @@ export default function Landing() {
           <h2 className="text-[clamp(1.9rem,4vw,2.9rem)] font-semibold leading-[1.07] tracking-[-0.03em]">
             <LineReveal lines={["Nobody can watch someone", "for ninety days."]} />
             <LineReveal
-              lines={["Ninety seconds a day, they can."]}
+              lines={["Three minutes a day, they can."]}
               className="block text-muted-foreground"
               step={2}
             />
@@ -605,7 +605,7 @@ export default function Landing() {
           <Reveal step={6} className="mx-auto mt-14 max-w-lg">
             <NinetyDays complete />
             <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              ninety mornings · ninety seconds each · nothing leaves the phone
+              ninety mornings · three minutes each · nothing leaves the phone
             </p>
           </Reveal>
         </section>

@@ -33,11 +33,20 @@ export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEleme
 );
 CardHeader.displayName = "CardHeader";
 
-export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-base font-semibold tracking-tight", className)} {...props} />
-  ),
-);
+/**
+ * Defaults to `h3`, which is right for a card sitting inside a page that already has an
+ * `h1`. On the few screens where the CARD IS THE PAGE - login, register - that default
+ * leaves the document starting at h3 with no h1 above it, which is a broken outline for a
+ * screen reader walking the page by heading. Those screens pass `as="h1"`.
+ *
+ * Deliberately an escape hatch rather than a guess: nothing here can know its own depth.
+ */
+export const CardTitle = forwardRef<
+  HTMLHeadingElement,
+  HTMLAttributes<HTMLHeadingElement> & { as?: "h1" | "h2" | "h3" }
+>(({ className, as: Tag = "h3", ...props }, ref) => (
+  <Tag ref={ref} className={cn("text-base font-semibold tracking-tight", className)} {...props} />
+));
 CardTitle.displayName = "CardTitle";
 
 export const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(

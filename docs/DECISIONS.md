@@ -518,3 +518,199 @@ main.py's OpenAPI description, migration 0012's docstring, and the test that cer
 wrong number (`test_the_daily_battery_fits_the_ninety_second_budget` → `..._fits_its_capture_budget`).
 **Pitch and landing-page copy deliberately untouched** — the owner is handling the
 public-facing figure separately, and `frontend/src/routes/Landing.tsx` keeps its wording.
+
+---
+
+**D-046 · 2026-08-28 · `consent_ref` is nullable in Part 3, and Part 4 owes it a backfill.**
+`patient_clinician_links` carries a `consent_ref` column that Part 3 never populates. The
+consent tables it will point at do not exist yet; they are Part 4. The alternative — hold
+the doctor-in-the-loop gate until Part 4 lands — would leave the far worse defect in place
+(any account with the clinician role could read any patient) for the sake of a foreign key.
+
+Consent is not, however, unrecorded. Every link writes an audit event
+(`clinician.link.granted`) carrying `{"consent": "caregiver_granted", "consent_ref": null}`,
+and the link is created by the owning caregiver, never by the clinician. So the *fact* of
+consent has a durable, append-only record from day one; what it lacks is a reference into a
+structured consent store.
+
+**The obligation this creates, stated so Part 4 cannot forget it:** Part 4's migration must
+backfill `consent_ref` for every link created before its consent tables existed, sourcing
+the grant time and actor from those audit rows. Without that backfill, Part 3's links become
+a cohort of consented-but-unreferenced records — consent that happened, evidenced only in a
+log nobody joins against. `test_the_link_records_consent_now_for_part_4_to_reference` exists
+to make the audit event a contract rather than an implementation detail, so the backfill has
+something guaranteed to read.
+
+Owner decision, 2026-08-28: ship nullable now, do not wait.
+
+---
+
+**D-047 · 2026-08-28 · A baseline that does not complete auto-extends exactly once, then
+ABANDONS. It is never downgraded to LIGHT.**
+The 21-day baseline window can expire with modules still unlocked — a patient who misses
+sessions, or whose comprehensive-only modules never reach their retained-session count. Three
+options were on the table: extend, downgrade the protocol to LIGHT so fewer modules need to
+lock, or stop and involve a human.
+
+**Downgrading was rejected outright.** LIGHT changes which tasks run, which changes where
+each remaining module sits on the fatigue curve. `SessionObservation` stores raw values with
+no position adjustment, so a module measured at position 2 of a LIGHT session and position 6
+of a COMPREHENSIVE one is two different physiological states written to one baseline. That is
+the exact confound INV-14 and D-027 exist to prevent, and doing it *while building the
+baseline* would corrupt the yardstick every later comparison is measured against. A shortcut
+that damages the reference is not a shortcut.
+
+So: `expiry_decision(days_elapsed, extensions_used)` returns `continue` → `extend` (once, to
+35 days) → `abandon`. The second failure is not a second silent extension. It is a finding
+about this patient's ability to complete the protocol — possibly a deterioration, possibly a
+phone they cannot use, possibly a caregiver who has stopped — and it belongs in front of a
+person. ABANDONED carries a reason, visible to both caregiver and clinician, and suppresses
+bands and alerts like every non-LOCKED state.
+
+`test_expiry_never_recommends_a_light_downgrade` asserts the string is not reachable from any
+combination of inputs, so the option cannot quietly return later.
+
+Owner decision, 2026-08-28.
+
+---
+
+**D-048 · 2026-08-28 · The frozen reference is written on the doctor's CONFIRM, not on
+module lock.**
+INV-4 says the frozen reference is written once and never updated: it is the permanent
+yardstick, and every later comparison — every band, every alert — is measured against it.
+Until Part 3 it was written by `_upsert_baseline` at the moment a module's adaptive baseline
+locked, i.e. purely on session count. No human had seen it.
+
+Part 3 introduces a clinician who can say "that window is not representative — keep
+collecting" (EXTEND). If the reference is already sealed by then, that judgement is
+cosmetic: the yardstick was set against the window the clinician just rejected, permanently,
+and INV-4 forbids correcting it. The write therefore moved to `freeze_reference()`, called
+from exactly one place — the CONFIRM branch of `record_review`.
+
+**The failure mode this creates is new, and is the thing actually worth testing.** With the
+write on CONFIRM, an EXTEND-then-CONFIRM cycle has two moments that look like completion. A
+naive implementation snapshots at each, so the reference gets written twice and the second
+write silently replaces a value that was supposed to be permanent. A test asserting only
+"not written on EXTEND" passes while that ships.
+`test_extend_then_confirm_writes_the_reference_exactly_once` drives the full cycle — EXTEND,
+values move, CONFIRM, then a second CONFIRM with post-lock drift — and asserts the reference
+captures the FINAL window, and that a repeat `freeze_reference()` returns 0 newly frozen.
+The guard is in the function itself: rows with `reference_locked_at is not None` are skipped,
+so idempotence does not depend on the caller.
+
+Consequence worth noting: a patient in DOCTOR_REVIEW_PENDING has locked modules and no frozen
+reference. That is correct — they are not being monitored yet, and `baseline_phase` is now
+computed from `patient.baseline_state is not LOCKED` rather than from the modules, so bands
+and alerts stay suppressed until a human confirms.
+
+Owner decision, 2026-08-28.
+
+---
+
+**D-049 · 2026-08-28 · A clinician needs BOTH an active link and current C3 consent. Neither
+alone grants access.**
+Part 3.2 made an active `patient_clinician_links` row the thing that grants a clinician
+access. Part 4 adds a second, independent condition: `CLINICIAN_SHARING` (C3) consent must
+currently be in force.
+
+These answer different questions and can change independently. A link answers *is there a
+care relationship*; consent answers *may it see data right now*. A caregiver who withdraws
+C3 has not ended the relationship with the doctor — they have withdrawn permission to share
+measurements, and that must take effect immediately without anyone having to also remember
+to revoke the link. Conversely, revoking a link ends the relationship without implying
+anything about consent.
+
+**The implementation detail that matters more than the rule:** both conditions are checked
+in exactly one function, `app.auth.deps.clinician_may_access_patient`. That is not tidiness.
+The Part 5.1 endpoint audit found **six** routes that had each hand-rolled their own version
+of "may this caller touch this patient" and never received the Part 3.2 fix — including
+`sessions.py:_assert_can_access`, which still granted any account with the clinician role
+read *and write* access to any patient's raw module features. Six separate copies is how a
+security fix half-lands. Every call site now delegates to the single function, so a future
+change to the rule reaches all of them or none.
+
+Consequence worth stating: `/clinic/patients` and `GET /patients` filter on consent as well
+as on the link, so a withdrawn patient disappears from the roster rather than appearing
+there and 403-ing when opened.
+
+---
+
+**D-050 · 2026-08-28 · Erasure tombstones the patient row instead of deleting it.**
+Part 5.4 asked for real deletion of clinical measurements with the audit trail retained
+(INV-8). Those two requirements are in direct conflict in the current schema, and the
+conflict was found by probing rather than by reading: `audit_log.patient_id` carries
+`ondelete="CASCADE"`, so `DELETE FROM patients` destroys every audit row for that patient.
+A probe against a real SQLite database confirmed it — one audit row before, zero after.
+
+So erasure strips the row instead of removing it. Every clinical measurement is genuinely
+deleted (sessions, module results, baselines, deviations, scores, alerts, questionnaires,
+vitals, adherence, wearable readings, falls, and all Awaaz content). The surviving row keeps
+its id and loses everything else: name, age, sex, stroke details, languages, and
+`calibration_json` — which is where the face-identity enrolment vector lives, the one stored
+value derived from the patient's body. What remains identifies nobody.
+
+**Rejected: dropping the foreign key** so the row could be deleted outright. That is a
+constraint rewrite, on SQLite (which rebuilds the whole table under `batch_alter_table`), on
+the table every other table references — to solve a problem a nullable column solves
+additively. **Rejected: `ondelete="SET NULL"`**, which keeps the audit row while destroying
+the linkage that makes it useful; correlating one former patient's access history is the
+main thing an auditor wants after an erasure.
+
+Clinician links are revoked rather than deleted, and consent history is retained, both for
+the same reason as the audit trail: they are records of decisions and access, not
+measurements of a body.
+
+Two fields had to be RESET rather than nulled because they are NOT NULL —
+`stroke_side` (to `unknown`) and `other_movement_disorder` (to `False`). Found by a failing
+test, not by reading the model; `unknown` is also the more honest value, since after erasure
+we genuinely do not know.
+
+---
+
+**D-051 · 2026-08-28 · The corrected Daily Pulse figure goes everywhere, including the
+browser tab. D-045's carve-out for public-facing copy is closed.**
+D-045 corrected Daily Pulse from 90s to ~195s of raw task time and deliberately left
+pitch and landing copy alone, because the public-facing figure was the owner's to decide.
+That carve-out has now been decided the other way: **the true number goes everywhere.**
+
+It turned out the old figure had survived in **eight** places, and only one of them was
+the landing page D-045 actually named: the shipped `<title>`, the meta description, the PWA
+manifest `description`, both landing hero headlines, the body copy, the `NinetyDays` mark,
+and `docs/DEMO_SCRIPT.md`. Four of those were found by the scanner rather than by hand,
+after I had already "finished" correcting them manually.
+
+`docs/PRD.md` §7 keeps its `(Was "<=90s" …)` note and is explicitly allowlisted. Recording
+that the figure used to be wrong is the opposite of asserting it, and deleting it would
+erase the correction's own history.
+
+**The lesson recorded, because it is more general than this number:** a decision that is not
+enforced by a test is a decision that drifts back. D-045 was made, written down, and
+partially applied — and the wrong figure then shipped in the browser tab for weeks. The new
+`STALE_DURATION` guard in `test_regulatory_claims.py` is what makes D-045 real rather than
+aspirational.
+
+---
+
+**D-052 · 2026-08-28 · `python-multipart` is removed, so INV-1 is structural rather than
+only tested.**
+It was pinned, installed, and completely unused — zero matches anywhere in `app/`. It is
+also the single dependency whose *only* purpose is accepting file uploads, which is exactly
+what INV-1 forbids.
+
+Three tests already asserted that no endpoint accepts media (a source scan, a schema scan,
+and an OpenAPI scan). Those catch a violation *after* somebody writes it. With the library
+absent, a future `UploadFile` parameter fails at **import** — the runtime cannot express the
+violation at all. That is a different and stronger kind of guarantee, and it cost one
+deleted line.
+
+Removed from `requirements.txt` **and** `requirements.lock.txt` — leaving the lock entry
+would have restored it on the next byte-identical rebuild. Verified by actually
+uninstalling it and confirming the app imports, all 76 routes register, and the OpenAPI
+document still generates. A new INV-1 test asserts neither manifest re-pins it, checked
+against the manifests rather than the live interpreter so a transitively-installed copy
+does not produce a false failure.
+
+`passlib` remains unmaintained and is why `bcrypt` is held at 4.0.1. Recorded in
+`docs/SBOM.md`; deliberately not acted on, because migrating password hashing is a
+security-relevant change that deserves its own reviewed piece of work.
+

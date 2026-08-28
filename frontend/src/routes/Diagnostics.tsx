@@ -21,7 +21,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { hasWasmSimd, measureFps, type FpsResult } from "@/lib/deviceProbes";
+import {
+  describePlatform,
+  hasWasmSimd,
+  measureFps,
+  probeModels,
+  type FpsResult,
+  type ModelProbe,
+} from "@/lib/deviceProbes";
 
 type Probe = { label: string; value: string; verdict: "good" | "warn" | "bad" | "info" };
 
@@ -34,6 +41,8 @@ function verdictFor(measured: number): Probe["verdict"] {
 export default function Diagnostics() {
   const [probes, setProbes] = useState<Probe[]>([]);
   const [fps, setFps] = useState<FpsResult[]>([]);
+  const [models, setModels] = useState<ModelProbe[]>([]);
+  const [modelsRunning, setModelsRunning] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -46,7 +55,11 @@ export default function Diagnostics() {
     // re-run, or fires setState after the page has been left.
     let cancelled = false;
     const nav = navigator as Navigator & { deviceMemory?: number };
+    const platform = describePlatform();
     const out: Probe[] = [
+      { label: "Browser", value: platform.browser, verdict: "info" },
+      { label: "OS", value: platform.os, verdict: "info" },
+      { label: "Form factor", value: platform.mobile ? "mobile" : "desktop", verdict: "info" },
       { label: "User agent", value: navigator.userAgent, verdict: "info" },
       {
         label: "Secure context (HTTPS)",
@@ -115,13 +128,26 @@ export default function Diagnostics() {
     }
   }, []);
 
+  const runModels = useCallback(async () => {
+    setModelsRunning(true);
+    setError(null);
+    try {
+      setModels(await probeModels());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setModelsRunning(false);
+    }
+  }, []);
+
   const report = {
-    schema: "neurotrace.diagnostics/1",
+    schema: "neurotrace.diagnostics/2",
     capturedAt: startedAt.current,
     // Deliberately no patient, account, or location field. This file gets pasted into a
     // chat or an email, and the safest payload is one that cannot identify anybody.
     probes: Object.fromEntries(probes.map((p) => [p.label, p.value])),
     fps,
+    models,
   };
 
   return (
@@ -213,24 +239,65 @@ export default function Diagnostics() {
         </div>
       ))}
 
-      {fps.length > 0 && (
-        <>
-          <pre className="overflow-x-auto rounded-lg border border-line bg-surface p-3 text-xs">
-            {JSON.stringify(report, null, 2)}
-          </pre>
-          <Button
-            className="min-h-12 w-full"
-            onClick={() => {
-              navigator.clipboard
-                ?.writeText(JSON.stringify(report, null, 2))
-                .then(() => setCopied(true))
-                .catch(() => setCopied(false));
-            }}
-          >
-            {copied ? "Copied" : "Copy report"}
-          </Button>
-        </>
-      )}
+      <Button
+        className="min-h-14 w-full text-lg"
+        onClick={runModels}
+        disabled={modelsRunning}
+      >
+        {modelsRunning
+          ? "Loading models and sampling frames…"
+          : "Measure model load + detection rate (~20 s)"}
+      </Button>
+
+      {models.map((m) => (
+        <div key={m.model} className="rounded-lg border border-line p-4">
+          <p className="text-lg">
+            {m.model === "face" ? "FaceMesh" : "PoseLandmarker"} ·{" "}
+            <strong>{m.initMs === null ? "did not load" : `${m.initMs} ms to load`}</strong>
+          </p>
+          {m.error && <p className="mt-1 text-sm text-alert">{m.error}</p>}
+          {m.detectionRate !== null ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Found the subject in{" "}
+              <strong
+                className={
+                  m.detectionRate < 0.5
+                    ? "text-alert"
+                    : m.detectionRate < 0.9
+                      ? "text-watch"
+                      : "text-stable"
+                }
+              >
+                {Math.round(m.detectionRate * 100)}%
+              </strong>{" "}
+              of {m.framesSampled} frames · {m.medianDetectMs} ms per frame (median)
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted-foreground">
+              No camera frames sampled — load time only. Allow camera access to measure the
+              detection rate, which is the number that says whether this device can actually
+              see the person.
+            </p>
+          )}
+        </div>
+      ))}
+
+      {/* Always available, even when every probe above failed. A device where nothing
+          works is exactly the device whose report is most worth sending. */}
+      <pre className="overflow-x-auto rounded-lg border border-line bg-surface p-3 text-xs">
+        {JSON.stringify(report, null, 2)}
+      </pre>
+      <Button
+        className="min-h-12 w-full"
+        onClick={() => {
+          navigator.clipboard
+            ?.writeText(JSON.stringify(report, null, 2))
+            .then(() => setCopied(true))
+            .catch(() => setCopied(false));
+        }}
+      >
+        {copied ? "Copied" : "Copy report"}
+      </Button>
     </div>
   );
 }

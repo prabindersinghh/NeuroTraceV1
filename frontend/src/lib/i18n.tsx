@@ -249,6 +249,53 @@ export const STRINGS = {
   startCheckin: { en: "Start check-in", hi: "जाँच शुरू करें", pa: "ਜਾਂਚ ਸ਼ੁਰੂ ਕਰੋ" },
   buildingBaseline: { en: "Learning their normal", hi: "उनका सामान्य स्तर सीख रहे हैं", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਪੱਧਰ ਸਿੱਖ ਰਹੇ ਹਾਂ" },
 
+  // --- what reaches the caregiver (Part 6.2) ---
+  // NONE of these reassure. "Everything looks fine" is a claim this product cannot make -
+  // it watches a handful of features for a few minutes a day. Silence means "nothing
+  // crossed a threshold", and that is all it means. WATCH deliberately has no string here,
+  // because WATCH does not notify (lib/notify.ts).
+  needsAttention: { en: "Needs your attention", hi: "आपके ध्यान की ज़रूरत", pa: "ਤੁਹਾਡੇ ਧਿਆਨ ਦੀ ਲੋੜ" },
+  notifyAlert: {
+    en: "A change was seen across more than one area, on more than one day. Please speak to their doctor.",
+    hi: "एक से अधिक क्षेत्रों में, एक से अधिक दिन बदलाव दिखा है। कृपया उनके डॉक्टर से बात करें।",
+    pa: "ਇੱਕ ਤੋਂ ਵੱਧ ਖੇਤਰਾਂ ਵਿੱਚ, ਇੱਕ ਤੋਂ ਵੱਧ ਦਿਨ ਬਦਲਾਅ ਦਿਖਿਆ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਉਹਨਾਂ ਦੇ ਡਾਕਟਰ ਨਾਲ ਗੱਲ ਕਰੋ।",
+  },
+  notifyAtypical: {
+    en: "The pattern of change is not one-sided. That points somewhere different - worth asking their doctor about.",
+    hi: "बदलाव का तरीका एक तरफ़ा नहीं है। यह किसी और ओर इशारा करता है - डॉक्टर से पूछना ठीक रहेगा।",
+    pa: "ਬਦਲਾਅ ਦਾ ਤਰੀਕਾ ਇੱਕ ਪਾਸੇ ਦਾ ਨਹੀਂ ਹੈ। ਇਹ ਕਿਸੇ ਹੋਰ ਪਾਸੇ ਇਸ਼ਾਰਾ ਕਰਦਾ ਹੈ - ਡਾਕਟਰ ਤੋਂ ਪੁੱਛਣਾ ਠੀਕ ਰਹੇਗਾ।",
+  },
+  notifyMissed: {
+    en: "No check-in for a few days. Without them there is nothing to compare against.",
+    hi: "कुछ दिनों से कोई जाँच नहीं हुई। इनके बिना तुलना करने को कुछ नहीं होता।",
+    pa: "ਕੁਝ ਦਿਨਾਂ ਤੋਂ ਕੋਈ ਜਾਂਚ ਨਹੀਂ ਹੋਈ। ਇਹਨਾਂ ਤੋਂ ਬਿਨਾਂ ਤੁਲਨਾ ਕਰਨ ਲਈ ਕੁਝ ਨਹੀਂ ਹੁੰਦਾ।",
+  },
+  notifyLowQuality: {
+    en: "The last few check-ins were hard to read. More light, and the phone steady at arm's length, usually fixes it.",
+    hi: "पिछली कुछ जाँचें साफ़ नहीं थीं। ज़्यादा रोशनी और फ़ोन को हाथ भर दूर स्थिर रखने से आमतौर पर ठीक हो जाता है।",
+    pa: "ਪਿਛਲੀਆਂ ਕੁਝ ਜਾਂਚਾਂ ਸਾਫ਼ ਨਹੀਂ ਸਨ। ਵੱਧ ਰੌਸ਼ਨੀ ਅਤੇ ਫ਼ੋਨ ਨੂੰ ਬਾਂਹ ਦੀ ਦੂਰੀ 'ਤੇ ਸਥਿਰ ਰੱਖਣ ਨਾਲ ਆਮ ਤੌਰ 'ਤੇ ਠੀਕ ਹੋ ਜਾਂਦਾ ਹੈ।",
+  },
+  notifyAdherence: {
+    en: "Check-ins have dropped off. The record is getting too thin to say much from.",
+    hi: "जाँचें कम हो गई हैं। रिकॉर्ड इतना कम है कि उससे ज़्यादा कुछ नहीं कहा जा सकता।",
+    pa: "ਜਾਂਚਾਂ ਘੱਟ ਹੋ ਗਈਆਂ ਹਨ। ਰਿਕਾਰਡ ਇੰਨਾ ਘੱਟ ਹੈ ਕਿ ਉਸ ਤੋਂ ਬਹੁਤਾ ਕੁਝ ਨਹੀਂ ਕਿਹਾ ਜਾ ਸਕਦਾ।",
+  },
+
+  // --- which session is due today (Part 6.6) ---
+  // The patient must always know whether today is the short check-in or the longer one,
+  // and roughly how long it will take, BEFORE they press begin. Durations come from the
+  // server's own `estimated_seconds`, never a hardcoded number — D-045 is the whole reason
+  // this is not written as a literal here.
+  todayShort: { en: "Today is the short check-in", hi: "आज छोटी जाँच है", pa: "ਅੱਜ ਛੋਟੀ ਜਾਂਚ ਹੈ" },
+  todayLong: { en: "Today is the longer check-in", hi: "आज लंबी जाँच है", pa: "ਅੱਜ ਲੰਬੀ ਜਾਂਚ ਹੈ" },
+  aboutMinutes: { en: "About {n} minutes", hi: "लगभग {n} मिनट", pa: "ਲਗਭਗ {n} ਮਿੰਟ" },
+  stepsCount: { en: "{n} short tasks", hi: "{n} छोटे काम", pa: "{n} ਛੋਟੇ ਕੰਮ" },
+  restAnyTime: {
+    en: "You can pause and rest at any point.",
+    hi: "आप कभी भी रुककर आराम कर सकते हैं।",
+    pa: "ਤੁਸੀਂ ਕਿਸੇ ਵੀ ਵੇਲੇ ਰੁਕ ਕੇ ਆਰਾਮ ਕਰ ਸਕਦੇ ਹੋ।",
+  },
+
   // --- exam ---
   checkinTitle: { en: "Daily check-in", hi: "रोज़ाना जाँच", pa: "ਰੋਜ਼ਾਨਾ ਜਾਂਚ" },
   stepOf: { en: "Step", hi: "चरण", pa: "ਪੜਾਅ" },

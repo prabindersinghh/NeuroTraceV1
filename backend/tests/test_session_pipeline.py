@@ -19,6 +19,8 @@ from app.models import (
     Alert,
     Band,
     Baseline,
+    BaselineReview,
+    BaselineReviewAction,
     BaselineState,
     Deviation,
     ExamSession,
@@ -30,6 +32,7 @@ from app.models import (
     StrokeSide,
     User,
 )
+from app.services.baseline_review import record_review
 from app.services.session_pipeline import compute_session
 from app.services.synthetic import (
     BASELINE_DAYS,
@@ -59,6 +62,18 @@ async def make_patient(session, **kw) -> Patient:
     return patient
 
 
+async def _confirm_baseline(session, patient) -> None:
+    """Drive the Part 3 doctor gate. Modules locking is now a request for review, not a
+    lock — the monitoring phase (bands, alerts, the frozen reference) does not begin until
+    a clinician confirms."""
+    clinician = User(email=f"dr-{uuid.uuid4().hex[:8]}@example.com",
+                     pw_hash=hash_password("a-real-password"), role=Role.clinician)
+    session.add(clinician)
+    await session.flush()
+    await record_review(session, patient, clinician.id, BaselineReviewAction.CONFIRM, None)
+    await session.commit()
+
+
 async def run_day(session, patient: Patient, day: int, drift: float,
                   *, drift_modules=None, quality: float = 1.0,
                   identity: bool = True, hour: int = 9) -> dict:
@@ -82,10 +97,18 @@ async def run_day(session, patient: Patient, day: int, drift: float,
 
 @pytest.fixture
 async def twenty_one_days(session):
-    """The PRD acceptance scenario, run once."""
+    """The PRD acceptance scenario, run once.
+
+    Part 3: modules locking is a request for review, not a lock — so as soon as the doctor
+    gate opens (patient reaches DOCTOR_REVIEW_PENDING), a clinician confirms immediately.
+    That is the scenario this simulation models: the baseline phase ends, a doctor signs
+    off, and the stable/decline days that follow are real monitoring, not still-suppressed
+    sessions that would otherwise render every band "STABLE" regardless of the drift fed in.
+    """
     patient = await make_patient(session)
     rng = make_rng(42)
     results = []
+    confirmed = False
     for day, (_label, drift) in enumerate(DEMO_PLAN):
         exam = ExamSession(patient_id=patient.id, ts=START + timedelta(days=day),
                            type=SessionType.daily_pulse)
@@ -98,6 +121,10 @@ async def twenty_one_days(session):
                                      domain=MODULES[code].domain, features_json=f))
         await session.commit()
         results.append(await compute_session(session, exam.id))
+        if not confirmed and patient.baseline_state is BaselineState.DOCTOR_REVIEW_PENDING:
+            await _confirm_baseline(session, patient)
+            confirmed = True
+    assert confirmed, "the baseline never reached DOCTOR_REVIEW_PENDING across all 21 days"
     await session.refresh(patient)
     return patient, results
 
@@ -139,8 +166,13 @@ async def test_the_twenty_one_day_simulation(session, twenty_one_days):
     assert alert.clinician_line
     assert "median/MAD baseline" in alert.clinician_line
 
-    # --- and the patient's baseline actually locked ---
-    assert patient.baseline_state is BaselineState.locked
+    # --- and the patient's baseline actually locked, via a recorded doctor CONFIRM ---
+    assert patient.baseline_state is BaselineState.LOCKED
+    assert await session.scalar(
+        select(func.count()).select_from(BaselineReview)
+        .where(BaselineReview.patient_id == patient.id,
+               BaselineReview.action == BaselineReviewAction.CONFIRM)
+    ) == 1
 
 
 async def test_the_alert_names_the_specific_findings_that_changed(twenty_one_days):
@@ -213,6 +245,7 @@ async def test_a_single_deviating_domain_never_alerts(session):
     patient = await make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await run_day(session, patient, day, 0.0)
+    await _confirm_baseline(session, patient)
 
     bands = []
     for day in range(LOCK_AT_N_SESSIONS + 3, LOCK_AT_N_SESSIONS + 8):
@@ -228,6 +261,7 @@ async def test_two_deviating_domains_do_alert(session):
     patient = await make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await run_day(session, patient, day, 0.0)
+    await _confirm_baseline(session, patient)
 
     bands = [
         (await run_day(session, patient, day, 2.8, drift_modules=["M4", "M7"]))["band"]
@@ -240,6 +274,7 @@ async def test_a_single_bad_day_does_not_alert(session):
     patient = await make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await run_day(session, patient, day, 0.0)
+    await _confirm_baseline(session, patient)
 
     spike = await run_day(session, patient, LOCK_AT_N_SESSIONS + 3, 3.0)
     assert spike["band"] != "ALERT"
@@ -252,6 +287,7 @@ async def test_improvement_never_alerts(session):
     patient = await make_patient(session)
     for day in range(LOCK_AT_N_SESSIONS + 3):
         await run_day(session, patient, day, 0.0)
+    await _confirm_baseline(session, patient)
 
     bands = [
         (await run_day(session, patient, day, -2.8))["band"]

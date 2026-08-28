@@ -74,6 +74,10 @@ per-request cost to users with intermittent data.
 | `fall_events` | device-reported falls; bypass the engine entirely |
 | `asha_visits` | one household visit, idempotent on (worker, client_visit_id) |
 | `questionnaires` | PHQ-2/9, EAT-10, FSS, Barthel, **DHI**, **HEARING** |
+| `clinician_profiles` | registration number, qualification, authority — all `SELF_DECLARED` |
+| `patient_clinician_links` | **who may read this patient**; active while `unlinked_at IS NULL` |
+| `baseline_reviews` | append-only CONFIRM / EXTEND / FLAG_CONCERN, with the snapshot reviewed |
+| `consents` | six independent, versioned, withdrawable consents — C3 gates clinician access |
 | `awaaz_profiles` | speech profile and auto-speak settings — gates INV-9 |
 | `phrase_cards` | the patient's phrase board |
 | `voice_samples` | voice-clone **metadata only**; the audio never enters this database |
@@ -100,10 +104,41 @@ routine PATCH silently un-enrols the patient and the check stops running unrepor
 |---|---|---|
 | patient | own exam | run the battery |
 | caregiver | own patients: band, explanation, trends, FAST | enrol, run exams, log symptoms and vertigo, acknowledge falls |
-| clinician | all patients: roster, deviations, drift, typed cards | acknowledge alerts, export reports |
+| clinician | **only linked patients**: roster, deviations, drift, typed cards | acknowledge alerts, export reports, confirm baselines |
 | asha_worker | **only assigned households**: name, age, due modules | run deep assessment, sync visits |
 
 Enforced server-side on every route (INV-6). UI hiding is never the boundary.
+
+**A clinician's reach is a link, not a role.** Until 2026-08-28, `get_patient_for_user`
+granted access to any patient as soon as `user.role is Role.clinician`, and `/clinic/patients`
+ran an unscoped `select(Patient)` — so a provisioned clinician could read the entire roster.
+`Patient.clinician_id` existed and was never consulted for authorisation. Access now requires
+a row in `patient_clinician_links` with `unlinked_at IS NULL`. The **owning caregiver**
+creates the link; a clinician cannot link themselves, because a doctor who could add
+themselves to a patient makes the link meaningless as a control. Revocation sets `unlinked_at`
+and keeps the row, so who could see this patient and when stays recoverable (INV-8). Part 3.2.
+
+**Registration numbers are stored, displayed, and marked unverified.** `verification_status`
+has exactly one value — `SELF_DECLARED` — and is never read from the request body. Nothing is
+checked against any medical register, and a client that could set `VERIFIED` would be
+asserting a check we never performed. The one-value enum is the point, not an oversight.
+
+**A clinician needs BOTH an active link and current C3 consent** (Part 4, D-049). A link
+answers "is there a care relationship"; `CLINICIAN_SHARING` consent answers "may it see data
+right now". Withdrawing consent takes effect immediately without touching the link, and both
+conditions are checked in exactly one function — `auth.deps.clinician_may_access_patient`.
+That centralisation is itself the control: the Part 5.1 endpoint audit found **six** routes
+that had each hand-rolled the check and never received the Part 3.2 fix, one of which still
+allowed any clinician account to read *and write* any patient's raw module features. See
+`docs/ENDPOINT_DATA_AUDIT.md`.
+
+**Erasure tombstones, it does not delete** (Part 5.4, D-050). `audit_log.patient_id` cascades
+on delete — verified by probing, not assumed — so removing a `patients` row destroys the
+record of who accessed that person's data. Erasure therefore deletes every clinical
+measurement and strips the surviving row of every identifying field, including the
+face-identity vector in `calibration_json`. Audit entries, consent history and revoked
+clinician links are all retained: they record decisions and access, not measurements.
+`docs/DATA_INVENTORY.md` has the full per-table split.
 
 
 **`admin` — the operator, not a participant in care.** Sees `/admin`: census, band
@@ -141,11 +176,33 @@ Domains that **can** establish laterality: `cranial_nerves`, `motor`, `coordinat
 
 Bands: `STABLE`, `WATCH`, `ALERT`, `PATTERN_ATYPICAL`.
 
-Migrations applied: 0001–0006.
+Migrations applied: 0001–0017.
 
 **Two yardsticks, every session.** The adaptive baseline answers "is today unlike recently";
 the frozen reference answers "how far from the normal we established". A slow decline keeps
 the first quiet and drives the second up (D-013).
+
+**Nothing is scored until a clinician confirms the baseline.** `patients.baseline_state` runs
+NOT_STARTED → IN_PROGRESS → DOCTOR_REVIEW_PENDING → LOCKED, with ABANDONED reachable from any
+of them. Meeting the completion criteria produces DOCTOR_REVIEW_PENDING — a *request for
+review*, not a lock. `session_pipeline` suppresses bands and alerts whenever
+`patient.baseline_state is not LOCKED`, so a patient waiting on a doctor, or one whose
+baseline was invalidated, is not being monitored and is not told they are. LOCKED and
+ABANDONED are terminal to the recomputation path: a later session never moves them, because
+one was a human decision and the other an invalidation.
+
+The clinician's three actions are CONFIRM (locks, and writes the frozen reference — the only
+place that write happens), EXTEND (returns to IN_PROGRESS, requires a note), and FLAG_CONCERN
+(records a worry and holds at the gate — it is not a rejection). Every action appends a
+`baseline_reviews` row carrying the snapshot the reviewer actually saw. Part 3.3/3.4,
+D-047, D-048.
+
+**Re-entry** brings a clinician back after LOCKED: an ALERT band, a PATTERN_ATYPICAL band,
+adherence below the floor, a caregiver concern (sufficient on its own — a family's worry does
+not need a number to corroborate it), a new clinical event, or the periodic review falling
+due. `evaluate_reentry` returns *every* matching reason, most urgent first, each with readable
+detail; a stable, adherent, recently-reviewed patient returns none, because a signal that
+fired for everyone would be ignored. Part 3.5.
 
 ---
 
@@ -155,8 +212,11 @@ Numbered. Each has a test in `backend/tests/test_invariants.py`. A failure here 
 the product depends on has been broken.
 
 **INV-1 · Raw media never leaves the device.** No endpoint accepts a file upload; no table
-has a binary column. Audio, video and frames are converted to numbers on the phone and
-discarded. *This is the product's central privacy claim.*
+has a binary column; no registered route declares a binary request body. Audio, video and
+frames are converted to numbers on the phone and discarded. *This is the product's central
+privacy claim.* Since D-052 it is **structural**: `python-multipart` — the library FastAPI
+needs in order to accept an upload at all — is deliberately not a dependency, so a future
+`UploadFile` parameter fails at import rather than at review.
 
 **INV-2 · No ALERT without a lateralised finding.** Stroke is lateralised; Parkinson's is
 symmetric. Without this a PD patient generates our highest-confidence alert.
@@ -164,8 +224,10 @@ symmetric. Without this a PD patient generates our highest-confidence alert.
 **INV-3 · Acute symptoms and falls bypass the engine entirely.** Both are events, not
 trends. Neither may call `evaluate_gates` or compute a deviation.
 
-**INV-4 · The frozen reference is written once.** Snapshot at baseline lock, never updated.
-An adaptive yardstick cannot see a decline it has been following.
+**INV-4 · The frozen reference is written once.** Snapshotted at the clinician's CONFIRM
+(not at module lock — D-048), never updated. An adaptive yardstick cannot see a decline it
+has been following. The hazard the test hunts is a *second* write across an
+EXTEND-then-CONFIRM cycle, not merely a write on EXTEND.
 
 **INV-5 · We own the trend; the device vendor owns the measurement.** Every wearable
 response carries the claim boundary explicitly.

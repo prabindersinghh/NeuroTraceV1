@@ -10,7 +10,14 @@ export type Lang = "en" | "hi" | "pa";
  *  every session ran the full battery regardless. These four values now genuinely drive
  *  what the server's `/sessions/plan-v2/{session_type}` returns. */
 export type SessionType = "DAILY_PULSE" | "COMPREHENSIVE" | "MONTHLY" | "ASHA_VISIT";
-export type BaselineState = "not_started" | "collecting" | "locked";
+/** Migration 0015 replaced the three lowercase values with these five. Part 3 added
+ *  DOCTOR_REVIEW_PENDING (criteria met, no clinician has confirmed) and ABANDONED. */
+export type BaselineState =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "DOCTOR_REVIEW_PENDING"
+  | "LOCKED"
+  | "ABANDONED";
 export type StrokeSide = "left" | "right" | "bilateral" | "unknown";
 // DHI added with the posterior-circulation scope widening: for a patient whose deficits
 // are vertigo and imbalance rather than weakness, it is the closest thing to a functional

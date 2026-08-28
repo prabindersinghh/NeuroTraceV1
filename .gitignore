@@ -83,3 +83,16 @@ frontend/scratch/
 
 # Throwaway browser-sweep scripts written next to the app during debugging.
 frontend/*.mjs
+
+# The generated knowledge graph. NEVER COMMIT THIS (INV-11).
+#
+# It indexes every tracked source file, and that includes `backend/tests/test_privacy.py`,
+# which necessarily quotes the identifier patterns it hunts for. Committing the graph would
+# therefore trip INV-11's own text scan on the scanner's bait. It is a ~5.5 MB artefact that
+# regenerates in about a minute with `graphify update .`, so there is nothing to weigh
+# against the invariant.
+#
+# It was untracked but NOT ignored: `git check-ignore graphify-out/` returned 0, which reads
+# like a pass and is not one - the files inside were never matched, and `git add -A` would
+# have staged 163 of them.
+graphify-out/

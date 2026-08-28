@@ -183,12 +183,27 @@ async def list_falls(patient: AuthorisedPatient, db: Session,
 @router.post("/fall/{fall_id}/acknowledge", response_model=MessageResponse)
 async def acknowledge_fall(fall_id: uuid.UUID, user: CurrentUser,
                            db: Session) -> MessageResponse:
+    """Until this fix, authorisation here read the legacy `Patient.clinician_id` column —
+    caregiver-writable via `PATCH /patients` with no check that the value even names a
+    clinician account, and never cleared when `clinician.py:revoke_link` unlinks a
+    clinician through the real Part 3.2 mechanism. So a revoked clinician kept the ability
+    to acknowledge falls indefinitely, and a caregiver could point it at an arbitrary
+    account. Now uses the same active-link check every other clinician-facing route uses.
+    Found in the Part 5.1 endpoint data audit.
+    """
+    from ..auth.deps import clinician_may_access_patient
+    from ..models import Role
+
     event = await db.get(FallEvent, fall_id)
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fall event not found")
     patient = await db.get(Patient, event.patient_id)
-    if patient is None or (patient.caregiver_id != user.id
-                           and patient.clinician_id != user.id):
+    if patient is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your patient")
+    allowed = patient.caregiver_id == user.id
+    if not allowed and user.role is Role.clinician:
+        allowed = await clinician_may_access_patient(db, user.id, patient.id)
+    if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your patient")
     event.acknowledged_at = datetime.now(timezone.utc)
     db.add(AuditLog(actor_id=user.id, action="wearable.fall.ack",

@@ -109,6 +109,56 @@ class PatientRead(PatientBase):
 
 
 # --------------------------------------------------------------------------- sessions
+class ClinicianProfileUpsert(BaseModel):
+    """Part 3.1. `verification_status` is deliberately ABSENT — it is never client-set."""
+
+    full_name: str = Field(min_length=1, max_length=160)
+    qualification: str | None = Field(default=None, max_length=120)
+    registration_number: str | None = Field(default=None, max_length=64)
+    registering_authority: str | None = Field(default=None, max_length=160)
+    specialty: str | None = Field(default=None, max_length=120)
+    affiliation: str | None = Field(default=None, max_length=200)
+    contact: str | None = Field(default=None, max_length=200)
+
+
+class ClinicianProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    full_name: str
+    qualification: str | None = None
+    registration_number: str | None = None
+    registering_authority: str | None = None
+    specialty: str | None = None
+    affiliation: str | None = None
+    contact: str | None = None
+    #: Always SELF_DECLARED. Rendered beside the registration number, everywhere.
+    verification_status: str
+
+
+class LinkCreate(BaseModel):
+    patient_id: uuid.UUID
+    clinician_id: uuid.UUID
+    clinician_role: str = Field(pattern="^(TREATING_PHYSICIAN|CONSULTING_NEUROLOGIST|CLINICAL_REVIEWER)$")
+
+
+class ConsentSet(BaseModel):
+    """PUT body for one of the six consents (Part 4). `version` defaults to the current
+    wording for that type when omitted — a caller only needs to pass it when it is agreeing
+    to a specific, displayed version."""
+
+    granted: bool
+    version: str | None = Field(default=None, max_length=24)
+    device_context: str | None = Field(default=None, max_length=256)
+
+
+class BaselineReviewSubmit(BaseModel):
+    """A note is required for EXTEND and FLAG_CONCERN — enforced in the service so the
+    failure is a readable 400 rather than a constraint error."""
+
+    action: str = Field(pattern="^(CONFIRM|EXTEND|FLAG_CONCERN)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class ProvisionUser(BaseModel):
     """An admin minting a privileged account. Not reachable from /auth/register."""
 

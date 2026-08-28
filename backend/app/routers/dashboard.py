@@ -29,13 +29,16 @@ from ..models import (
     AuditLog,
     Band,
     Baseline,
+    ConsentType,
     ExamSession,
     Patient,
+    PatientClinicianLink,
     Questionnaire,
     Role,
     Score,
     User,
 )
+from ..services.consent import consent_currently_granted
 from ..safety.fast import fast_card
 from ..schemas import (
     AlertRead,
@@ -164,7 +167,26 @@ async def clinic_patients(clinician: Clinician, db: Session) -> ClinicListRespon
     busy clinician's list. Ranking on how many domains have been persistently deviating,
     and for how long, puts the patients who actually need review at the top.
     """
-    patients = list(await db.scalars(select(Patient).order_by(Patient.name)))
+    # SCOPED TO THIS CLINICIAN'S LINKED PATIENTS (Part 3.2).
+    #
+    # This was `select(Patient)` — every clinician saw every patient in the deployment,
+    # with no scoping of any kind. `Patient.clinician_id` existed and was never used here.
+    # An active row in `patient_clinician_links` is now what puts a patient on a roster.
+    linked = list(await db.scalars(
+        select(Patient)
+        .join(PatientClinicianLink, PatientClinicianLink.patient_id == Patient.id)
+        .where(PatientClinicianLink.clinician_id == clinician.id,
+               PatientClinicianLink.unlinked_at.is_(None))
+        .order_by(Patient.name)
+    ))
+    # Part 4: an active link is not enough — C3 (CLINICIAN_SHARING) must also currently be
+    # in force. A withdrawn patient must not appear on the roster with a name attached; the
+    # per-patient routes enforce the same rule via `clinician_may_access_patient`, so this
+    # keeps the roster consistent with what those routes will actually let the clinician see.
+    patients = [
+        p for p in linked
+        if await consent_currently_granted(db, p.id, ConsentType.CLINICIAN_SHARING)
+    ]
     out: list[ClinicPatientRow] = []
 
     for patient in patients:
@@ -240,9 +262,16 @@ async def clinic_patients(clinician: Clinician, db: Session) -> ClinicListRespon
 @router.post("/clinic/alerts/{alert_id}/acknowledge", response_model=MessageResponse)
 async def acknowledge_alert(alert_id: uuid.UUID, clinician: Clinician,
                             db: Session) -> MessageResponse:
+    """Role-gated to `clinician`, but until this fix had no check that THIS clinician is
+    linked to the alert's patient — any clinician account could acknowledge any patient's
+    alert given the (UUID) `alert_id`. Found in the Part 5.1 endpoint data audit."""
+    from ..auth.deps import clinician_may_access_patient
+
     alert = await db.get(Alert, alert_id)
     if alert is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
+    if not await clinician_may_access_patient(db, clinician.id, alert.patient_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to acknowledge this alert")
     alert.acknowledged_by = clinician.id
     alert.acknowledged_at = datetime.now(timezone.utc)
     db.add(AuditLog(actor_id=clinician.id, action="alert.acknowledge",

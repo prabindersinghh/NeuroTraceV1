@@ -28,7 +28,7 @@ same engine a live check-in goes through.
 Press **Open the demo**. You land on Ramesh's dashboard — 67, left MCA infarct, five months
 post-discharge, Punjabi speaker. Status: **Please check on them**.
 
-> "Three weeks of daily check-ins. Each one is ninety seconds on his own phone."
+> "Three weeks of daily check-ins. Each one is about three minutes on his own phone."
 
 ---
 

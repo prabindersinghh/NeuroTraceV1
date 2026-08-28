@@ -4,9 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#173a7a" />
+    <!-- Declared explicitly: with no icon link the browser probes /favicon.ico,
+         which does not exist, and every page load logged a 404. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-maskable.svg" />
     <meta
       name="description"
-      content="NeuroTrace - a 90-second daily neurological check-in for stroke survivors at home."
+      content="NeuroTrace - a ~3-minute daily neurological check-in for stroke survivors at home."
     />
     <link
       rel="preload"
@@ -15,7 +19,7 @@
       type="font/woff2"
       crossorigin
     />
-    <title>NeuroTrace — a 90-second neurological exam, at home, every day</title>
+    <title>NeuroTrace — a ~3-minute neurological exam, at home, every day</title>
   </head>
   <body>
     <div id="root"></div>

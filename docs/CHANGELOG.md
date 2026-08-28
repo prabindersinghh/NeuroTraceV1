@@ -4,6 +4,362 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 (final) — D-045 enforced everywhere, python-multipart removed, PWA install fixed
+
+Three owner-directed actions closing out the autonomous run.
+
+### D-045's carve-out closed: the true duration goes everywhere (D-051)
+D-045 corrected Daily Pulse from 90s to ~195s of raw task time and deliberately left the
+public-facing copy alone. That is now decided the other way, and it turned out the old figure
+had survived in **eight** places — only one of which was the landing page D-045 named:
+
+the shipped `<title>`, the meta description, the PWA manifest `description`, **both** landing
+hero headlines ("Ninety seconds a day is more.", "Ninety seconds a day, they can."), the body
+copy, the `NinetyDays` mark, and `docs/DEMO_SCRIPT.md`.
+
+**Four of those I found only because I wrote the test.** I corrected what I could see by hand
+first, then the scanner immediately failed on four more. A decision that is not enforced by a
+test is a decision that drifts back — which is the actual lesson, and it is recorded in D-051
+rather than left as a war story.
+
+`docs/PRD.md` §7 keeps its `(Was "<=90s" ...)` note and is explicitly allowlisted: recording
+that the figure used to be wrong is the opposite of asserting it.
+
+### The Part 8 scanner's scope had a hole exactly where the miss was
+It covered `frontend/src/**`, `docs/**` and both READMEs — and **not `frontend/index.html`**,
+which is the browser tab and the text that appears when the link is shared. Nor
+`frontend/vite.config.ts`, where the PWA manifest description is authored and from which it
+ships. Both are now in scope, with a test asserting they stay there, because that scope gap is
+the whole reason a corrected figure shipped for weeks.
+
+New `STALE_DURATION` guard with self-tests in both directions, against the exact strings that
+shipped.
+
+### python-multipart removed — INV-1 is now structural (D-052)
+Pinned, installed, and completely unused (zero matches in `app/`), and it is the one
+dependency whose only purpose is accepting file uploads — precisely what INV-1 forbids.
+
+Three tests already asserted no endpoint accepts media. Those catch a violation *after*
+somebody writes it. With the library absent, a future `UploadFile` parameter fails at
+**import**: the runtime cannot express the violation at all.
+
+Removed from `requirements.txt` **and** `requirements.lock.txt` (leaving the lock entry would
+restore it on the next byte-identical rebuild), and **actually uninstalled to verify rather
+than assume** — the app imports, all 76 routes register, the OpenAPI document still
+generates. New INV-1 test asserts neither manifest re-pins it, checked against the manifests
+rather than the live interpreter so a transitively-installed copy is not a false failure.
+
+`passlib` remains unmaintained (why `bcrypt` is held at 4.0.1) — logged in `docs/SBOM.md`,
+deliberately not acted on.
+
+### The PWA could not install, and the first fix was only half a fix
+`/icon-192.png` and `/icon-512.png` had been declared in the manifest since it was written and
+**neither file had ever existed**. Every load logged "Download error or resource isn't a valid
+image": "Add to home screen" produced a blank icon, and some Android versions suppress the
+install prompt outright when a manifest's icons cannot be fetched.
+
+An earlier pass pointed the manifest at `favicon.svg`, which silenced the console but left it
+half-fixed — that file is 48×46 and non-square, so a launcher's circular maskable crop would
+have cut the mark.
+
+**What happened next is worth recording.** I generated real PNGs, committed them, and
+`test_privacy.py` failed: it treats every tracked image as a possible photograph of a real
+patient's records. That scanner is deliberately blunt and it is **right** to be (INV-11). So
+the commit was reset, the blobs purged from the object store (`git reflog expire` + `git gc`,
+verified by re-running the privacy suite), and the need for a raster removed instead of the
+test being weakened.
+
+`public/icon-maskable.svg` is generated from the repo's own `favicon.svg`: square, opaque
+ground (a maskable icon must not rely on transparency, or a launcher applying its own shape
+shows the OS background through the corners), mark inset to 56% so it survives the crop.
+
+`index.html` also declared no icon link at all, so every load probed `/favicon.ico` and 404'd.
+Now declared, plus `apple-touch-icon`.
+
+### Verified
+- backend: `test_privacy.py`, `test_regulatory_claims.py`, `test_invariants.py` — exit 0
+- frontend: `tsc -b` exit 0 · `vitest` 74 passed · `oxlint` exit 0 (9 pre-existing warnings,
+  none new) · `npm run build` exit 0
+- live, against the production build: title and both descriptions carry the corrected figure;
+  both manifest icon entries return 200 as `image/svg+xml` and decode to **512×512 square**
+  with an opaque ground; a maskable entry is present; favicon 200; console **0 errors, 0
+  warnings**.
+
+**One non-finding, stated because I nearly reported it as a bug.** `getRegistrations()`
+returned 0 in the automated browser, which would mean no offline caching. Registering the
+service worker manually in the same page succeeded, and the injected `registerSW.js` is
+correct and standard — so that was a measurement artefact of the automated context, not a
+defect. Part 7.4 (proving offline model loading with the network genuinely disabled) remains
+outstanding and unverified either way.
+
+### Noted, not acted on
+`frontend/public/favicon.svg` is a purple gradient bolt — nothing like the blue medical brand
+(`#173a7a` / `#1E5AA8`), and gradients are otherwise forbidden by the design system. It looks
+like a template leftover. The new icon inherits it faithfully rather than inventing a logo,
+because artwork is the owner's call.
+
+---
+
+## 2026-08-28 (later still) — Part 6, the beautification pass, and four bugs the browser found
+
+Branch `finish/autonomous-completion`, continued.
+
+### A stale lowercase enum had four surfaces lying at once
+`frontend/src/lib/types.ts` still declared `BaselineState` as the three pre-0015 lowercase
+values. Migration 0015 replaced them with five uppercase ones, so
+`baseline_state !== "locked"` compared against a string the server can no longer send. The
+caregiver home, clinic list, clinician report and dashboard therefore showed the "still
+collecting" banner **permanently** — including for patients a clinician had confirmed.
+
+TypeScript could not catch this: the type itself was the thing that was wrong, so every
+comparison type-checked cleanly against a lie. Found by reading the Part 3 enum change back
+against the frontend instead of assuming a backend migration had been propagated.
+
+### Part 6.2 — what reaches a caregiver, and what deliberately does not
+`frontend/src/lib/notify.ts`: pure, no React, no network, unit-tested — the same shape as
+`taskFlow.ts`, and for the same reason. The rule worth pinning is a **negative**: WATCH does
+not notify. WATCH is the band the engine sits in while it waits for a second corroborating
+domain; pushing it to a family trains them to ignore the one that matters, and a rule like
+that erodes silently inside a component when somebody widens a condition to "surface more".
+
+A patient who is not being monitored — baseline collecting, awaiting a doctor, or abandoned —
+produces no band-derived notification, keeping the caregiver surface consistent with the
+Part 3 suppression rather than trusting it. Adherence and quality signals *do* survive that
+suppression, because they are facts about the record rather than claims about the person.
+
+No message reassures. "Everything looks fine" is a claim this product cannot make.
+
+### Part 6.6 — the patient knows what they are starting
+Before pressing begin: which check-in is due, roughly how many minutes, how many tasks, and
+that they can pause. The duration is the server's own `estimated_seconds`, rounded **up** —
+never a number typed into the frontend, which is exactly the drift D-045 records. Fetching it
+is deliberately non-fatal: offline, the patient still gets their button.
+
+### The beautification pass, within the locked design system
+`index.css` and `tailwind.config.js` are **untouched**. No token, no `.patient-scale` rule and
+no colour semantic changed. STABLE stays accent-blue; green stays forbidden.
+
+- Every band now pairs its colour with a word **and an icon**, so a colour-blind reader, a
+  screen in sunlight, or a greyscale print of the report reach the same conclusion.
+- `aria-live="polite"` on the status line, so a band that changes while the page is open is
+  announced rather than only re-painted. Polite, not assertive — a status change must not
+  interrupt someone mid-sentence, and this is never the emergency path.
+
+The broad spacing/typography/density sweep is **not** done.
+
+### Two bugs found only by loading the built app in a browser
+**The PWA could not install.** `vite.config.ts` declared `/icon-192.png` and `/icon-512.png`;
+`public/` has only `favicon.svg` and `icons.svg`. Every load logged "Download error or
+resource isn't a valid image", so "Add to home screen" produced a blank icon — and some
+Android versions suppress the install prompt outright when a manifest's icons cannot be
+fetched. For this product that is not cosmetic: the installed PWA *is* the airplane-mode
+demo. Pointed at the brand asset that exists rather than inventing artwork.
+
+**Login and register had no `main` landmark and started at `h3`.** Both render their own
+shell rather than `AppShell`. `CardTitle` gained an `as` escape hatch (default `h3`
+unchanged, so no other card is affected) and both screens declare their title as the `h1`.
+
+### Verified
+- frontend: `tsc -b` exit 0 · `vitest` **74 passed** (was 62) · `oxlint` exit 0, no new
+  warnings · `npm run build` exit 0
+- live, against the production build in a real browser: `/diagnostics` renders the new
+  browser/OS/form-factor rows; the model probe completes (FaceMesh 496 ms, PoseLandmarker
+  274 ms, both 100% detection on **Playwright's synthetic camera** — desktop, not a phone,
+  and not a real face); the report JSON is copyable with zero probes run; `/login` now
+  reports `main` and `heading [level=1]`; console clean, 0 errors 0 warnings.
+
+### Not changed, deliberately
+`frontend/index.html` still says "90-second" in its `<title>` and meta description. D-045
+reserves the public-facing figure for the owner, so it was left alone and flagged in
+`COMPLETION_RUN_REPORT.md` instead — that decision was recorded about `Landing.tsx`, and the
+tab title may not have been in view when it was made.
+
+---
+
+## 2026-08-28 (later) — Parts 3.7e, 4, 5, 7, 8: an endpoint audit that found six real holes
+
+Branch `finish/autonomous-completion`, **not merged** — left for review.
+
+### The finding that mattered: Part 3.2's fix had landed in one place out of seven
+Part 5.1 asked for an audit of every endpoint. Reading all 67 routes turned up that the
+clinician-access fix from Part 3.2 lived in `get_patient_for_user` and nowhere else — six
+other routes had each hand-rolled their own copy of "may this caller touch this patient",
+and none of them had been updated.
+
+| Route(s) | The gap |
+|---|---|
+| `POST /sessions/{id}/module/{code}`, `/finalize`, `GET /sessions/{id}/modules` | `_assert_can_access` still granted any `user.role is Role.clinician` unconditionally — an unlinked clinician could **read and write** another patient's raw module features |
+| `GET /patients` | role dispatch had no `else`; clinician and **admin** accounts fell through with no `WHERE` and got every patient in the deployment |
+| `POST /wearable/fall/{id}/acknowledge` | authorised via the legacy `Patient.clinician_id`, which revocation never clears — a revoked clinician kept the ability indefinitely |
+| `PATCH /patients/{id}` | `clinician_id` settable to any user id with no check it names a clinician; this is what made the row above exploitable rather than merely stale |
+| `POST /clinic/alerts/{id}/acknowledge` | role-gated but no check this clinician is linked to the alert's patient |
+| `DELETE /awaaz/listener/{token}` | needed only *some* valid login — asymmetric with minting, which correctly required `get_patient_for_user` |
+
+Each is pinned by a regression test asserting the **old** behaviour is gone, not that the new
+behaviour works. The structural fix: every clinician access decision now routes through one
+function, `auth.deps.clinician_may_access_patient`. Six copies is how a security fix
+half-lands (D-049).
+
+### Erasure: the audit trail was being destroyed by the thing meant to protect privacy
+`audit_log.patient_id` carries `ondelete="CASCADE"`. **Probed rather than assumed** — a
+throwaway database, one audit row before `DELETE FROM patients`, zero after. So the existing
+delete route destroyed exactly the record an erasure request tends to arrive attached to:
+who accessed this person's data before it was removed.
+
+Erasure now tombstones (D-050, migration 0017). Every clinical measurement is genuinely
+deleted; the surviving row keeps its id and loses name, age, sex, stroke details, languages
+and `calibration_json` — which is where the face-identity enrolment vector lives, the one
+stored value derived from the patient's body. Audit entries, consent history and revoked
+clinician links are retained: they record decisions and access, not measurements.
+
+Rejected: dropping the FK (a constraint rewrite on SQLite, on the table everything else
+references, to solve what a nullable column solves additively) and `SET NULL` (which keeps
+the row while destroying the linkage that makes it useful).
+
+Two fields had to be RESET rather than nulled because they are NOT NULL — `stroke_side` to
+`unknown`, `other_movement_disorder` to `False`. Found by a failing test, not by reading the
+model. `unknown` is also the more honest value: after erasure we genuinely do not know.
+
+### Part 4 — six consents, and C3 actually gates access
+`consents` table (migration 0016), six independently grantable and withdrawable types, each
+versioned and attributed with a server-observed IP. Withdrawing `CLINICIAN_SHARING` blocks a
+**still-linked** clinician immediately and drops the patient from the roster — the central
+test leaves the link deliberately active so that consent is provably what is doing the work.
+
+D-046's obligation is discharged: 0016 materialises the historical consent for every
+Part-3-era link from its own `linked_at`/`linked_by` and threads `consents.id` back onto
+`consent_ref`. Going forward the link and its consent are created in one transaction, so no
+unreferenced link can be created at all.
+
+### Part 3.7e — admin doctor census
+`/admin/doctors`: clinician count, a non-clinical roster (name, registration number +
+`SELF_DECLARED`, specialty, affiliation) and a patient **count** per doctor. No drill-down
+route exists anywhere. `test_no_admin_response_contains_patient_identifying_data` was extended
+to link a real doctor to a real patient first — the exact shape that would tempt one — before
+asserting zero patient content leaks.
+
+### Part 8 — the overclaim scanner, and its own two false positives
+Extends INV-13's regulatory-exemption scan with the capability-overclaim family: detect /
+predict / diagnose / replace / clinically proven / medical-grade, plus accuracy figures with
+no synthetic label, across user-facing source, docs, and the built bundle.
+
+It produced two false positives on first run, both fixed by narrowing rather than exempting
+(the D-030 discipline):
+
+- **`README.md`** — "It does not detect strokes and does not / replace a clinician." The
+  negation and the claim landed on different lines because the prose wraps. A scanner that
+  flags a correct disclaimer pressures someone into weakening it, so the negation window now
+  spans the previous line.
+- **`CLINICAL_REFERENCE.md`** — "Saccade precision 94–112%" is a published VNG reference
+  range for an eye, not a model metric. `precision` and `sensitivity` belong to both
+  vocabularies, so an accuracy figure is now flagged only when a model-claim context is
+  present.
+
+Both false positives are now self-tests, so the scanner is pinned in both directions.
+
+### Part 5.2 — INV-1 strengthened
+The existing test greps app sources for three markers. Added a third check against the
+**generated OpenAPI document** — every route as registered, plus every component schema — so
+a `bytes` field or a custom media type is caught even though it spells nothing the grep looks
+for.
+
+### Part 5.6 — offline ordering verified (not built)
+Automatic drain remains plan-only. What was verified is that the backend tolerates
+out-of-order arrival: `test_offline_ordering.py` builds the same clinical history twice, once
+submitted chronologically and once deliberately reversed, and asserts the two patients come
+out identical in bands, gates, drift and baseline medians. Every history query orders on
+`ExamSession.ts`, and a source assertion pins that it never becomes insertion order.
+
+### Part 7 — phone-readiness prep
+`/diagnostics` gained FaceMesh and PoseLandmarker init time, **detection rate** and median
+per-frame cost (a model can initialise perfectly and still fail to see the subject), plus a
+parsed browser/OS string. The JSON report is now always copyable — previously it appeared
+only after a successful FPS run, so the device where nothing worked was the one device you
+could not get a report from. `docs/PHONE_TEST_RESULTS.md` is a structured empty template.
+
+**Nothing has run on a physical handset.** Every row in that template is blank on purpose.
+
+### New documents
+`ENDPOINT_DATA_AUDIT.md`, `DATA_INVENTORY.md`, `SECURITY.md`, `SBOM.md`,
+`PHONE_TEST_RESULTS.md`, and `docs/plans/PLAN_offline_auto_drain.md`.
+
+### Two findings recorded, not acted on
+`python-multipart` is installed and **completely unused** — the one dependency whose only
+purpose is what INV-1 forbids. Removing it would make the invariant structurally true rather
+than only test-true. And `passlib` is unmaintained, which is the reason `bcrypt` is pinned at
+4.0.1. Both are written up in `SBOM.md`; neither was changed, since dependency changes were
+outside this run's scope.
+
+---
+
+## 2026-08-28 — Part 3: a baseline no longer locks itself
+
+### The change
+Meeting the baseline completion criteria used to lock the baseline and seal the frozen
+reference, on session count alone. It now produces **DOCTOR_REVIEW_PENDING** — a request for
+review. `patients.baseline_state` runs NOT_STARTED -> IN_PROGRESS -> DOCTOR_REVIEW_PENDING ->
+LOCKED, with ABANDONED reachable throughout, and `session_pipeline` suppresses bands and
+alerts whenever the state is not LOCKED. A patient waiting on a doctor is not being monitored
+and is no longer told they are.
+
+Three clinician actions, all appended to `baseline_reviews` with the snapshot the reviewer
+saw: CONFIRM (locks, and writes the frozen reference), EXTEND (back to IN_PROGRESS, note
+required), FLAG_CONCERN (records a worry and holds — it is not a rejection).
+
+### An over-broad access path, found and closed
+`get_patient_for_user` granted access to any patient as soon as `user.role is Role.clinician`,
+and `/clinic/patients` ran an unscoped `select(Patient)`. `Patient.clinician_id` existed and
+was never consulted for authorisation, so a provisioned clinician could read the entire
+roster. Access now requires an active row in `patient_clinician_links` (`unlinked_at IS
+NULL`), created by the **owning caregiver** — a clinician cannot link themselves, because a
+doctor who could add themselves makes the link meaningless as a control. Revocation sets
+`unlinked_at` and keeps the row (INV-8).
+
+`test_patient_clinician_link.py` asserts the OLD behaviour is gone rather than the new one
+working: unlinked clinician -> 403, and an empty roster.
+
+### The frozen reference moved to CONFIRM (D-048), and the bug that creates
+Writing at module lock made EXTEND cosmetic — INV-4 forbids correcting a reference already
+sealed, so "that window isn't representative" would have arrived too late. The write is now
+`freeze_reference()`, called from one place.
+
+**The failure this introduces is a second write across EXTEND-then-CONFIRM**, and a test
+asserting only "not written on EXTEND" would pass while it shipped.
+`test_extend_then_confirm_writes_the_reference_exactly_once` drives the whole cycle — EXTEND,
+values move to `{"k": 1.5}`, CONFIRM, then a second CONFIRM with post-lock drift to
+`{"k": 9.9}` — and asserts the reference holds the FINAL window and a repeat call returns 0
+newly frozen. Idempotence lives in the function (`reference_locked_at is not None` -> skip),
+not in the caller.
+
+### Expiry: extend once, then abandon (D-047)
+Never a LIGHT downgrade. LIGHT changes which tasks run, which moves every module's position
+on the fatigue curve, which corrupts the baseline being built — the exact confound INV-14 and
+D-027 exist to prevent. `test_expiry_never_recommends_a_light_downgrade` asserts the string
+is unreachable from any input combination, so the option cannot quietly return.
+
+### Migrations
+`0014_doctor_in_the_loop` (additive: three tables, backfills links from
+`patients.clinician_id` with a dialect branch, does **not** drop `clinician_id`) and
+`0015_baseline_phase_states` (widen -> rewrite -> narrow on the `baseline_state` CHECK) are
+deliberately separate. 0015 passes the **bare** constraint name to `batch_alter_table` —
+passing the rendered name doubles the prefix, the same trap 0003 and 0012 hit.
+
+### Verified
+- `tests/test_baseline_review.py` 16 passed, exit 0
+- `tests/test_patient_clinician_link.py` 9 passed, exit 0
+- `tests/test_baseline_phase.py` 15 passed, exit 0
+- migration round-trip `upgrade head` -> `downgrade base`, 36 passed, exit 0
+- Postgres render inspected by eye: `gen_random_uuid()` on the Postgres branch, and
+  `DROP CONSTRAINT ck_patients_baseline_state_enum` with a single prefix
+- demo seed drives the real gate: `bands: SSSSSSSSSSSSSSSSSSSAA -> ALERT`, confirmed on day
+  19, final state LOCKED, 1 `baseline_reviews` row. A seed that skips the doctor gate now
+  fails a test.
+
+### Not done, deliberately
+The clinician baseline-review **frontend**. Backend-first was the agreed order.
+
+---
+
 ## 2026-08-24 (even later) — The "outside CDSCO" claim removed everywhere; INV-13
 
 ### Part 1 of TASK_FINAL_TECHNICAL_COMPLETION.md, done first because it was flagged urgent

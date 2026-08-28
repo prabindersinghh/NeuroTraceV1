@@ -127,7 +127,7 @@ function NinetyDaysScene() {
             transition: `opacity ${DURATION.fast}ms ${EASE.standard}`,
           }}
         >
-          ■ ninety mornings, ninety seconds each
+          ■ ninety mornings, three minutes each
         </span>
       </p>
     </div>

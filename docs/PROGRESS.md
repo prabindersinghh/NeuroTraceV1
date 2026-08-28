@@ -12,16 +12,182 @@ first, then this line, then `git log` since the last part closed.
 - [x] **Part 1 — regulatory language.** Done and verified. `docs/INTENDED_USE.md`,
       `docs/CLAIMS_MATRIX.md`, INV-13, `test_regulatory_claims.py` (9/9, including the
       built bundle — caught a real stale-`dist/` near-miss on first run). D-042.
-- [ ] Part 2 — two-layer session model (Daily Pulse / Comprehensive Follow-up)
-- [ ] Part 3 — doctor-in-the-loop 21-day baseline
-- [ ] Part 4 — consent architecture
-- [ ] Part 5 — privacy, security, data
-- [ ] Part 6 — UX and session flow completion
-- [ ] Part 7 — phone readiness
-- [ ] Part 8 — claims matrix seed (8.1 prohibited-phrase test — done as part of Part 1)
+- [x] **Part 2 — two-layer session model.** Done and verified (commit `6739186`).
+      Daily Pulse / Comprehensive Follow-up, cadence-aware baseline locking (D-043),
+      INV-14 (a module's fatigue-curve position is identical across session types), and
+      **honest timings** — Daily Pulse is 195s of raw task time, not 90s; `registry.py`'s
+      per-module seconds had been reverse-engineered to hit the target and were corrected
+      to match the numbers that actually drive the live timer (D-044, D-045). The
+      fatigue-position question was **tested, not assumed**: the engine did blend modules
+      appearing at different positions, which is why INV-14 exists.
+- [x] **Part 3 — doctor-in-the-loop baseline. Backend green; frontend still to come.**
+      A baseline no longer locks itself. See "Part 3, as built" below.
+- [x] **Part 3.7e — admin doctor census.** `/admin/doctors`: how many clinicians are
+      onboarded, their non-clinical roster, and a patient **count** per doctor. No
+      drill-down exists anywhere. The D-041 privacy test was extended to link a real doctor
+      to a real patient before asserting zero patient content leaks.
+- [x] **Part 4 — consent architecture.** Six independent, versioned, withdrawable consents
+      (migration 0016). C3 (`CLINICIAN_SHARING`) actually gates access — see D-049.
+      D-046's backfill obligation is discharged: 0016 materialises the historical consent
+      for every Part-3-era link and threads `consent_ref` back onto it.
+- [x] **Part 5 — privacy, security, data.** `ENDPOINT_DATA_AUDIT.md` (all 67 routes;
+      **six real access-control gaps found and fixed**), INV-1 re-verified and
+      strengthened, `DATA_INVENTORY.md`, erasure (migration 0017, D-050), `SECURITY.md`,
+      offline-ordering verification, `SBOM.md`.
+- [~] **Part 6 — UX and session flow completion. PARTIAL.** 6.2 (caregiver notification
+      rules, pure and unit-tested in `frontend/src/lib/notify.ts` — **WATCH does not
+      notify**, and no message reassures) and 6.6 (the patient sees which check-in is due
+      and roughly how long it takes, from the server's `estimated_seconds`, never a
+      hardcoded number). **6.1, 6.3, 6.4 and 6.5 are not done.**
+- [~] **Final beautification pass. PARTIAL.** Design tokens, `.patient-scale` and colour
+      semantics untouched — `index.css` and `tailwind.config.js` are unmodified. Done:
+      every band pairs colour + word + icon so colour is never the only carrier;
+      `aria-live="polite"` on the status line; `main` landmark and `h1` on login/register;
+      a PWA manifest that pointed at two non-existent icons, fixed. **The broad
+      spacing/typography/density sweep is not done.**
+- [x] **Part 7 — phone readiness PREP.** `/diagnostics` extended with FaceMesh /
+      PoseLandmarker init time, detection rate and per-frame cost, plus parsed browser/OS;
+      the JSON report is now always copyable, including when every probe failed.
+      `PHONE_TEST_RESULTS.md` is a structured empty template. **The handset run itself is
+      the owner's — nothing here has executed on a physical phone.**
+- [x] **Part 8 — claims matrix enforcement.** The overclaim scanner: detect / predict /
+      diagnose / replace / clinically-proven / medical-grade, plus unlabelled accuracy
+      figures, across user-facing source, docs and the built bundle.
 - [ ] Part 9 — completion checklist, deploy, verify live
 
-**Last updated:** 2026-08-24 (later still) · Two independent sessions landed the same day
+### Part 3, as built (2026-08-28)
+
+**The change in one line: meeting the completion criteria now produces a *request for
+review*, not a lock.** `patients.baseline_state` runs NOT_STARTED → IN_PROGRESS →
+DOCTOR_REVIEW_PENDING → LOCKED, with ABANDONED reachable throughout, and bands and alerts are
+suppressed whenever the state is not LOCKED. A patient waiting on a doctor is not being
+monitored, and is not told they are.
+
+Three things landed that are worth a stranger's attention:
+
+1. **An over-broad access path was closed.** `get_patient_for_user` granted access to any
+   patient as soon as `user.role is Role.clinician`, and `/clinic/patients` ran an unscoped
+   `select(Patient)`. `Patient.clinician_id` existed and was never consulted. Access now
+   requires an active row in `patient_clinician_links`, created by the owning caregiver — a
+   clinician cannot link themselves. `test_patient_clinician_link.py` asserts the *old*
+   behaviour is gone: unlinked clinician → 403, and an empty roster.
+2. **The frozen reference write moved to CONFIRM** (D-048). It used to be written at module
+   lock, before any human saw it — which made EXTEND ("that window isn't representative")
+   cosmetic, since INV-4 forbids correcting a reference already sealed. The bug this creates
+   is a *second* write across EXTEND-then-CONFIRM;
+   `test_extend_then_confirm_writes_the_reference_exactly_once` drives the full cycle and
+   asserts a repeat `freeze_reference()` returns 0.
+3. **Expiry extends once, then abandons** (D-047). Never a LIGHT downgrade — that changes
+   which tasks run, which moves every module's position on the fatigue curve, which corrupts
+   the very baseline being built. A second failure to complete is a finding about the
+   patient, and goes in front of a person with a reason both caregiver and clinician can see.
+
+**Migrations 0014 (additive) and 0015 (enum rewrite) are deliberately separate.** 0014 adds
+the three tables and backfills links from `patients.clinician_id` with a dialect branch
+(`lower(hex(randomblob(16)))` / `gen_random_uuid()`); `clinician_id` is **not** dropped. 0015
+widens → rewrites → narrows the `baseline_state` CHECK constraint, using the **bare**
+constraint name inside `batch_alter_table` (passing the rendered name doubles the prefix —
+the same trap 0003 and 0012 hit). Both round-trip; both verified rendered for Postgres.
+
+**`consent_ref` was nullable and Part 4 owed it a backfill** (D-046). **Discharged** —
+migration 0016 materialises the historical consent for every Part-3-era link from its own
+`linked_at`/`linked_by` and threads the new `consents.id` back onto `consent_ref`. Nothing
+is invented: the evidence already existed as a `clinician.link.granted` audit event, and the
+migration gives it a queryable home. Going forward `POST /clinician/links` creates the link
+and the C3 consent in one transaction, so no unreferenced link can be created at all.
+
+**Not done, deliberately:** the clinician baseline-review *frontend*. Backend first was the
+agreed order; the review view, the queue entry, and the ABANDONED reason surface are a
+follow-up commit.
+
+---
+
+### Parts 3.7e, 4, 5, 7, 8 — the autonomous completion run (2026-08-28)
+
+Branch `finish/autonomous-completion`. **Not merged — left for review.**
+
+**The headline is not a feature, it is six access-control gaps.** Part 5.1 asked for an
+endpoint audit; reading all 67 routes found that Part 3.2's clinician-access fix had landed
+in `get_patient_for_user` and nowhere else. Six routes had each hand-rolled their own copy of
+"may this caller touch this patient" and never received it:
+
+1. `sessions.py:_assert_can_access` — still granted **any** clinician account read AND write
+   access to any patient's raw module features. Critical.
+2. `GET /patients` — the role dispatch had no `else`, so clinician and **admin** accounts fell
+   through with no `WHERE` clause and received every patient in the deployment. Critical, and
+   an INV-11 breach for admin.
+3. `POST /wearable/fall/{id}/acknowledge` — authorised via the legacy `Patient.clinician_id`
+   column, which revocation never clears, so a revoked clinician kept the ability forever.
+4. `PATCH /patients/{id}` — `clinician_id` settable to any user id with no check it names a
+   clinician. This is what made (3) exploitable rather than merely stale.
+5. `POST /clinic/alerts/{id}/acknowledge` — no check that this clinician is linked to the
+   alert's patient.
+6. `DELETE /awaaz/listener/{token}` — needed only *some* valid login, asymmetric with minting.
+
+All six are pinned by regression tests that assert the **old** behaviour is gone. The
+structural fix is that every clinician access decision now goes through one function,
+`auth.deps.clinician_may_access_patient` (D-049) — six copies is how a security fix
+half-lands.
+
+**Erasure tombstones rather than deletes** (D-050). `audit_log.patient_id` cascades on
+delete — verified by probing a real database, one audit row before and zero after — so
+deleting a patient destroyed the record of who had accessed their data. Erasure now deletes
+every clinical measurement and strips the surviving row of every identifying field including
+the face-identity vector. Audit, consent history and revoked links are retained.
+
+**Consent is six independent grants, and C3 really gates access.** Withdrawing
+`CLINICIAN_SHARING` blocks a still-linked clinician immediately and removes the patient from
+the roster — the central test leaves the link deliberately active to prove consent is doing
+the work.
+
+**New docs:** `ENDPOINT_DATA_AUDIT.md`, `DATA_INVENTORY.md`, `SECURITY.md`, `SBOM.md`,
+`PHONE_TEST_RESULTS.md` (empty template), and three plan-only docs under `docs/plans/`.
+
+**Two findings recorded, not acted on** (both in `SBOM.md`): `python-multipart` is installed
+and completely unused — deleting it would make INV-1 structurally true rather than only
+test-true; and `passlib` is unmaintained, which is why `bcrypt` is pinned at 4.0.1.
+
+**Still outstanding:** Part 6's functional UX work, the whole-system beautification pass,
+Part 9's deploy-and-verify, and the Part 3 clinician frontend.
+
+---
+
+### Owner-directed close-out (2026-08-28, final)
+
+Three actions after the run report, all verified:
+
+1. **D-045 is enforced everywhere now (D-051).** The corrected Daily Pulse figure had
+   survived in **eight** places, including the shipped `<title>`, the meta description, the
+   PWA manifest and BOTH landing hero headlines. **Four were found by the new test, after I
+   had already corrected what I could see by hand.** The Part 8 scanner's file scope did not
+   include `frontend/index.html` or `frontend/vite.config.ts`; both are now in scope with a
+   test that keeps them there. `docs/PRD.md` is allowlisted because its line records that
+   90s *was* the old target.
+2. **`python-multipart` removed (D-052).** INV-1 is now structural, not only tested: the
+   library FastAPI needs to accept an upload at all is simply absent, so a future
+   `UploadFile` fails at import. Removed from both manifests and actually uninstalled to
+   verify. `passlib` stays (unmaintained, why bcrypt is pinned at 4.0.1) — logged only.
+3. **PWA install fixed for real.** The manifest had declared two PNGs that never existed.
+   Committing real PNGs tripped `test_privacy.py` — which treats any tracked image as a
+   possible patient photograph, and is right to. The commit was reset, the blobs purged, and
+   the need for a raster removed instead: `public/icon-maskable.svg`, square with an opaque
+   ground, generated from the repo's own `favicon.svg`.
+
+**Noted, not acted on:** `favicon.svg` is a purple gradient bolt, nothing like the blue
+medical brand and using a gradient the design system otherwise forbids. Probably a template
+leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
+owner's call.
+
+**Last updated:** 2026-08-28 · Part 3 (doctor-in-the-loop baseline) backend complete —
+see "Part 3, as built" above. Before it, Part 2 (`6739186`) and a **whole-system frontend UX
+pass** (`d40ae6f`, branch `ux/system-upgrade`) landed: an offline/sync strip on the caregiver
+surfaces, clinical status colours moved onto the token palette, and `frontend/src/lib/
+taskFlow.ts` extracted so the session's retry/confirm rules are pure and testable — which
+immediately exposed **two live retry bugs and one stale-closure bug that mislabelled every
+Daily Pulse session** (caught by oxlint, not by any test). `UX-CHANGES.md` carries the
+deferred items; **automatic offline drain is flagged there as a data-integrity fix, not
+polish** — an offline queue that never drains loses sessions silently. ·
+Earlier: two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
 `clinician` and read every patient's name; registration is now caregiver/patient only,
