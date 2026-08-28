@@ -514,3 +514,21 @@ Removing a card does not delete a previously consented local learning recording 
 its locked target; those have their own explicit revocation path. The UI says plainly that
 board customization changes tiles only and is not speech-recognition training, preventing
 a useful personalization control from becoming an unsupported model claim.
+
+**D-053 · 2026-08-28 · Shared phrases bind speakers before a cohort can be split.**
+A shared-model evaluation must isolate both people and prompts. Assigning each patient to a
+different split is insufficient when the same default board phrases occur in train and
+test: the model can benefit from phrase familiarity while appearing to generalize to a new
+speaker. The cohort planner therefore builds a bipartite relationship in memory. Speakers
+sharing an exact Unicode-normalised phrase within a language become one indivisible
+connected component, and only whole components may enter train, validation, or test.
+
+This topology has an inconvenient but honest consequence. Three or ten patient archives
+may still form a single component because everyone used the same board. If fewer than three
+independent components remain, the readiness artifact blocks and omits capture IDs rather
+than claiming a leakage-safe split. It reports only aggregate topology and limitations; no
+patient ID, phrase, audio, or hash is published. Exact matching does not catch paraphrases
+or translations, and archive schema v1 cannot check severity or demographic diversity.
+Those are stated limitations, not inferred away. Verification does not pool media, and the
+local export receipt is not consent for pooled research; governance approval remains a
+separate prerequisite.

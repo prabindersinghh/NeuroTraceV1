@@ -5,7 +5,8 @@ One table. Every model. One column that says REAL DATA or SYNTHETIC, with no amb
 We will be asked this, and the honest answer is better than a good-looking one. Paraspeak
 published their word error rate and won on it.
 
-**Last verified:** 2026-08-28, including the Awaaz archive and corpus-readiness boundaries.
+**Last verified:** 2026-08-28, including the Awaaz archive, single-patient corpus-readiness,
+and multi-patient cohort-readiness boundaries.
 The face identity check was added the same day and is listed here for the same reason
 everything else is: it makes a decision about a patient off a threshold, and the threshold
 is not calibrated on real data.
@@ -35,7 +36,11 @@ associations, size bounds, RIFF/WAVE headers and SHA-256, then exits without wri
 adapter or metrics. No real-data claim is possible until actual LoRA fine-tuning exists.
 The separate `awaaz_corpus_readiness` command may write aggregate counts and deterministic
 phrase-disjoint capture-ID assignments. Its claim flags remain false because planning a
-split is not training or evaluation.
+split is not training or evaluation. The `awaaz_cohort_readiness` command extends that
+boundary across separately verified patient archives: it assigns whole connected
+speaker/phrase components, blocks when shared board prompts leave fewer than three clean
+components, and discloses neither patient identity nor phrase text. It does not pool media,
+and the local export receipt does not establish consent for a pooled study.
 
 ### The identity check is not a model, and is listed anyway
 

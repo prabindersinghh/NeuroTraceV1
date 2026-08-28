@@ -30,14 +30,14 @@ VALIDATION_FRACTION = 0.15
 TEST_FRACTION = 0.15
 
 
-def _normalise_phrase(text: str) -> str:
+def normalise_phrase(text: str) -> str:
     """Return the comparison form used only in memory to prevent phrase leakage."""
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
 def _group_digest(pair: VerifiedAwaazPair, seed: int) -> str:
     """Order phrase groups reproducibly without publishing a transcript-derived hash."""
-    normalised = _normalise_phrase(pair.target_text)
+    normalised = normalise_phrase(pair.target_text)
     material = f"{seed}\0{pair.lang}\0{normalised}".encode()
     return hashlib.sha256(material).hexdigest()
 
@@ -100,7 +100,7 @@ def build_awaaz_corpus_plan(
     """Build a non-clinical readiness report without exposing archive contents."""
     phrase_groups: dict[tuple[str, str], list[VerifiedAwaazPair]] = defaultdict(list)
     for pair in archive.pairs:
-        phrase_groups[(pair.lang, _normalise_phrase(pair.target_text))].append(pair)
+        phrase_groups[(pair.lang, normalise_phrase(pair.target_text))].append(pair)
 
     n_pairs = len(archive.pairs)
     n_phrase_groups = len(phrase_groups)

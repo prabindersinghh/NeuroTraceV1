@@ -4,6 +4,27 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz leakage-safe cohort readiness
+
+Multiple verified single-patient Awaaz archives can now be checked together without
+extracting or pooling their media. The planner keeps every speaker whole and connects any
+speakers who share an exact Unicode-normalised phrase in the same language, then assigns
+only whole connected components to train, validation, or test. This prevents both speaker
+leakage and repeated-board-prompt leakage.
+
+If shared prompts leave fewer than three independent components, the artifact blocks and
+omits capture IDs rather than manufacturing a clean split. A ready artifact includes only
+deterministic seed-42 capture assignments and aggregate counts—never patient IDs, phrase
+text, audio, or hashes. Its claims state that archives were not pooled and no model,
+evaluation, clinical metric, or deployable artifact was produced. It also records that
+local export consent is not consent for pooled research.
+
+Verified: backend **912 collected / 909 passed / 3 expected skips / 0 failed** with an
+explicit writable Numba cache for the repository's symlinked virtual environment. Thirteen
+focused archive/planner tests pin input-order determinism, simultaneous speaker/phrase
+isolation, duplicate patient and capture refusal, shared-default-prompt blocking, private
+output, non-extracting multi-archive verification, and owner-only report permissions.
+
 ## 2026-08-28 — Awaaz personal phrase-board management
 
 The existing add/delete card endpoints now power a collapsed, trilingual management panel

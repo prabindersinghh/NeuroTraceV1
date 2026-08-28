@@ -15,6 +15,10 @@ from app.ml.train.awaaz_archive import (
     VerifiedAwaazPair,
     verify_awaaz_training_archive,
 )
+from app.ml.train.awaaz_cohort_plan import (
+    build_awaaz_cohort_plan,
+    main as cohort_plan_main,
+)
 from app.ml.train.awaaz_evaluation_plan import (
     build_awaaz_corpus_plan,
     main as evaluation_plan_main,
@@ -31,9 +35,18 @@ def _wav() -> bytes:
     )
 
 
-def _write_archive(path, *, corrupt_hash: bool = False, extra_name: str | None = None):
-    patient_id = uuid.uuid4()
-    capture_id = uuid.uuid4()
+def _write_archive(
+    path,
+    *,
+    patient_id: uuid.UUID | None = None,
+    capture_id: uuid.UUID | None = None,
+    target_text: str = "Water",
+    lang: str = "en",
+    corrupt_hash: bool = False,
+    extra_name: str | None = None,
+):
+    patient_id = patient_id or uuid.uuid4()
+    capture_id = capture_id or uuid.uuid4()
     card_id = uuid.uuid4()
     audio = _wav()
     digest = "00" * 32 if corrupt_hash else hashlib.sha256(audio).hexdigest()
@@ -48,8 +61,8 @@ def _write_archive(path, *, corrupt_hash: bool = False, extra_name: str | None =
             "source": "card_tap",
             "card_id": str(card_id),
             "utterance_id": None,
-            "target_text": "Water",
-            "lang": "en",
+            "target_text": target_text,
+            "lang": lang,
             "duration_seconds": 0.25,
             "sha256": digest,
             "size_bytes": len(audio),
@@ -238,3 +251,177 @@ def test_evaluation_plan_cli_never_overwrites_an_existing_report(
         evaluation_plan_main()
 
     assert out.read_text() == "keep me"
+
+
+def _verified_patient(
+    patient_number: int,
+    phrases: tuple[str, ...],
+    *,
+    capture_offset: int,
+) -> VerifiedAwaazArchive:
+    audio = _wav()
+    pairs = tuple(
+        VerifiedAwaazPair(
+            capture_id=uuid.UUID(int=capture_offset + index),
+            source="card_tap",
+            target_text=phrase,
+            lang="en",
+            duration_seconds=0.25,
+            sha256=hashlib.sha256(audio).hexdigest(),
+            audio=audio,
+        )
+        for index, phrase in enumerate(phrases, start=1)
+    )
+    return VerifiedAwaazArchive(
+        patient_id=uuid.UUID(int=patient_number),
+        exported_at="2026-08-28T03:00:00.000Z",
+        pairs=pairs,
+    )
+
+
+def test_cohort_split_is_deterministic_and_isolates_speakers_and_phrases():
+    archives = [
+        _verified_patient(1, ("Shared alpha", "Unique one"), capture_offset=100),
+        _verified_patient(2, (" shared   ALPHA ", "Unique two"), capture_offset=200),
+        _verified_patient(3, ("Shared beta", "Unique three"), capture_offset=300),
+        _verified_patient(4, ("SHARED BETA", "Unique four"), capture_offset=400),
+        _verified_patient(5, ("Shared gamma", "Unique five"), capture_offset=500),
+        _verified_patient(6, ("shared gamma", "Unique six"), capture_offset=600),
+    ]
+    reordered = [
+        VerifiedAwaazArchive(
+            patient_id=archive.patient_id,
+            exported_at=archive.exported_at,
+            pairs=tuple(reversed(archive.pairs)),
+        )
+        for archive in reversed(archives)
+    ]
+
+    report = build_awaaz_cohort_plan(archives)
+    reordered_report = build_awaaz_cohort_plan(reordered)
+    split = report["split_plan"]
+    encoded = json.dumps(report)
+
+    assert report["status"] == "split_plan_ready"
+    assert split == reordered_report["split_plan"]
+    assert report["cohort"]["speaker_phrase_components"] == 3
+    assert report["cohort"]["cross_speaker_phrase_groups"] == 3
+    assert split["invariants"] == {
+        "speaker_disjoint": True,
+        "exact_normalised_phrase_within_language_disjoint": True,
+    }
+    assert all(count == 2 for count in split["speaker_counts"].values())
+    assert sum(split["pair_counts"].values()) == 12
+    assert "Shared alpha" not in encoded
+    assert str(archives[0].patient_id) not in encoded
+    assert archives[0].pairs[0].sha256 not in encoded
+    assert "RIFF" not in encoded
+
+    capture_to_split = {
+        capture_id: name
+        for name, capture_ids in split["capture_ids"].items()
+        for capture_id in capture_ids
+    }
+    for archive in archives:
+        assert len({capture_to_split[str(pair.capture_id)] for pair in archive.pairs}) == 1
+    for shared_phrase in ("alpha", "beta", "gamma"):
+        matching_capture_ids = [
+            str(pair.capture_id)
+            for archive in archives
+            for pair in archive.pairs
+            if shared_phrase in pair.target_text.casefold()
+        ]
+        assert len({capture_to_split[item] for item in matching_capture_ids}) == 1
+
+
+def test_shared_default_phrase_blocks_a_false_leakage_safe_cohort():
+    private_phrase = "Private shared prompt"
+    archives = [
+        _verified_patient(
+            patient_number,
+            (private_phrase,),
+            capture_offset=patient_number * 100,
+        )
+        for patient_number in range(1, 4)
+    ]
+
+    report = build_awaaz_cohort_plan(archives)
+    encoded = json.dumps(report)
+
+    assert report["status"] == "collect_more_or_redesign_prompts"
+    assert "split_plan" not in report
+    assert report["cohort"]["speaker_phrase_components"] == 1
+    assert report["blockers"] == [
+        "speaker_phrase_components_cannot_fill_three_splits",
+    ]
+    assert report["privacy"]["contains_capture_ids"] is False
+    assert private_phrase not in encoded
+    for archive in archives:
+        assert str(archive.patient_id) not in encoded
+        assert str(archive.pairs[0].capture_id) not in encoded
+
+
+@pytest.mark.parametrize("duplicate", ["patient", "capture"])
+def test_cohort_rejects_duplicate_patient_or_capture(duplicate):
+    first = _verified_patient(1, ("One",), capture_offset=100)
+    second = _verified_patient(2, ("Two",), capture_offset=200)
+    if duplicate == "patient":
+        second = VerifiedAwaazArchive(
+            patient_id=first.patient_id,
+            exported_at=second.exported_at,
+            pairs=second.pairs,
+        )
+    else:
+        second = VerifiedAwaazArchive(
+            patient_id=second.patient_id,
+            exported_at=second.exported_at,
+            pairs=(first.pairs[0],),
+        )
+
+    with pytest.raises(ValueError, match=duplicate):
+        build_awaaz_cohort_plan([first, second])
+
+
+def test_cohort_plan_cli_verifies_archives_and_writes_a_private_report(
+    tmp_path, monkeypatch, capsys,
+):
+    archive_paths = []
+    patient_ids = []
+    private_phrases = []
+    for index in range(1, 4):
+        path = tmp_path / f"patient-{index}.tar"
+        patient_id = uuid.UUID(int=index)
+        private_phrase = f"Private phrase {index}"
+        _write_archive(
+            path,
+            patient_id=patient_id,
+            capture_id=uuid.UUID(int=100 + index),
+            target_text=private_phrase,
+        )
+        archive_paths.append(path)
+        patient_ids.append(patient_id)
+        private_phrases.append(private_phrase)
+    out = tmp_path / "cohort-readiness.json"
+    arguments = ["awaaz_cohort_plan"]
+    for path in archive_paths:
+        arguments.extend(["--archive", str(path)])
+    arguments.extend(["--out", str(out)])
+    monkeypatch.setattr("sys.argv", arguments)
+
+    cohort_plan_main()
+
+    payload = json.loads(out.read_text())
+    encoded = json.dumps(payload)
+    assert payload["status"] == "split_plan_ready"
+    assert payload["artifact_type"] == "awaaz_cohort_readiness"
+    assert payload["claims"] == {
+        "archives_pooled": False,
+        "model_trained": False,
+        "evaluation_run": False,
+        "clinical_metrics": False,
+        "deployment_ready": False,
+    }
+    assert stat.S_IMODE(out.stat().st_mode) == 0o600
+    assert all(str(patient_id) not in encoded for patient_id in patient_ids)
+    assert all(phrase not in encoded for phrase in private_phrases)
+    assert "model_trained=false" in capsys.readouterr().out

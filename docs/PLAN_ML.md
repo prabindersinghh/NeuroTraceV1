@@ -71,6 +71,27 @@ aggregate counts and, when ready, capture UUID assignments, but no patient ID, t
 audio, or audio hash. It explicitly records that a one-patient archive cannot support
 speaker-disjoint shared-model evaluation and that human listener intelligibility has not
 been measured.
+
+A separately approved shared-model study can check whether multiple local archives permit
+both speaker- and exact-phrase-disjoint evaluation without pooling or extracting them:
+
+```bash
+python -m app.ml.train.awaaz_cohort_plan \
+  --archive /authorised/path/patient-1.tar \
+  --archive /authorised/path/patient-2.tar \
+  --archive /authorised/path/patient-3.tar \
+  --out /authorised/path/awaaz-cohort-readiness.json
+```
+
+Every speaker is a whole assignment unit. If two speakers use the same phrase in the same
+language after Unicode normalization, they are joined into the same indivisible component;
+this prevents the shared board prompt from appearing on both sides of evaluation. Three
+speakers are therefore not automatically three clean splits. If shared prompts leave fewer
+than three independent components, the command emits an aggregate blocker with no capture
+IDs instead of inventing a leakage-safe result. A ready artifact contains capture-ID
+assignments but no patient IDs, phrases, audio, or hashes. It still performs no pooling,
+training, evaluation, or clinical measurement, and local export consent is not pooled-study
+consent.
 **Keep the day-30 adapter permanently** — the frozen-reference trick (D-013) applied to a
 model. If speech scores worse against the *frozen* adapter while the live one compensates
 perfectly, that is objective deterioration.
