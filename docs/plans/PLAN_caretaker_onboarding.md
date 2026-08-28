@@ -2,6 +2,16 @@
 
 **Status: PLAN ONLY. Nothing in this document has been built.**
 
+**Owner decisions locked 2026-08-29** (§9 updated accordingly):
+1. **Only the owning caregiver creates caretakers.** A caretaker minting caretakers voids
+   the boundary.
+2. **A caretaker may acknowledge a FALL but not an ALERT.** Family sees everything;
+   silencing a clinical alert stays with the clinician. A worried family member dismissing a
+   real deterioration is the risk being avoided.
+3. **Caretaker is a COMMON role, not an occasional one**, and the onboarding flow is written
+   for *"I'm setting this up for my parent"* as the primary path. See §1a, which is a
+   consequence of (3) that needs one more decision before build.
+
 The caretaker is the family member who actually holds the phone most days — a son or
 daughter, with the patient being their parent. They are not a clinician and not the
 existing `caregiver` role (see §1, which is the first thing to settle).
@@ -71,6 +81,44 @@ no reason to repeat that; the consent table already exists.
 
 ---
 
+## 1a. What decision 3 changes — one question left before build
+
+Decision 3 says the enrolling person is usually the son or daughter. That is almost certainly
+true, and it creates a tension with the original brief worth resolving explicitly rather than
+guessing, because it decides whether this feature is small or large.
+
+The brief said *"patient signs up first (professional onboarding), then the app creates a
+caretaker login."* But if the son onboards the parent, **the son is already the `caregiver`** —
+the owner row, with full access, consent control and erasure. He does not need a caretaker
+account to see everything; he already sees everything.
+
+So "caretaker" is one of two different features depending on which reading is intended:
+
+**Reading A — caretaker = ADDITIONAL family (recommended).** The first family member to set
+things up is the `caregiver`/owner, exactly as today. `caretaker` covers everyone after them:
+the second sibling, the daughter-in-law, the son abroad. Common (most families have more than
+one involved adult), but not the primary account.
+- Nothing about the existing caregiver flow changes.
+- The onboarding *copy* becomes "I'm setting this up for my parent" — a wording change, not a
+  model change.
+- Everything else in this plan stands as written.
+
+**Reading B — caretaker replaces caregiver as the family role.** `caregiver` becomes a
+professional/clinical-adjacent role and family are all caretakers, with one designated owner.
+- Requires migrating every existing `caregiver` row and rewriting every "owning caregiver"
+  check in `patients.py`, `consent.py`, `erasure.py` and `clinician.py`.
+- Materially larger, and it touches the erasure and consent authorisation paths — the two
+  places where a mistake is worst.
+
+**Recommendation: Reading A.** It delivers the stated goal (family sees everything, scoped to
+their own patient, primary onboarding framed as setting it up for a parent) without touching
+the authorisation paths that Part 5.1 just finished hardening. Reading B is a rename with a
+migration attached, and renames that cross authorisation boundaries are how the six-route bug
+happened in the first place.
+
+**This is the one open question that must be answered before any code is written**, because A
+and B differ in the data model, not just the UI.
+
 ## 2. The onboarding → caretaker-creation flow
 
 The patient onboards professionally first (existing flow, unchanged). The caretaker is
@@ -96,13 +144,17 @@ created afterwards, attached to that patient.
 4. Server returns a one-time invite token. The caretaker sets their own credential.
 ```
 
-**Who is allowed to perform step 2 — decide before building.** The brief says "the app
-creates a caretaker login", which does not name an actor. The defensible default is **the
-owning caregiver only**, mirroring `create_link`'s rule that a clinician cannot link
-themselves. A caretaker must never be able to create another caretaker, or the link stops
-being an access control the moment one account is compromised. **Flagged for the owner:** if
-the intent is that the *patient* adds their own family member, that is a different rule and
-needs saying, because a patient account is the least protected one in the system.
+**Who may perform step 2 — LOCKED: the owning caregiver only.** Mirrors `create_link`'s rule
+that a clinician cannot link themselves. A caretaker must never be able to create another
+caretaker, or the link stops being an access control the moment one account is compromised.
+Neither the patient nor a caretaker may reach this route; both get 403, and both cases are
+pinned in §7.
+
+**Onboarding framing (decision 3).** The entry point is written as *"I'm setting this up for
+my parent"* — that is the real primary path, and the existing enrolment flow should say so.
+Under Reading A (§1a) the person doing that becomes the `caregiver`/owner as they do today;
+the "Add a family member" step in (2) is then how the *rest* of the family get in, and it is
+expected to be used often rather than rarely.
 
 **The auth deferral, stated precisely.** Step 4 needs an invite mechanism, and invite tokens
 are auth. Until the auth pass:
@@ -221,8 +273,8 @@ if not allowed and user.role is Role.caretaker:
 |---|---|
 | `GET /patients` | Explicit per-role dispatch. Needs a `caretaker` branch joining active links **and** filtering on C7, exactly like the clinician branch. **The `else: return []` fallthrough must stay** — that is what stopped the original leak. |
 | `sessions.py:_assert_can_access` | Resolves the patient from a session, so it cannot use the dependency. Already mirrors `get_patient_for_user`; add the caretaker branch **in the same commit**. |
-| `wearable.py:acknowledge_fall` | Same shape. Decide deliberately whether a caretaker may acknowledge a fall — clinically they probably should, since they are the person in the house. |
-| `dashboard.py:acknowledge_alert` | Currently `require_roles(Role.clinician)`. **Recommend NOT extending to caretakers**: acknowledging an alert is a clinical action that closes a loop. A caretaker seeing it is right; a caretaker silencing it is not. |
+| `wearable.py:acknowledge_fall` | Same shape. **LOCKED: a caretaker MAY acknowledge a fall** — they are the person in the house, and a fall needs answering now, not at the next clinic contact. Add the caretaker branch. |
+| `dashboard.py:acknowledge_alert` | `require_roles(Role.clinician)`. **LOCKED: NOT extended to caretakers.** A caretaker seeing an alert is right; a caretaker *silencing* one is not — a worried family member dismissing a real deterioration is precisely the failure this refuses. Stays clinician-only, and §7 pins the 403. |
 | `/consents/*` | `_require_owning_caregiver` must stay caregiver-only. A caretaker must not be able to grant or withdraw their own access. |
 | `DELETE /patients/{id}` | Erasure stays owning-caregiver only. |
 
@@ -277,8 +329,17 @@ test_caretaker_link.py
   withdrawing C7 removes the patient from the caretaker's list
   re-granting C7 restores access
   a caretaker CANNOT grant or withdraw their own C7            (403)
-  a caretaker CANNOT link another caretaker                     (403)
+  a caretaker CANNOT link another caretaker                     (403)  <- locked #1
+  the PATIENT cannot link a caretaker either                    (403)  <- locked #1
   a caretaker CANNOT erase the patient                          (403)
+
+  # locked #2 — see, but do not silence
+  a linked caretaker CAN acknowledge a fall on their own patient (200)
+  a linked caretaker CANNOT acknowledge an alert                 (403)
+  ... and can still READ that alert on the dashboard             (200)
+      ^ the pair matters: "family sees everything" and "family cannot
+        clear a clinical alert" have to both be true at once, or the
+        next person to read the code will collapse them
 
   # the link is a record, not a toggle
   revoking a link sets unlinked_at and keeps the row; access stops
@@ -315,14 +376,24 @@ catches a *new* route calling the link check directly.
 - Multiple caretakers per patient is **supported by the schema** but the UI for managing more
   than one is not planned here.
 
-## 9. Open questions for the owner
+## 9. Open questions
 
-1. **Who creates the caretaker** — owning caregiver only (recommended), or may the patient?
-2. **May a caretaker acknowledge an alert or a fall?** Recommendation: fall yes, alert no.
-3. **Is the caregiver also a caretaker in practice?** In many households the son who enrols
-   the parent *is* the family member. If so, the caregiver already has full access and the
-   caretaker role is for *additional* family — worth confirming, because it changes whether
-   this feature is common or occasional.
-4. **C7 default on withdrawal of C2** (`DATA_PROCESSING`): if the underlying processing
-   consent is withdrawn, should C7 be treated as moot? Currently each consent is independent;
-   this is the one place that independence may be surprising.
+**Resolved (owner, 2026-08-29):**
+1. ~~Who creates the caretaker~~ — **owning caregiver only.**
+2. ~~May a caretaker acknowledge an alert or a fall~~ — **fall yes, alert no.**
+3. ~~Is the caregiver also the family member~~ — **usually yes.** Caretaker is a common role
+   and onboarding leads with "I'm setting this up for my parent."
+
+**Still open — blocks build:**
+
+4. **Reading A or Reading B (§1a).** Decision 3 makes the enrolling person the family member,
+   which means they are already the `caregiver`. Is `caretaker` therefore *additional* family
+   (Reading A, recommended — no change to existing authorisation paths), or does it replace
+   `caregiver` as the family role (Reading B — a migration across every "owning caregiver"
+   check)? A and B differ in the data model, so this is answered before code, not during.
+
+**Still open — does not block build:**
+
+5. **C7 when C2 (`DATA_PROCESSING`) is withdrawn.** Each consent is currently independent. If
+   the underlying processing consent is withdrawn, is caretaker sharing moot? This is the one
+   place that independence may surprise someone, and it applies equally to C3 today.
