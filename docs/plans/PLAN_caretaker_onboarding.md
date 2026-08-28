@@ -9,8 +9,13 @@
    silencing a clinical alert stays with the clinician. A worried family member dismissing a
    real deterioration is the risk being avoided.
 3. **Caretaker is a COMMON role, not an occasional one**, and the onboarding flow is written
-   for *"I'm setting this up for my parent"* as the primary path. See §1a, which is a
-   consequence of (3) that needs one more decision before build.
+   for *"I'm setting this up for my parent"* as the primary path.
+4. **Reading A (§1a): caretaker = ADDITIONAL family.** The first family member to onboard the
+   patient is the `caregiver`/owner; every family member after them is a caretaker linked to
+   that patient. Reading B (renaming the family role) is explicitly rejected.
+
+**All four decisions are locked. No open question blocks build.** The plan below is complete
+as specified; §9 lists the one remaining non-blocking question.
 
 The caretaker is the family member who actually holds the phone most days — a son or
 daughter, with the patient being their parent. They are not a clinician and not the
@@ -33,10 +38,10 @@ is non-nullable, the caregiver enrols the patient, grants and withdraws all six 
 creates clinician links, and is the only actor who can erase. Every existing access rule that
 says "the owning caregiver" means that row.
 
-**A caretaker is not that.** The flow in this brief is: the patient signs up first, and the
-app then creates a caretaker login *for* that patient. So the caretaker arrives second,
-attached to an existing patient, and there may eventually be more than one of them (two
-siblings sharing the load is the normal case, not an edge case).
+**A caretaker is not that.** Per locked decision 4, the caretaker is every family member
+*after* the first: the second sibling, the relative abroad, the daughter-in-law. They arrive
+second, attached to an existing patient, and there are usually several — two siblings sharing
+the load is the normal case, not an edge case.
 
 **Recommendation: a new `Role.caretaker`, and a new `patient_caretaker_links` table.**
 Rejected alternatives, with reasons:
@@ -81,51 +86,48 @@ no reason to repeat that; the consent table already exists.
 
 ---
 
-## 1a. What decision 3 changes — one question left before build
+## 1a. Reading A — LOCKED
 
-Decision 3 says the enrolling person is usually the son or daughter. That is almost certainly
-true, and it creates a tension with the original brief worth resolving explicitly rather than
-guessing, because it decides whether this feature is small or large.
+Decision 3 said the enrolling person is usually the son or daughter. That is true, and it
+raised a fork worth naming: if the son onboards the parent, **the son is already the
+`caregiver`** — the owner row, with full access, consent control and erasure. He does not need
+a caretaker account to see everything; he already sees everything.
 
-The brief said *"patient signs up first (professional onboarding), then the app creates a
-caretaker login."* But if the son onboards the parent, **the son is already the `caregiver`** —
-the owner row, with full access, consent control and erasure. He does not need a caretaker
-account to see everything; he already sees everything.
+**Resolved: Reading A.**
 
-So "caretaker" is one of two different features depending on which reading is intended:
+> The first family member to onboard the patient is the `caregiver`/owner, exactly as today.
+> **Every additional family member is a caretaker** linked to that patient — the second
+> sibling, the relative abroad, the daughter-in-law.
 
-**Reading A — caretaker = ADDITIONAL family (recommended).** The first family member to set
-things up is the `caregiver`/owner, exactly as today. `caretaker` covers everyone after them:
-the second sibling, the daughter-in-law, the son abroad. Common (most families have more than
-one involved adult), but not the primary account.
-- Nothing about the existing caregiver flow changes.
-- The onboarding *copy* becomes "I'm setting this up for my parent" — a wording change, not a
+What this means concretely:
+
+- **The data model and authorisation paths are exactly as planned below.** A separate
+  `patient_caretaker_links` table is precisely what Reading A needs, which is why §1 chose it.
+- **Only the onboarding copy changes** — the entry point is written as *"I'm setting this up
+  for my parent"*. That is a wording change to the existing caregiver enrolment flow, not a
   model change.
-- Everything else in this plan stands as written.
+- **Caretaker is still common.** Most families have more than one involved adult, so the
+  "Add a family member" step is expected to be used often. Common does not mean primary.
+- **Nothing existing is renamed or migrated.** No `caregiver` row moves, no "owning caregiver"
+  check is rewritten.
 
-**Reading B — caretaker replaces caregiver as the family role.** `caregiver` becomes a
-professional/clinical-adjacent role and family are all caretakers, with one designated owner.
-- Requires migrating every existing `caregiver` row and rewriting every "owning caregiver"
-  check in `patients.py`, `consent.py`, `erasure.py` and `clinician.py`.
-- Materially larger, and it touches the erasure and consent authorisation paths — the two
-  places where a mistake is worst.
-
-**Recommendation: Reading A.** It delivers the stated goal (family sees everything, scoped to
-their own patient, primary onboarding framed as setting it up for a parent) without touching
-the authorisation paths that Part 5.1 just finished hardening. Reading B is a rename with a
-migration attached, and renames that cross authorisation boundaries are how the six-route bug
-happened in the first place.
-
-**This is the one open question that must be answered before any code is written**, because A
-and B differ in the data model, not just the UI.
+**Reading B — renaming the family role so `caregiver` becomes professional and all family are
+caretakers — is rejected.** It would require migrating every `caregiver` row and rewriting
+every "owning caregiver" check in `patients.py`, `consent.py`, `erasure.py` and `clinician.py`.
+That churns tested code across the consent and erasure authorisation paths — the two places
+where a mistake is worst — for no functional gain, since Reading A already delivers family
+transparency scoped per patient. Renames that cross authorisation boundaries are how the
+six-route bug happened.
 
 ## 2. The onboarding → caretaker-creation flow
 
-The patient onboards professionally first (existing flow, unchanged). The caretaker is
-created afterwards, attached to that patient.
+The patient is enrolled first by the first family member, who becomes the `caregiver`/owner
+(existing flow, unchanged). Additional family are created as caretakers afterwards, attached
+to that patient.
 
 ```
-1. Patient completes onboarding.                        (existing, untouched)
+1. Patient is enrolled by the first family member.      (existing, untouched)
+   That person is the caregiver/owner.
 
 2. Owning caregiver opens "Add a family member".
    Supplies: caretaker name, relationship, and ONE contact identifier
@@ -150,11 +152,12 @@ caretaker, or the link stops being an access control the moment one account is c
 Neither the patient nor a caretaker may reach this route; both get 403, and both cases are
 pinned in §7.
 
-**Onboarding framing (decision 3).** The entry point is written as *"I'm setting this up for
-my parent"* — that is the real primary path, and the existing enrolment flow should say so.
-Under Reading A (§1a) the person doing that becomes the `caregiver`/owner as they do today;
-the "Add a family member" step in (2) is then how the *rest* of the family get in, and it is
-expected to be used often rather than rarely.
+**Onboarding framing (decisions 3 + 4).** The entry point is written as *"I'm setting this up
+for my parent"* — the real primary path, and the existing enrolment flow should say so. The
+person doing that becomes the `caregiver`/owner exactly as they do today. The "Add a family
+member" step in (2) is then how the *rest* of the family get in, and it is expected to be used
+often rather than rarely. Step 1 below therefore reads "the patient is enrolled" rather than
+"the patient signs up": in practice a family member enrols them.
 
 **The auth deferral, stated precisely.** Step 4 needs an invite mechanism, and invite tokens
 are auth. Until the auth pass:
@@ -384,16 +387,16 @@ catches a *new* route calling the link check directly.
 3. ~~Is the caregiver also the family member~~ — **usually yes.** Caretaker is a common role
    and onboarding leads with "I'm setting this up for my parent."
 
-**Still open — blocks build:**
+4. ~~Reading A or Reading B~~ — **Reading A.** Caretaker is *additional* family; the first
+   family member remains the `caregiver`/owner. Reading B rejected: renaming the family role
+   would churn every "owning caregiver" check across the consent and erasure paths for no
+   functional gain.
 
-4. **Reading A or Reading B (§1a).** Decision 3 makes the enrolling person the family member,
-   which means they are already the `caregiver`. Is `caretaker` therefore *additional* family
-   (Reading A, recommended — no change to existing authorisation paths), or does it replace
-   `caregiver` as the family role (Reading B — a migration across every "owning caregiver"
-   check)? A and B differ in the data model, so this is answered before code, not during.
+**No open question blocks build.**
 
 **Still open — does not block build:**
 
 5. **C7 when C2 (`DATA_PROCESSING`) is withdrawn.** Each consent is currently independent. If
    the underlying processing consent is withdrawn, is caretaker sharing moot? This is the one
-   place that independence may surprise someone, and it applies equally to C3 today.
+   place that independence may surprise someone, and it applies equally to C3 today — so it is
+   a question about the existing consent model, not something this feature introduces.
