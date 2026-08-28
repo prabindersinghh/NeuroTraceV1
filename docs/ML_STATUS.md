@@ -5,7 +5,7 @@ One table. Every model. One column that says REAL DATA or SYNTHETIC, with no amb
 We will be asked this, and the honest answer is better than a good-looking one. Paraspeak
 published their word error rate and won on it.
 
-**Last verified:** 2026-08-23, by running every pipeline and reading its metrics file.
+**Last verified:** 2026-08-28, including the Awaaz archive and corpus-readiness boundaries.
 The face identity check was added the same day and is listed here for the same reason
 everything else is: it makes a decision about a patient off a threshold, and the threshold
 is not calibrated on real data.
@@ -19,7 +19,7 @@ is not calibrated on real data.
 | `voice_dysarthria_clf` | **SYNTHETIC** | 0.987 (meaningless) | one advisory feature into the engine | TORGO + UASpeech access |
 | `rhythm_irregularity_clf` | **SYNTHETIC** | 0.973 (meaningless) | "get an ECG" advisory | PhysioNet AF — **openly downloadable, no excuse** |
 | `asymmetry_discriminator` | **SYNTHETIC** | 0.976 (meaningless) | the empirical basis for Gate 3 | mPower — **publicly available after certification** |
-| `personalised_asr_adapter` | **SYNTHETIC SCAFFOLD** | — | future per-patient Awaaz ASR | real LoRA implementation and evaluation; exported pairs can be verified but are refused for training |
+| `personalised_asr_adapter` | **SYNTHETIC SCAFFOLD** | — | future per-patient Awaaz ASR | real LoRA implementation and human-listener evaluation; exported pairs can be verified and split-planned but are refused for training |
 | `voice_clone` | **SYNTHETIC** | — | family-archive voice for Awaaz | a consented 2-minute clip |
 | `face_identity` (not a model — a threshold) | **SYNTHETIC CALIBRATION** | — | same-person check; flags a session as a confounder | enrolment pairs from real households |
 
@@ -33,6 +33,9 @@ existence of a data directory while still generating synthetic pairs. That path 
 It now accepts a user-exported Awaaz tar only to validate member paths, schema, UUID
 associations, size bounds, RIFF/WAVE headers and SHA-256, then exits without writing an
 adapter or metrics. No real-data claim is possible until actual LoRA fine-tuning exists.
+The separate `awaaz_corpus_readiness` command may write aggregate counts and deterministic
+phrase-disjoint capture-ID assignments. Its claim flags remain false because planning a
+split is not training or evaluation.
 
 ### The identity check is not a model, and is listed anyway
 

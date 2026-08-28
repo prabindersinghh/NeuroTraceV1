@@ -54,6 +54,23 @@ intended to train nightly and ship back for on-device inference. **Current execu
 synthetic spec/drift simulation only.** A strict importer verifies the versioned local tar
 without extraction, but the command then refuses to write an adapter or non-synthetic
 metrics until real LoRA fine-tuning, held-out evaluation and model deployment exist.
+
+The verified archive can be checked for experimental readiness without exposing its
+contents:
+
+```bash
+python -m app.ml.train.awaaz_evaluation_plan \
+  --archive /authorised/path/awaaz-training.tar \
+  --out /authorised/path/awaaz-corpus-readiness.json
+```
+
+This creates an owner-readable planning artifact, not metrics. Fifty pairs and ten exact
+Unicode-normalised phrase groups are the hard gates for a deterministic 70/15/15
+phrase-disjoint plan at seed 42; 200 pairs remains a non-hard pilot target. The JSON contains
+aggregate counts and, when ready, capture UUID assignments, but no patient ID, transcript,
+audio, or audio hash. It explicitly records that a one-patient archive cannot support
+speaker-disjoint shared-model evaluation and that human listener intelligibility has not
+been measured.
 **Keep the day-30 adapter permanently** — the frozen-reference trick (D-013) applied to a
 model. If speech scores worse against the *frozen* adapter while the live one compensates
 perfectly, that is objective deterioration.

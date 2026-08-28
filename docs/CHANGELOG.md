@@ -4,6 +4,26 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 — Awaaz privacy-safe corpus readiness
+
+A verified local Awaaz archive can now produce a non-clinical readiness artifact without
+extracting media or publishing patient identity, transcripts, audio hashes, or audio. The
+artifact reports only aggregate corpus counts until both 50 pairs and 10 distinct
+Unicode-normalised phrase groups are present; once ready it adds deterministic seed-42
+capture-ID assignments that keep every exact phrase within a language in only one of train,
+validation, or test.
+
+The JSON marks model training, evaluation, clinical metrics, and deployment readiness false.
+It records the 200-pair pilot target as non-hard, blocks speaker-disjoint claims from a
+single-patient archive, and leaves listener intelligibility gain to an approved, consented
+human study. The command refuses to overwrite an existing output and creates the report
+with owner-only permissions.
+
+Verified: backend **904 collected / 901 passed / 3 expected skips / 0 failed**. Eight focused
+archive/planner tests pin non-extracting validation, aggregate-only small-corpus behavior,
+normalised-phrase isolation, deterministic assignments, false claim flags, owner-only file
+permissions, and overwrite refusal. Privacy preflight passed **7/7**.
+
 ## 2026-08-28 — Awaaz listener capability recovery
 
 Refreshing or revisiting the Awaaz page no longer loses control of an already-shared

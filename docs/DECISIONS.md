@@ -484,3 +484,19 @@ The replacement is then the sole current capability; old public pages receive th
 as expiry. This is an in-memory conversation boundary, not durable history: a server restart
 still revokes every link by design. The audit stores the expiry and number of superseded
 links, not any token.
+
+**D-051 · 2026-08-28 · Corpus readiness is not model evaluation.**
+A verified Awaaz archive can now produce a local readiness artifact before any training is
+attempted. It reports aggregate language, source, duration and diversity counts, and emits
+capture-ID assignments only after the archive reaches both 50 pairs and 10 distinct
+Unicode-normalised phrase groups. Assignment is deterministic at seed 42 and keeps an exact
+normalised phrase within one language wholly in train, validation, or test, preventing the
+same board phrase from inflating held-out results.
+
+The artifact is deliberately typed as `awaaz_corpus_readiness`, not metrics. It explicitly
+sets model-trained, evaluation-run, clinical-metrics and deployment-ready claims to false;
+contains no patient ID, transcript, audio or audio hash; and is created with owner-only file
+permissions. The 200-pair pilot target is reported as a planning target, not a hard quality
+claim. A single-patient archive cannot support speaker-disjoint shared-model evaluation,
+and word error rate cannot substitute for the primary human outcome of listener
+intelligibility gain. Both remain blocked on separately consented research protocols.
