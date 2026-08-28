@@ -4,6 +4,190 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-28 (later) — Parts 3.7e, 4, 5, 7, 8: an endpoint audit that found six real holes
+
+Branch `finish/autonomous-completion`, **not merged** — left for review.
+
+### The finding that mattered: Part 3.2's fix had landed in one place out of seven
+Part 5.1 asked for an audit of every endpoint. Reading all 67 routes turned up that the
+clinician-access fix from Part 3.2 lived in `get_patient_for_user` and nowhere else — six
+other routes had each hand-rolled their own copy of "may this caller touch this patient",
+and none of them had been updated.
+
+| Route(s) | The gap |
+|---|---|
+| `POST /sessions/{id}/module/{code}`, `/finalize`, `GET /sessions/{id}/modules` | `_assert_can_access` still granted any `user.role is Role.clinician` unconditionally — an unlinked clinician could **read and write** another patient's raw module features |
+| `GET /patients` | role dispatch had no `else`; clinician and **admin** accounts fell through with no `WHERE` and got every patient in the deployment |
+| `POST /wearable/fall/{id}/acknowledge` | authorised via the legacy `Patient.clinician_id`, which revocation never clears — a revoked clinician kept the ability indefinitely |
+| `PATCH /patients/{id}` | `clinician_id` settable to any user id with no check it names a clinician; this is what made the row above exploitable rather than merely stale |
+| `POST /clinic/alerts/{id}/acknowledge` | role-gated but no check this clinician is linked to the alert's patient |
+| `DELETE /awaaz/listener/{token}` | needed only *some* valid login — asymmetric with minting, which correctly required `get_patient_for_user` |
+
+Each is pinned by a regression test asserting the **old** behaviour is gone, not that the new
+behaviour works. The structural fix: every clinician access decision now routes through one
+function, `auth.deps.clinician_may_access_patient`. Six copies is how a security fix
+half-lands (D-049).
+
+### Erasure: the audit trail was being destroyed by the thing meant to protect privacy
+`audit_log.patient_id` carries `ondelete="CASCADE"`. **Probed rather than assumed** — a
+throwaway database, one audit row before `DELETE FROM patients`, zero after. So the existing
+delete route destroyed exactly the record an erasure request tends to arrive attached to:
+who accessed this person's data before it was removed.
+
+Erasure now tombstones (D-050, migration 0017). Every clinical measurement is genuinely
+deleted; the surviving row keeps its id and loses name, age, sex, stroke details, languages
+and `calibration_json` — which is where the face-identity enrolment vector lives, the one
+stored value derived from the patient's body. Audit entries, consent history and revoked
+clinician links are retained: they record decisions and access, not measurements.
+
+Rejected: dropping the FK (a constraint rewrite on SQLite, on the table everything else
+references, to solve what a nullable column solves additively) and `SET NULL` (which keeps
+the row while destroying the linkage that makes it useful).
+
+Two fields had to be RESET rather than nulled because they are NOT NULL — `stroke_side` to
+`unknown`, `other_movement_disorder` to `False`. Found by a failing test, not by reading the
+model. `unknown` is also the more honest value: after erasure we genuinely do not know.
+
+### Part 4 — six consents, and C3 actually gates access
+`consents` table (migration 0016), six independently grantable and withdrawable types, each
+versioned and attributed with a server-observed IP. Withdrawing `CLINICIAN_SHARING` blocks a
+**still-linked** clinician immediately and drops the patient from the roster — the central
+test leaves the link deliberately active so that consent is provably what is doing the work.
+
+D-046's obligation is discharged: 0016 materialises the historical consent for every
+Part-3-era link from its own `linked_at`/`linked_by` and threads `consents.id` back onto
+`consent_ref`. Going forward the link and its consent are created in one transaction, so no
+unreferenced link can be created at all.
+
+### Part 3.7e — admin doctor census
+`/admin/doctors`: clinician count, a non-clinical roster (name, registration number +
+`SELF_DECLARED`, specialty, affiliation) and a patient **count** per doctor. No drill-down
+route exists anywhere. `test_no_admin_response_contains_patient_identifying_data` was extended
+to link a real doctor to a real patient first — the exact shape that would tempt one — before
+asserting zero patient content leaks.
+
+### Part 8 — the overclaim scanner, and its own two false positives
+Extends INV-13's regulatory-exemption scan with the capability-overclaim family: detect /
+predict / diagnose / replace / clinically proven / medical-grade, plus accuracy figures with
+no synthetic label, across user-facing source, docs, and the built bundle.
+
+It produced two false positives on first run, both fixed by narrowing rather than exempting
+(the D-030 discipline):
+
+- **`README.md`** — "It does not detect strokes and does not / replace a clinician." The
+  negation and the claim landed on different lines because the prose wraps. A scanner that
+  flags a correct disclaimer pressures someone into weakening it, so the negation window now
+  spans the previous line.
+- **`CLINICAL_REFERENCE.md`** — "Saccade precision 94–112%" is a published VNG reference
+  range for an eye, not a model metric. `precision` and `sensitivity` belong to both
+  vocabularies, so an accuracy figure is now flagged only when a model-claim context is
+  present.
+
+Both false positives are now self-tests, so the scanner is pinned in both directions.
+
+### Part 5.2 — INV-1 strengthened
+The existing test greps app sources for three markers. Added a third check against the
+**generated OpenAPI document** — every route as registered, plus every component schema — so
+a `bytes` field or a custom media type is caught even though it spells nothing the grep looks
+for.
+
+### Part 5.6 — offline ordering verified (not built)
+Automatic drain remains plan-only. What was verified is that the backend tolerates
+out-of-order arrival: `test_offline_ordering.py` builds the same clinical history twice, once
+submitted chronologically and once deliberately reversed, and asserts the two patients come
+out identical in bands, gates, drift and baseline medians. Every history query orders on
+`ExamSession.ts`, and a source assertion pins that it never becomes insertion order.
+
+### Part 7 — phone-readiness prep
+`/diagnostics` gained FaceMesh and PoseLandmarker init time, **detection rate** and median
+per-frame cost (a model can initialise perfectly and still fail to see the subject), plus a
+parsed browser/OS string. The JSON report is now always copyable — previously it appeared
+only after a successful FPS run, so the device where nothing worked was the one device you
+could not get a report from. `docs/PHONE_TEST_RESULTS.md` is a structured empty template.
+
+**Nothing has run on a physical handset.** Every row in that template is blank on purpose.
+
+### New documents
+`ENDPOINT_DATA_AUDIT.md`, `DATA_INVENTORY.md`, `SECURITY.md`, `SBOM.md`,
+`PHONE_TEST_RESULTS.md`, and `docs/plans/PLAN_offline_auto_drain.md`.
+
+### Two findings recorded, not acted on
+`python-multipart` is installed and **completely unused** — the one dependency whose only
+purpose is what INV-1 forbids. Removing it would make the invariant structurally true rather
+than only test-true. And `passlib` is unmaintained, which is the reason `bcrypt` is pinned at
+4.0.1. Both are written up in `SBOM.md`; neither was changed, since dependency changes were
+outside this run's scope.
+
+---
+
+## 2026-08-28 — Part 3: a baseline no longer locks itself
+
+### The change
+Meeting the baseline completion criteria used to lock the baseline and seal the frozen
+reference, on session count alone. It now produces **DOCTOR_REVIEW_PENDING** — a request for
+review. `patients.baseline_state` runs NOT_STARTED -> IN_PROGRESS -> DOCTOR_REVIEW_PENDING ->
+LOCKED, with ABANDONED reachable throughout, and `session_pipeline` suppresses bands and
+alerts whenever the state is not LOCKED. A patient waiting on a doctor is not being monitored
+and is no longer told they are.
+
+Three clinician actions, all appended to `baseline_reviews` with the snapshot the reviewer
+saw: CONFIRM (locks, and writes the frozen reference), EXTEND (back to IN_PROGRESS, note
+required), FLAG_CONCERN (records a worry and holds — it is not a rejection).
+
+### An over-broad access path, found and closed
+`get_patient_for_user` granted access to any patient as soon as `user.role is Role.clinician`,
+and `/clinic/patients` ran an unscoped `select(Patient)`. `Patient.clinician_id` existed and
+was never consulted for authorisation, so a provisioned clinician could read the entire
+roster. Access now requires an active row in `patient_clinician_links` (`unlinked_at IS
+NULL`), created by the **owning caregiver** — a clinician cannot link themselves, because a
+doctor who could add themselves makes the link meaningless as a control. Revocation sets
+`unlinked_at` and keeps the row (INV-8).
+
+`test_patient_clinician_link.py` asserts the OLD behaviour is gone rather than the new one
+working: unlinked clinician -> 403, and an empty roster.
+
+### The frozen reference moved to CONFIRM (D-048), and the bug that creates
+Writing at module lock made EXTEND cosmetic — INV-4 forbids correcting a reference already
+sealed, so "that window isn't representative" would have arrived too late. The write is now
+`freeze_reference()`, called from one place.
+
+**The failure this introduces is a second write across EXTEND-then-CONFIRM**, and a test
+asserting only "not written on EXTEND" would pass while it shipped.
+`test_extend_then_confirm_writes_the_reference_exactly_once` drives the whole cycle — EXTEND,
+values move to `{"k": 1.5}`, CONFIRM, then a second CONFIRM with post-lock drift to
+`{"k": 9.9}` — and asserts the reference holds the FINAL window and a repeat call returns 0
+newly frozen. Idempotence lives in the function (`reference_locked_at is not None` -> skip),
+not in the caller.
+
+### Expiry: extend once, then abandon (D-047)
+Never a LIGHT downgrade. LIGHT changes which tasks run, which moves every module's position
+on the fatigue curve, which corrupts the baseline being built — the exact confound INV-14 and
+D-027 exist to prevent. `test_expiry_never_recommends_a_light_downgrade` asserts the string
+is unreachable from any input combination, so the option cannot quietly return.
+
+### Migrations
+`0014_doctor_in_the_loop` (additive: three tables, backfills links from
+`patients.clinician_id` with a dialect branch, does **not** drop `clinician_id`) and
+`0015_baseline_phase_states` (widen -> rewrite -> narrow on the `baseline_state` CHECK) are
+deliberately separate. 0015 passes the **bare** constraint name to `batch_alter_table` —
+passing the rendered name doubles the prefix, the same trap 0003 and 0012 hit.
+
+### Verified
+- `tests/test_baseline_review.py` 16 passed, exit 0
+- `tests/test_patient_clinician_link.py` 9 passed, exit 0
+- `tests/test_baseline_phase.py` 15 passed, exit 0
+- migration round-trip `upgrade head` -> `downgrade base`, 36 passed, exit 0
+- Postgres render inspected by eye: `gen_random_uuid()` on the Postgres branch, and
+  `DROP CONSTRAINT ck_patients_baseline_state_enum` with a single prefix
+- demo seed drives the real gate: `bands: SSSSSSSSSSSSSSSSSSSAA -> ALERT`, confirmed on day
+  19, final state LOCKED, 1 `baseline_reviews` row. A seed that skips the doctor gate now
+  fails a test.
+
+### Not done, deliberately
+The clinician baseline-review **frontend**. Backend-first was the agreed order.
+
+---
+
 ## 2026-08-24 (even later) — The "outside CDSCO" claim removed everywhere; INV-13
 
 ### Part 1 of TASK_FINAL_TECHNICAL_COMPLETION.md, done first because it was flagged urgent
