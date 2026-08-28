@@ -46,13 +46,22 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        // BOTH PNGs referenced here were declared and never existed - `public/` has only
+        // favicon.svg and icons.svg. The browser logged "Download error or resource isn't a
+        // valid image" for every install, so "Add to home screen" produced a blank icon and
+        // on some Android versions the install prompt is suppressed outright when a
+        // manifest's icons cannot be fetched. That is not cosmetic for this product: the
+        // installed PWA IS the offline/airplane-mode story.
+        //
+        // Pointed at the brand asset that actually exists rather than inventing artwork.
+        // An SVG icon is valid in a web manifest and scales to every launcher size;
+        // `sizes: "any"` is the correct declaration for one.
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
           {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
+            src: "/favicon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
             purpose: "maskable",
           },
         ],

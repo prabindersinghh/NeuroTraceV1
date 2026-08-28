@@ -68,9 +68,10 @@ export function Login() {
         <LanguageToggle />
       </div>
 
-      <Card className="w-full max-w-md">
+      <main className="w-full max-w-md">
+        <Card>
         <CardHeader>
-          <CardTitle className="text-xl">{t("signIn")}</CardTitle>
+          <CardTitle as="h1" className="text-xl">{t("signIn")}</CardTitle>
           <CardDescription>{t("tagline")}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -127,6 +128,7 @@ export function Login() {
           </p>
         </CardContent>
       </Card>
+      </main>
     </div>
   );
 }
