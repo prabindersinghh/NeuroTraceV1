@@ -11,7 +11,9 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import type { Lang } from "./types";
 
-const STRINGS = {
+/** Exported so behavioural tests can assert on the copy the app actually renders,
+ *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
+export const STRINGS = {
   qualityNoPerson: {
     en: "We could not see the whole body. Step back so everything fits, then try again.",
     hi: "पूरा शरीर नहीं दिखा। थोड़ा पीछे हों ताकि सब दिखे, फिर दोबारा करें।",
@@ -145,6 +147,16 @@ const STRINGS = {
   retry: { en: "Try again", hi: "फिर कोशिश करें", pa: "ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ" },
   back: { en: "Back", hi: "वापस", pa: "ਵਾਪਸ" },
   offline: { en: "Offline — saved on this phone", hi: "ऑफ़लाइन — इसी फ़ोन में सहेजा गया", pa: "ਆਫ਼ਲਾਈਨ — ਇਸੇ ਫ਼ੋਨ ਵਿੱਚ ਸੰਭਾਲਿਆ" },
+  sendNow: {
+    en: "Send now",
+    hi: "अभी भेजें",
+    pa: "ਹੁਣੇ ਭੇਜੋ",
+  },
+  sending: {
+    en: "Sending…",
+    hi: "भेजा जा रहा है…",
+    pa: "ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…",
+  },
   pendingSync: { en: "waiting to sync", hi: "सिंक होना बाकी", pa: "ਸਿੰਕ ਹੋਣਾ ਬਾਕੀ" },
   onDevice: {
     en: "processed on this device · no recording left your phone",

@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "./ui/button";
 import { LanguageToggle } from "./LanguageToggle";
+import { SyncStatus } from "./ui/SyncStatus";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -36,13 +37,24 @@ export function AppShell({ children }: { children: ReactNode }) {
                   }}
                 >
                   <LogOut className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">{t("signOut")}</span>
+                  {/*
+                    * `sr-only sm:not-sr-only`, not `hidden sm:inline`. The icon is
+                    * aria-hidden, so with the label `hidden` below the sm breakpoint this
+                    * button had NO accessible name on exactly the phone form factor the
+                    * product targets — announced as just "button", next to the language
+                    * control, for its only destructive action. The rendered layout is
+                    * identical at every width; only the accessibility tree changes.
+                    */}
+                  <span className="sr-only sm:not-sr-only">{t("signOut")}</span>
                 </Button>
               </>
             )}
           </div>
         </div>
       </header>
+
+      {/* Renders nothing when online with an empty queue — see SyncStatus. */}
+      <SyncStatus />
 
       <main className="container py-8">{children}</main>
     </div>
