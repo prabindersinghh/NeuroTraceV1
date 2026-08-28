@@ -80,7 +80,7 @@ def test_every_web_runnable_task_exists_in_the_protocol():
 
 # ------------------------------------------------- 3 · raw submission and its side effects
 async def _start(client, token, patient_id, **kw):
-    res = await client.post(f"/sessions/{patient_id}/start", json={"type": "daily", **kw},
+    res = await client.post(f"/sessions/{patient_id}/start", json={"type": "DAILY_PULSE", **kw},
                             headers=auth(token))
     assert res.status_code == 201, res.text
     return res.json()["id"]

@@ -11,7 +11,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.engine.baseline import ENROLMENT_MIN_DAYS_POST_STROKE
-from app.exam.registry import DAILY_MODULES, MODULES, daily_battery_seconds
+from app.exam.registry import (
+    DAILY_BUDGET_SECONDS,
+    DAILY_MODULES,
+    MODULES,
+    daily_battery_seconds,
+)
 from app.services.synthetic import make_rng, synthetic_module
 
 NOW = datetime.now(timezone.utc)
@@ -44,7 +49,7 @@ async def make_patient(client, token, **overrides):
 
 
 async def run_session(client, token, patient_id, rng, drift=0.0):
-    started = await client.post(f"/sessions/{patient_id}/start", json={"type": "daily"},
+    started = await client.post(f"/sessions/{patient_id}/start", json={"type": "DAILY_PULSE"},
                                 headers=auth(token))
     assert started.status_code == 201, started.text
     sid = started.json()["id"]
@@ -93,7 +98,10 @@ async def test_the_battery_endpoint_describes_the_daily_session(client):
     resp = await client.get("/sessions/battery/daily")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["total_seconds"] == daily_battery_seconds() <= 90
+    # Was `<= 90`. That 90 was an aspirational target the live protocol never met;
+    # the real Daily Pulse capture time is 195s (D-045). Asserted against the
+    # constant now so the two cannot drift apart again.
+    assert body["total_seconds"] == daily_battery_seconds() <= DAILY_BUDGET_SECONDS
     assert {m["code"] for m in body["modules"]} == set(DAILY_MODULES)
     for module in body["modules"]:
         assert module["instructions"]["en"] and module["instructions"]["hi"]
@@ -437,6 +445,45 @@ async def test_the_demo_seed_produces_the_pitch_story(client):
     seeded = (await client.post("/demo/seed")).json()
     assert seeded["bands"][-1] == "ALERT"
     assert seeded["bands"].count("ALERT") >= 1
+
+
+async def test_the_demo_seed_runs_the_real_two_layer_schedule_not_just_the_right_ending(client):
+    """The demo's SHAPE, asserted — not only that it ends in ALERT.
+
+    A seed anchored on the wrong reference date produced 21 COMPREHENSIVE sessions instead
+    of the twice-weekly mix, and still ended in ALERT with the correct band sequence,
+    because the alert story rests on DECLINING_MODULES (M4/M7/M1) which are DAILY-schedule
+    modules present in every session type. The story looked right while the mechanism was
+    wrong, which is exactly the failure a band-only assertion cannot see.
+
+    21 days at 2 Comprehensive/week is 6 Comprehensive and 15 Daily Pulse.
+    """
+    seeded = (await client.post("/demo/seed")).json()
+    counts = seeded["session_type_counts"]
+
+    assert counts.get("COMPREHENSIVE") == 6, (
+        f"expected 6 Comprehensive sessions across 21 days at twice weekly, got "
+        f"{counts.get('COMPREHENSIVE')} — the scheduler is being handed the wrong "
+        f"reference date, or the cadence config changed. Full counts: {counts}"
+    )
+    assert counts.get("DAILY_PULSE") == 15, (
+        f"expected 15 Daily Pulse sessions, got {counts.get('DAILY_PULSE')}. "
+        f"Full counts: {counts}"
+    )
+    assert sum(counts.values()) == seeded["days"] == 21
+
+    # And the deeper battery must genuinely carry more modules — a Comprehensive session
+    # that ran only the Daily Pulse six would satisfy the counts above and still be wrong.
+    login = await client.post("/auth/login",
+                              json={"email": seeded["email"], "password": seeded["password"]})
+    token = login.json()["tokens"]["access_token"]
+    body = (await client.get(f"/dashboard/{seeded['patient_id']}",
+                             headers=auth(token))).json()
+    assert body["baseline"]["state"] == "locked", (
+        "the 21-day baseline must LOCK inside the promised window even though the "
+        "Comprehensive-only modules are measured only twice weekly — this is the "
+        "aggregate-lock-on-slowest-module regression (D-043)"
+    )
 
     login = await client.post("/auth/login",
                               json={"email": seeded["email"], "password": seeded["password"]})

@@ -18,7 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.password import hash_password
-from ..exam.registry import DAILY_MODULES, MODULES
+from ..exam.registry import DAILY_MODULES, MODULES, WEEKLY_MODULES
+from ..exam.scheduler import session_type_due_today
 from ..models import (
     Adherence,
     AuditLog,
@@ -101,16 +102,37 @@ async def seed_demo(db: AsyncSession) -> dict:
     first_day = now - timedelta(days=len(DEMO_PLAN) - 1)
     rng = make_rng(42)
     bands: list[str] = []
+    #: Counted and returned so the demo's SHAPE is assertable, not just its ending band.
+    #: A seed anchored on the wrong reference date produced 21 Comprehensive sessions and
+    #: still ended in ALERT — the story looked right while the mechanism was wrong.
+    session_type_counts: dict[str, int] = {}
 
     for index, (label, drift) in enumerate(DEMO_PLAN):
         ts = first_day + timedelta(days=index)
-        exam = ExamSession(patient_id=patient.id, ts=ts, type=SessionType.daily,
+        # The two-layer schedule (Part 2.5): most days are a Daily Pulse, and roughly
+        # twice a week the patient runs the deeper Comprehensive battery. The alert story
+        # is unaffected because it rests entirely on DECLINING_MODULES (M4/M7/M1), all
+        # three of which are DAILY-schedule modules present in BOTH session types — so
+        # every day still contributes to the drift the demo is built to show.
+        # Anchor on `first_day`, NOT `patient.enrolment_date`. The demo backdates its 21
+        # sessions but the patient row is created now, so enrolment_date is AFTER every
+        # session — which made every day clamp to day 0 and come out COMPREHENSIVE, the
+        # opposite of the twice-weekly schedule this is meant to demonstrate. Caught by
+        # counting the seeded session types rather than trusting the story still ended in
+        # ALERT (it did, which is exactly why this would have shipped unnoticed).
+        session_type = session_type_due_today(
+            first_day, patient.comprehensive_days_per_week, ts,
+        )
+        exam = ExamSession(patient_id=patient.id, ts=ts, type=session_type,
                            quality_score=1.0, identity_verified=True)
         db.add(exam)
         await db.flush()
 
+        codes = list(DAILY_MODULES)
+        if session_type is SessionType.comprehensive:
+            codes += list(WEEKLY_MODULES)
         features = synthetic_session(
-            rng, list(DAILY_MODULES), drift,
+            rng, codes, drift,
             drift_modules=DECLINING_MODULES if drift else None,
         )
         for code, feats in features.items():
@@ -120,6 +142,9 @@ async def seed_demo(db: AsyncSession) -> dict:
         db.add(Adherence(patient_id=patient.id, taken=True, ts=ts))
         await db.flush()
 
+        session_type_counts[session_type.value] = (
+            session_type_counts.get(session_type.value, 0) + 1
+        )
         result = await compute_session(db, exam.id, commit=False)
         bands.append(result["band"])
         logger.info("seed day %2d (%-8s) -> %s", index + 1, label, result["band"])
@@ -137,6 +162,7 @@ async def seed_demo(db: AsyncSession) -> dict:
         "patient_id": str(patient.id),
         "days": len(DEMO_PLAN),
         "bands": bands,
+        "session_type_counts": session_type_counts,
         "detail": (f"Seeded {len(DEMO_PLAN)} days for {DEMO_PATIENT_NAME}, "
                    f"ending {bands[-1]}"),
     }

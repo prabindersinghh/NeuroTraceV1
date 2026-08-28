@@ -125,7 +125,7 @@ class IdentitySignatureSave(BaseModel):
 
 
 class SessionStart(BaseModel):
-    type: SessionType = SessionType.daily
+    type: SessionType = SessionType.daily_pulse
     device_info: dict | None = None
     offline_captured: bool = False
     is_practice: bool = False

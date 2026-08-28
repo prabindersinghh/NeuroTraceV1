@@ -70,7 +70,7 @@ async def test_no_admin_response_contains_patient_identifying_data(client, provi
     }, headers=auth(care_token))
     assert made.status_code == 201, made.text
     patient_id = made.json()["id"]
-    await client.post(f"/sessions/{patient_id}/start", json={"type": "daily"},
+    await client.post(f"/sessions/{patient_id}/start", json={"type": "DAILY_PULSE"},
                       headers=auth(care_token))
 
     for route in ADMIN_ROUTES:

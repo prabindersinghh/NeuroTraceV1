@@ -342,3 +342,58 @@ def test_inv10_a_task_needing_supervision_can_never_be_marked_unsupervised():
                 assert module.requires_device in SUPERVISED_DEVICES, (
                     f"{code} contains supervised tasks {unsupervised} but requires only "
                     f"'{module.requires_device}'")
+
+
+# --------------------------------------------------------------------------- INV-14
+def test_inv14_daily_pulse_modules_hold_identical_positions_across_both_protocols():
+    """INV-14 — A MODULE'S POSITION ON THE FATIGUE CURVE IS THE SAME IN EVERY SESSION TYPE.
+
+    This is the two-protocol form of the rule `session_plan.py` has always enforced within
+    one protocol: ordering is part of the measurement, not presentation (D-027). If finger
+    tapping always runs at the same position, every session's tapping is measured at the
+    same point on the fatigue curve, the patient's own baseline absorbs that offset, and
+    position becomes a constant. A constant cannot confound.
+
+    Two session types break that guarantee unless it is enforced. `SessionObservation`
+    (engine/baseline.py) carries a module's raw feature values into its baseline with NO
+    position adjustment — the median and MAD are computed directly over whatever the module
+    measured. So if M7 sat at position 4 in Daily Pulse and position 15 in Comprehensive,
+    its baseline would silently blend readings taken fresh with readings taken tired: two
+    different physiological states averaged into one "normal".
+
+    That is the same silent-corruption shape INV-2's laterality gate and D-043's cadence
+    thresholds each guard against on a different axis. It degrades in the dangerous
+    direction too — a rested reading looks like improvement, which MASKS decline.
+
+    Enforced by construction in `session_plan.py`: both protocols are DERIVED from the one
+    `PROTOCOL` tuple, with the six Daily Pulse modules pinned to positions 1-6 in each. This
+    test pins the property itself, so a future hand-written second protocol cannot quietly
+    reintroduce the confound. D-044.
+    """
+    from app.exam.session_plan import (
+        COMPREHENSIVE_STEPS,
+        DAILY_PULSE_MODULES,
+        DAILY_PULSE_STEPS,
+    )
+
+    pulse = [(s.module, s.task, s.position) for s in DAILY_PULSE_STEPS]
+    embedded = [
+        (s.module, s.task, s.position)
+        for s in COMPREHENSIVE_STEPS
+        if s.module in DAILY_PULSE_MODULES
+    ]
+
+    assert pulse == embedded, (
+        "A Daily Pulse module sits at a different position depending on session type. "
+        "Its baseline would then mix fresh-position and fatigued-position readings, and "
+        "the error masks decline rather than causing a false alarm.\n"
+        f"  Daily Pulse:   {pulse}\n"
+        f"  In Comprehensive: {embedded}"
+    )
+    # And the positions must be the leading block, not merely equal somewhere in the middle:
+    # anything inserted before them would shift the whole fatigue curve underneath them.
+    assert [p for _, _, p in pulse] == list(range(1, len(pulse) + 1)), (
+        "Daily Pulse steps must occupy positions 1..N. If a comprehensive-only step were "
+        "inserted ahead of them, every Daily Pulse module would move down the fatigue "
+        "curve in Comprehensive sessions only."
+    )

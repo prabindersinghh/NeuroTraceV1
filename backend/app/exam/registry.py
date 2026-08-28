@@ -4,11 +4,15 @@ One table describing all twenty modules: which domain they belong to (which is w
 counts), what they extract, which features are scored, which direction is clinically worse,
 and how often they run.
 
-Scheduling is not arbitrary. The daily battery is the six modules that (a) change fastest
-when something is going wrong and (b) can be completed in ninety seconds by a 68-year-old
-with a residual hemiparesis. Everything else is weekly or monthly, because a battery that
-takes twenty minutes is a battery nobody completes, and an incomplete battery detects
-nothing.
+Scheduling is not arbitrary. The daily battery (Daily Pulse) is the six modules that change
+fastest when something is going wrong, and it runs in about 195 seconds of capture — three
+to four minutes wall-clock once instructions and retries are counted. Everything else is
+weekly or monthly, because a battery that takes twenty minutes is a battery nobody
+completes, and an incomplete battery detects nothing.
+
+The `seconds` field below is the honest capture time per module, reconciled against
+`session_plan.py`'s per-step timings in 2026-08 (D-045). It had been reverse-engineered to
+hit a 90-second target that the live protocol never actually met.
 """
 from __future__ import annotations
 
@@ -200,7 +204,7 @@ MODULES: dict[str, ExamModule] = {
         lateral_keys=("mouth_corner_symmetry", "corner_drop", "nasolabial_ratio",
                       "forehead_movement_symmetry", "ear_asymmetry",
                       "eye_closure_asymmetry", "blink_asymmetry"),
-        nihss_item=4, seconds=16,
+        nihss_item=4, seconds=40,
         instructions_en="Smile widely. Now raise your eyebrows. Close your eyes tightly. Puff out your cheeks.",
         instructions_hi="खुलकर मुस्कुराइए। अब भौंहें ऊपर उठाइए। आँखें कसकर बंद कीजिए। गाल फुलाइए।",
     ),
@@ -210,7 +214,7 @@ MODULES: dict[str, ExamModule] = {
         extract=extract_tongue_palate,
         scoring_keys=tuple(TONGUE_SCORING_KEYS), bad_direction=TONGUE_BAD_DIRECTION,
         lateral_keys=("tongue_deviation_abs",),
-        seconds=15,
+        seconds=20,
         instructions_en="Stick your tongue straight out. Now say 'aaah' for as long as you can.",
         instructions_hi="जीभ सीधी बाहर निकालिए। अब जब तक हो सके 'आ' बोलिए।",
     ),
@@ -226,7 +230,7 @@ MODULES: dict[str, ExamModule] = {
         scoring_keys=tuple(OCULOMOTOR_SCORING_KEYS),
         bad_direction=OCULOMOTOR_BAD_DIRECTION,
         lateral_keys=OCULOMOTOR_LATERAL_KEYS,
-        seconds=45,
+        seconds=140,
         instructions_en=("Follow the moving dot with your eyes, keeping your head still. "
                          "Then look at each dot as soon as it appears."),
         instructions_hi=("सिर स्थिर रखते हुए चलती हुई बिंदु को आँखों से देखिए। फिर जैसे ही "
@@ -239,7 +243,7 @@ MODULES: dict[str, ExamModule] = {
         tasks=("sustained_a", "ddk", "sentence"),
         extract=extract_dysarthria,
         scoring_keys=tuple(DYSARTHRIA_SCORING_KEYS), bad_direction=DYSARTHRIA_BAD_DIRECTION,
-        nihss_item=10, seconds=20,
+        nihss_item=10, seconds=40,
         instructions_en="Say 'aaah' steadily for five seconds. Now repeat 'pa-ta-ka' as fast as you can. Now read this sentence aloud.",
         instructions_hi="पाँच सेकंड तक लगातार 'आ' बोलिए। अब जितनी तेज़ी से हो सके 'प-त-क' दोहराइए। अब यह वाक्य ज़ोर से पढ़िए।",
     ),
@@ -271,7 +275,7 @@ MODULES: dict[str, ExamModule] = {
         scoring_keys=tuple(FINE_MOTOR_SCORING_KEYS), bad_direction=FINE_MOTOR_BAD_DIRECTION,
         # Bradykinesia slows both hands, so the ratio between them barely moves.
         lateral_keys=("tap_asymmetry_ratio", "tap_cv_asymmetry"),
-        seconds=22,
+        seconds=25,
         instructions_en="Tap the circle as fast as you can with your left hand. Now your right hand.",
         instructions_hi="बाएँ हाथ से जितनी तेज़ी से हो सके गोले को दबाइए। अब दाएँ हाथ से।",
     ),
@@ -282,7 +286,7 @@ MODULES: dict[str, ExamModule] = {
         tasks=("finger_to_nose", "rapid_alternating"),
         extract=extract_coordination,
         scoring_keys=tuple(COORDINATION_SCORING_KEYS), bad_direction=COORDINATION_BAD_DIRECTION,
-        nihss_item=7, seconds=30,
+        nihss_item=7, seconds=55,
         instructions_en="Touch your nose, then touch the dot on the screen. Repeat five times.",
         instructions_hi="अपनी नाक छुइए, फिर स्क्रीन पर बनी बिंदु को छुइए। पाँच बार दोहराइए।",
     ),
@@ -340,7 +344,7 @@ MODULES: dict[str, ExamModule] = {
         tasks=("simple_rt", "choice_rt", "trail_making_a"),
         extract=extract_attention_speed,
         scoring_keys=tuple(ATTENTION_SCORING_KEYS), bad_direction=ATTENTION_BAD_DIRECTION,
-        seconds=20,
+        seconds=60,
         instructions_en="Tap the circle the moment it turns blue. As fast as you can.",
         instructions_hi="जैसे ही गोला नीला हो, तुरंत दबाइए। जितनी तेज़ी से हो सके।",
     ),
@@ -370,7 +374,7 @@ MODULES: dict[str, ExamModule] = {
         code="M13", gates_alerts=False, name="Mood", domain=DOMAIN_MOOD, schedule=DAILY,
         tasks=("phq2",), extract=_questionnaire("PHQ2"),
         scoring_keys=tuple(MOOD_SCORING_KEYS), bad_direction=MOOD_BAD_DIRECTION,
-        seconds=8,
+        seconds=20,
         instructions_en="Over the last two weeks, how often have you felt little interest or pleasure in doing things?",
         instructions_hi="पिछले दो हफ़्तों में, कितनी बार आपको किसी काम में मन नहीं लगा?",
     ),
@@ -420,7 +424,7 @@ MODULES: dict[str, ExamModule] = {
         code="M19", gates_alerts=False, name="Medication", domain=DOMAIN_VITALS, schedule=DAILY,
         tasks=("adherence",), extract=extract_adherence,
         scoring_keys=tuple(ADHERENCE_SCORING_KEYS), bad_direction=ADHERENCE_BAD_DIRECTION,
-        seconds=4,
+        seconds=10,
         instructions_en="Did you take today's medicines?",
         instructions_hi="क्या आपने आज की दवाइयाँ ली?",
     ),
@@ -433,7 +437,12 @@ MODULES: dict[str, ExamModule] = {
         instructions_hi="क्या कुछ नया या अलग हुआ है?",
     ),
     "M21": ExamModule(
-        code="M21", name="Sense of upright", domain=DOMAIN_POSTERIOR, schedule=MONTHLY,
+        # Moved from MONTHLY to WEEKLY (D-044): TASK_FINAL_TECHNICAL_COMPLETION.md Part 2
+        # lists SVV explicitly inside Comprehensive Follow-up's content, alongside the rest
+        # of the posterior/vestibular battery (M3, M9) it shares a domain with. Leaving it
+        # at MONTHLY while M3 and M9 moved to Comprehensive would have split one domain's
+        # evidence across two different cadences for no clinical reason.
+        code="M21", name="Sense of upright", domain=DOMAIN_POSTERIOR, schedule=WEEKLY,
         tasks=("svv_static", "svv_dynamic_cw", "svv_dynamic_acw"),
         extract=extract_svv,
         scoring_keys=tuple(SVV_SCORING_KEYS), bad_direction=SVV_BAD_DIRECTION,
@@ -469,16 +478,35 @@ def get_module(code: str) -> ExamModule:
     return module
 
 
-DAILY_BUDGET_SECONDS = 90  # PRD §7: the whole daily session on a low-end Android phone
+#: Raw capture time for the Daily Pulse battery — the REAL figure, 195s, not the 90s this
+#: constant claimed until 2026-08-24 (D-045).
+#:
+#: The old 90 was a target, and every module's `seconds` above had been reverse-engineered
+#: to sum to it. Meanwhile `session_plan.py`'s `Step.seconds` — the numbers that actually
+#: drive the live session timer — said 195 for the same six modules. Two files, two
+#: different durations for the same work, and the one patients experienced was the larger.
+#: Nothing ever computed "these six modules alone" before the Daily Pulse / Comprehensive
+#: split, so the contradiction stayed invisible.
+#:
+#: Resolved by correcting the registry to the truth rather than shortening tasks to fit the
+#: target: these durations ARE the measurement (sustained phonation needs its seconds to
+#: show stability; tapping needs its window to show rate and asymmetry), so trimming them
+#: to hit a number would degrade what the product measures.
+DAILY_BUDGET_SECONDS = 195
 
 
 def daily_battery_seconds() -> int:
-    """Total capture time for the daily battery.
+    """Total capture time for the Daily Pulse battery.
 
-    Instructions are spoken *while* each capture runs, so these are capture seconds,
-    not capture-plus-instruction. `test_exam_modules.py` asserts the total stays
-    within DAILY_BUDGET_SECONDS — a battery that overruns is a battery patients
-    abandon, and an abandoned battery detects nothing.
+    Instructions are spoken *while* each capture runs, so these are capture seconds, not
+    capture-plus-instruction — and wall-clock is longer still once framing and retries are
+    counted (`session_plan.planned_seconds` says the same of its own figure). Roughly
+    3-4 minutes in practice.
+
+    `test_exam_modules.py` asserts the total stays within DAILY_BUDGET_SECONDS, and
+    `test_registry_matches_session_plan_timings` asserts no module here claims LESS time
+    than the protocol actually spends on it — which is the specific drift that let these
+    two files disagree for so long.
     """
     return sum(m.seconds for m in modules_for(DAILY))
 

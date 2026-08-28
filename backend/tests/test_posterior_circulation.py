@@ -577,10 +577,15 @@ def test_the_dynamic_rotation_needs_someone_present():
 
 
 def test_svv_is_in_the_posterior_domain_and_offered_on_tier_one():
+    """D-044: M21 moved from monthly to weekly (Comprehensive Follow-up) so the whole
+    posterior/vestibular domain (M3, M9, M21) shares one cadence rather than splitting its
+    evidence across two — TASK_FINAL_TECHNICAL_COMPLETION.md Part 2 lists SVV explicitly
+    inside Comprehensive's content."""
     from app.exam.registry import MODULES, modules_for_tier
 
     assert MODULES["M21"].domain == "posterior_vestibular"
-    assert "M21" in modules_for_tier("monthly", "TIER_1_PHONE")
+    assert "M21" in modules_for_tier("weekly", "TIER_1_PHONE")
+    assert "M21" not in modules_for_tier("monthly", "TIER_1_PHONE")
 
 
 # ------------------------------------------------------------------ E3 hearing

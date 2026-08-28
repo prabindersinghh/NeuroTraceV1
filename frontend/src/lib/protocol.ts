@@ -15,6 +15,7 @@
  * What is skipped and why is a fact the audit reports, not something buried here.
  */
 import { api } from "./api";
+import type { SessionType } from "./types";
 
 export type Intensity = "full" | "standard" | "light" | "research";
 
@@ -30,6 +31,8 @@ export interface PlanStep {
 
 export interface SessionPlan {
   intensity: Intensity;
+  /** Part 2 (D-044). Absent on responses from the deprecated `/plan/` endpoint. */
+  session_type?: SessionType;
   planned_seconds: number;
   /** The fall-risk gate renders immediately before this position. */
   fall_gate_before_position: number | null;
@@ -93,34 +96,72 @@ export const WEB_EXCLUDED: Record<string, string> = {
   rapid_alternating: "Same — hand tracking.",
 };
 
-const MIRROR_FALL_GATE = 11;
+// (The old hardcoded MIRROR_FALL_GATE = 11 was removed with D-044's renumbering — the
+// gate position is now derived from the actual standing block, see mirrorPlan.)
 
-function mirrorPlan(intensity: Intensity): SessionPlan {
-  // The mirror carries FULL; STANDARD drops the three optional steps, LIGHT and RESEARCH
-  // fall back to FULL rather than guessing — the server is authoritative for those.
-  let steps = PROTOCOL_MIRROR;
-  if (intensity === "standard") {
-    steps = steps.filter(
-      (s) => !["vertical_saccades", "svv_static_and_dynamic", "rapid_alternating"].includes(s.task),
+/** The six DAILY-schedule modules — Daily Pulse's content. Mirrors
+ *  `session_plan.DAILY_PULSE_MODULES`; kept in sync by `protocol.test.ts`. */
+const DAILY_PULSE_MODULES = new Set(["M1", "M4", "M7", "M10", "M13", "M19"]);
+
+/** Renumber a step list 1..N, preserving order. Mirrors `session_plan._renumbered`. */
+function renumbered(steps: PlanStep[], start = 1): PlanStep[] {
+  return steps.map((s, i) => ({ ...s, position: start + i }));
+}
+
+/**
+ * The offline mirror, split by session type the SAME WAY the server splits it (D-044).
+ *
+ * This derivation is not duplicated logic for its own sake — it is what keeps the offline
+ * path from disagreeing with the server about where a module sits in the session. Since
+ * every module's baseline encodes its position on the fatigue curve, an offline session
+ * that ran M7 at a different position than an online one would feed two different
+ * physiological states into the same baseline: precisely the corruption the server-side
+ * position-consistency guarantee exists to prevent, reintroduced through the back door.
+ */
+function mirrorPlan(intensity: Intensity, sessionType: SessionType): SessionPlan {
+  const dailyPulse = renumbered(PROTOCOL_MIRROR.filter((s) => DAILY_PULSE_MODULES.has(s.module)));
+
+  let steps: PlanStep[];
+  if (sessionType === "DAILY_PULSE") {
+    steps = dailyPulse;  // intensity is ignored: nothing left to trim, same as the server
+  } else {
+    const additions = renumbered(
+      PROTOCOL_MIRROR.filter((s) => !DAILY_PULSE_MODULES.has(s.module)),
+      dailyPulse.length + 1,
     );
+    // STANDARD drops the three optional steps; LIGHT and RESEARCH fall back to FULL rather
+    // than guessing — the server is authoritative for those.
+    const trimmed = intensity === "standard"
+      ? additions.filter(
+          (s) => !["vertical_saccades", "svv_static_and_dynamic", "rapid_alternating"].includes(s.task),
+        )
+      : additions;
+    steps = [...dailyPulse, ...trimmed];
   }
+
+  const firstStanding = steps.find((s) => s.block.startsWith("C_"));
   return {
     intensity,
+    session_type: sessionType,
     planned_seconds: steps.reduce((a, s) => a + s.seconds, 0),
-    fall_gate_before_position: MIRROR_FALL_GATE,
+    // Derived, not the hardcoded MIRROR_FALL_GATE constant: renumbering moved the standing
+    // block, and a stale gate position would render the fall-risk gate at the wrong step.
+    fall_gate_before_position: firstStanding ? firstStanding.position : null,
     steps,
   };
 }
 
 /** Server plan when reachable; the mirror when not. Never throws. */
-export async function loadPlan(intensity: Intensity): Promise<SessionPlan> {
+export async function loadPlan(
+  intensity: Intensity, sessionType: SessionType = "COMPREHENSIVE",
+): Promise<SessionPlan> {
   try {
-    const plan = await api.sessionPlan(intensity);
+    const plan = await api.sessionPlanV2(sessionType, intensity.toUpperCase());
     if (plan?.steps?.length) return plan;
   } catch {
     /* offline — exactly the situation the mirror exists for */
   }
-  return mirrorPlan(intensity);
+  return mirrorPlan(intensity, sessionType);
 }
 
 /** The steps this PWA will actually run, in order. */

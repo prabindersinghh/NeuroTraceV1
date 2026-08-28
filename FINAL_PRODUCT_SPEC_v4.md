@@ -296,7 +296,7 @@ against the RUNNING system, not only in tests:
   [ ] SVV module live in posterior_vestibular
   [ ] E3 audiometry self-report built
   [ ] All model cards written; ML_STATUS.md states real vs synthetic
-  [ ] Deployed on Railway + Neon, demo reproduces on the public URL
+  [x] Deployed on Railway + Neon, demo reproduces on the public URL
   [ ] EN / HI / PA throughout
   [ ] All invariants pinned; full suite green by exit code
   [ ] Privacy invariant passing; no identifiers anywhere; nothing pushed

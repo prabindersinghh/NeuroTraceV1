@@ -28,7 +28,9 @@ from ..engine.baseline import (
     Baseline as EngineBaseline,
     SessionObservation,
     build_baseline,
+    discard_count_for_schedule,
     is_off_window,
+    lock_threshold_for_schedule,
 )
 from ..engine.confounders import ConfounderContext, detect_confounders
 from ..engine.deviation import compute_module_deviation
@@ -41,7 +43,7 @@ from ..engine.gates import (
     evaluate_gates,
     rank_drivers,
 )
-from ..exam.registry import MODULES, get_module
+from ..exam.registry import ANY, DAILY, MONTHLY, WEEKLY, MODULES, get_module
 from ..models import (
     Alert,
     Band,
@@ -60,6 +62,20 @@ from ..slm.templates import render_clinician_line, render_template
 logger = logging.getLogger("neurotrace.pipeline")
 
 QUALITY_FLOOR = 0.6
+
+#: registry.py's module `schedule` vocabulary (DAILY/WEEKLY/MONTHLY/ANY — how often a
+#: module is MEASURED) translated to baseline.py's cadence-bucket vocabulary (D-043 — how
+#: many of that module's own observations it needs before its baseline locks). WEEKLY
+#: maps to "twice_weekly" rather than "weekly": WEEKLY-schedule modules are exactly the
+#: Comprehensive-only content (D-044), and Comprehensive's default cadence is twice
+#: weekly, not once. ANY (only M20, symptom log, `gates_alerts=False`) is treated as
+#: daily — it can be submitted any time, and nothing gates on its baseline lock speed.
+_CADENCE_BUCKET: dict[str, str] = {
+    DAILY: "daily",
+    WEEKLY: "twice_weekly",
+    MONTHLY: "monthly",
+    ANY: "daily",
+}
 
 
 async def _module_history(
@@ -257,8 +273,12 @@ async def compute_session(
                 identity_ok=exam.identity_verified,
                 off_window=exam.off_window,
             )
-            built = build_baseline(module.code, [*history, observation],
-                                   list(module.scoring_keys))
+            cadence = _CADENCE_BUCKET[module.schedule]
+            built = build_baseline(
+                module.code, [*history, observation], list(module.scoring_keys),
+                discard_first=discard_count_for_schedule(cadence),
+                lock_at=lock_threshold_for_schedule(cadence),
+            )
             row = await _upsert_baseline(db, patient.id, built)
             baseline_phase = True
             min_baseline_n = min(min_baseline_n, built.n_sessions)

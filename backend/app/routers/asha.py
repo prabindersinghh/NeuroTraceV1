@@ -136,7 +136,7 @@ async def submit_session(payload: AshaSessionSubmit, worker: AshaWorker,
             rejected.append(code)
             continue
         if exam is None:
-            exam = ExamSession(patient_id=patient.id, ts=ts, type=SessionType.monthly,
+            exam = ExamSession(patient_id=patient.id, ts=ts, type=SessionType.asha_visit,
                                quality_score=1.0, identity_verified=True)
             db.add(exam)
             await db.flush()

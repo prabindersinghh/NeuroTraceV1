@@ -38,6 +38,94 @@ DISCARD_FIRST_N_SESSIONS = 3
 LOCK_AT_N_SESSIONS = 12
 TIME_OF_DAY_TOLERANCE_HOURS = 2.0
 
+# --- cadence-aware lock thresholds (D-043) ---
+#
+# LOCK_AT_N_SESSIONS is a count of that MODULE's own usable observations, and
+# `build_baseline` was always parameterised to accept a different `lock_at` per call — but
+# every call site passed the same flat constant, for every module, regardless of how often
+# that module is actually measured. That was silently fine for as long as every module ran
+# daily (the case until Part 2 of TASK_FINAL_TECHNICAL_COMPLETION.md), because "12
+# observations" and "12 days" were the same thing. They stop being the same thing the
+# moment a Comprehensive-only module runs twice weekly instead of daily: 12 observations at
+# 2/week is six calendar weeks, not the ~21-day window the product positions as core
+# (Part 3). Verified explicitly, not assumed — see test_mixed_cadence_baseline.py.
+#
+# The fix is a lower n for slower cadences, chosen so the REAL-WORLD lock time lands near
+# the same ~3-week neighbourhood a daily module reaches, rather than leaving it at whatever
+# a flat count happens to imply. These are the DEFAULT session-type cadences from
+# TASK_FINAL_TECHNICAL_COMPLETION.md Part 2 (Daily Pulse = daily, Comprehensive Follow-up =
+# twice weekly default) plus the pre-existing WEEKLY/MONTHLY module schedules
+# (`exam/registry.py`) for modules that fall outside both layers (e.g. the monthly-only
+# battery). DISCARD_FIRST_N_SESSIONS is deliberately left flat at 3 for every cadence here:
+# the practice effect it corrects for is a property of REPEATING a task, not of calendar
+# time, so there is no clinical basis to shrink it for a slower-cadence module. The one
+# honest rough edge this leaves: at MONTHLY cadence, 3 discarded practice sessions is 3
+# months before any signal accumulates at all. That module set (M12/M15/M16) is already the
+# lowest-priority tier — several are `gates_alerts=False` — so it is recorded here rather
+# than solved: a MONTHLY-cadence baseline is known to be slow to establish, on purpose,
+# because forcing a faster lock there would mean trusting fewer real repetitions of a task
+# with a genuine learning curve.
+_CADENCE_LOCK_THRESHOLDS: dict[str, int] = {
+    "daily": LOCK_AT_N_SESSIONS,   # 12 usable + 3 discarded ≈ 15-18 calendar days
+    "twice_weekly": 4,             # 4 usable + 2 discarded = 6 sessions = exactly 3 weeks
+    "weekly": 3,                   # 3 usable + 2 discarded ≈ 5 weeks
+    "monthly": 3,                  # 3 usable + 1 discarded ≈ 4 months — see note above
+}
+
+#: How many leading PRACTICE sessions to discard, per cadence.
+#:
+#: Flat 3 was the original rule and stays right for daily modules. It is wrong for slower
+#: cadences for a reason that only became visible once the arithmetic was checked against
+#: the 21-day baseline window the product actually promises (Part 3): at twice weekly,
+#: 3 discarded + 6 retained = 9 sessions = 4.5 weeks, so the patient-level baseline could
+#: never lock inside 21 days — and `_refresh_baseline_state` gates the WHOLE patient on
+#: the slowest module. The demo seed caught this live: 21 days produced 6 Comprehensive
+#: sessions and the baseline stayed `collecting`.
+#:
+#: The practice effect is real and cadence does not remove it, so the discard is reduced
+#: rather than dropped. Two is the floor worth keeping: the sharpest learning gain on
+#: these tasks is between the 1st and 2nd administration. And 4 retained is not an
+#: arbitrary remainder — it is the minimum `fit_trajectory` needs to fit a real recovery
+#: slope at all (below 4 it returns flat, which would silently convert a
+#: still-recovering patient's rising baseline into a flat line and read that recovery as
+#: deviation).
+_CADENCE_DISCARD_COUNTS: dict[str, int] = {
+    "daily": DISCARD_FIRST_N_SESSIONS,
+    "twice_weekly": 2,
+    "weekly": 2,
+    #: One only: at monthly cadence each discarded session costs a whole month, and three
+    #: would mean a third of a year before the module contributes anything.
+    "monthly": 1,
+}
+
+
+def lock_threshold_for_schedule(schedule: str) -> int:
+    """How many of a module's OWN usable observations it needs before its baseline locks.
+
+    Raises on an unrecognised schedule rather than defaulting to the daily threshold — a
+    typo'd schedule name silently falling back to `daily` would UNDER-count how long a
+    slower-cadence module actually needs, which is exactly the silent-corruption failure
+    mode this function exists to rule out.
+    """
+    try:
+        return _CADENCE_LOCK_THRESHOLDS[schedule]
+    except KeyError:
+        raise ValueError(
+            f"unknown cadence schedule {schedule!r}; expected one of "
+            f"{sorted(_CADENCE_LOCK_THRESHOLDS)}"
+        ) from None
+
+
+def discard_count_for_schedule(schedule: str) -> int:
+    """How many leading practice sessions to discard, for a module at this cadence."""
+    try:
+        return _CADENCE_DISCARD_COUNTS[schedule]
+    except KeyError:
+        raise ValueError(
+            f"unknown cadence schedule {schedule!r}; expected one of "
+            f"{sorted(_CADENCE_DISCARD_COUNTS)}"
+        ) from None
+
 # --- statistics ---
 MIN_MAD = 1e-6           # floor so a perfectly flat feature cannot divide by zero
 MAD_TO_SD = 1.4826       # makes MAD a consistent estimator of SD under normality

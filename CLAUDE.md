@@ -63,7 +63,8 @@ lose rows · INV-8 audit data is append-only · INV-9 nothing is spoken for an a
 without confirmation · INV-10 every module has a declared tier placement · INV-11 **no
 patient identifier anywhere in this repository** · INV-12 fall-risk tasks never appear in an
 unsupervised schedule · INV-13 no regulatory-exemption claim anywhere (`docs/INTENDED_USE.md`
-is the frozen statement).
+is the frozen statement) · INV-14 a module holds the same session position in every session
+type (fatigue-curve confound).
 
 Each has a test. If one fails, that is the finding — do not route around it.
 

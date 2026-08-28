@@ -389,3 +389,132 @@ built frontend bundle, which caught a stale `frontend/dist/` still carrying the 
 after the source was already fixed. Every genuine safety disclaimer ("it cannot detect a
 stroke happening now, call 108") was reworded to carry the same warning without using any
 of the banned phrases, so the ban costs nothing safety-relevant.
+
+**D-043 · 2026-08-24 · Baseline lock thresholds are cadence-aware, not a flat 12.**
+Task 2.4 asked explicitly: does the baseline engine handle modules measured at different
+frequencies, or does it silently mix them? Tested rather than assumed
+(`test_mixed_cadence_baseline.py`). Two different answers to two different questions:
+
+Per-module isolation was already correct. `build_baseline` is called once per
+`module.code`, and `_module_history` fetches only that module's own `ModuleResult` rows —
+no cross-module pooling, no conflation of observation index with elapsed calendar time.
+Proven with an interleaved daily module and a twice-weekly module over ten weeks: the
+twice-weekly module's n_sessions, window and trajectory come out byte-identical whether or
+not the daily module's data exists in the same account.
+
+The aggregate lock timeline was not. `_refresh_baseline_state` sets the WHOLE patient's
+`baseline_state` to `locked` only when every module's own `BaselineRow` is individually
+locked, and every module was locked with the same flat `LOCK_AT_N_SESSIONS = 12` regardless
+of cadence. At twice-weekly (the Part 2 default for Comprehensive Follow-up), 12
+observations is six calendar weeks — not the ~21-day window Part 3 positions as core. This
+was invisible until now because every module has run daily since the product existed;
+"12 observations" and "12 days" were the same number by coincidence, not by design.
+
+Fixed with `lock_threshold_for_schedule` and `discard_count_for_schedule`
+(`engine/baseline.py`), both wired into `session_pipeline.py`'s live `build_baseline` call
+via `_CADENCE_BUCKET`.
+
+**The first set of numbers was wrong, and the demo caught it.** Initially: twice_weekly
+locked at 6 retained with the flat discard of 3 — 9 sessions, 4.5 weeks. But
+`_refresh_baseline_state` gates the WHOLE patient on the slowest module, and Part 3
+positions a 21-day doctor-reviewed baseline as core; 21 days at twice weekly is only SIX
+sessions. So the patient-level baseline could never lock in the promised window. This did
+not show up in the isolated cadence tests (each module's own numbers were correct) — it
+showed up when the 21-day demo seed came back with `baseline.state == "collecting"`
+instead of `locked`. Chosen because it was checked against the product's actual promise
+rather than against lock-time in the abstract.
+
+Final: daily locks at 12 retained after 3 discarded (~15-18 days, unchanged); twice_weekly
+at 4 after 2 discarded (exactly 6 sessions = 3 weeks); weekly at 3 after 2; monthly at 3
+after 1. The discard count is now cadence-aware too — the practice effect is real and
+cadence does not remove it, so it is reduced rather than dropped, and 2 keeps the sharpest
+learning gain (1st→2nd administration) out of the baseline. 4 retained for twice_weekly is
+not an arbitrary remainder: `fit_trajectory` returns a FLAT slope below 4 points, and a
+flat trajectory on a still-recovering patient reads their genuine recovery as deviation.
+
+**D-044 · 2026-08-24 · The two-layer session model: derived, not retyped; and a real
+duration discrepancy found while building it.**
+Task 2.1/2.2. `SessionType` renamed `daily/weekly/monthly` → `DAILY_PULSE/COMPREHENSIVE/
+MONTHLY/ASHA_VISIT` (migration 0012) — the old values described a MODULE's measurement
+schedule, not a SESSION, and never actually differentiated live content: every session ran
+the full 21-step battery under `type="daily"` regardless of what `weekly`/`monthly` were
+meant to mean; the frontend never sent them.
+
+`exam/registry.py` already tagged each module DAILY/WEEKLY/MONTHLY, and that tagging maps
+almost exactly onto the task's Daily Pulse / Comprehensive content lists — M1/M4/M7/M10/
+M13/M19 were already DAILY. One real correction: M21 (SVV) was tagged MONTHLY though the
+task lists it inside Comprehensive; moved to WEEKLY so the whole posterior/vestibular
+domain (M3, M9, M21) shares one cadence instead of splitting its evidence across two.
+
+**Daily Pulse's six steps land at IDENTICAL positions (1-6) in both protocols, not
+independently ordered.** This is not cosmetic. `SessionObservation` (engine/baseline.py)
+carries a module's raw feature values into its baseline with no position-adjustment — if
+M7 genuinely performs differently late in a session than early (which
+`within_session_fatigue_slope` exists specifically to say it does), then a baseline mixing
+M7 captured at position 4 in Daily Pulse with M7 captured at position 15 in the old flat
+protocol would silently blend two different physiological states into one "normal" — the
+same silent-corruption shape 2.4 asked to rule out for cadence, here for fatigue position
+instead. Both protocols are DERIVED from the single existing `PROTOCOL` tuple (partition by
+module, renumber) rather than retyped by hand, so there is exactly one place a task's
+wording or duration can be edited and it is structurally impossible for the two protocols
+to describe a module differently. `test_session_type_protocols.py` pins the position match.
+
+**A real discrepancy, found rather than assumed away: Daily Pulse's six modules do not sum
+to 90 seconds of raw task time — they sum to 195.** `registry.py`'s `seconds` field per
+module (M1=16, M4=20, M7=22, M10=20, M13=8, M19=4) was clearly reverse-engineered to hit
+`DAILY_BUDGET_SECONDS = 90` exactly; `session_plan.py`'s `Step.seconds` for the SAME six
+modules (the numbers that actually drive the live protocol timer) are M10=60, M4=40, M1=40,
+M7=25, M13=20, M19=10 — 195s. This was invisible before Part 2 because nothing ever
+computed "these six modules, alone" — the flat protocol ran everything together. Decision:
+keep `session_plan.py`'s durations. They are what a patient actually experiences, and
+shortening a reaction-time or speech task without a clinical basis to make a target number
+true would be worse than admitting the target was optimistic. The "~90 seconds" claim is
+corrected wherever it appears in product copy to the real figure — raw task time ~195s,
+realistically 3-4 minutes wall-clock once instructions and framing are included, per
+`planned_seconds`'s own docstring ("Task time only. Real sessions run longer"). Flagged to
+the project owner as an open question: either accept "under four minutes" as Daily Pulse's
+honest positioning, or decide which of the six tasks' durations can be shortened on
+clinical grounds — that decision is not this session's to make unilaterally.
+
+Cadence-aware baseline locking (D-043) is wired through session_type: DAILY_PULSE modules
+use the `daily` threshold, COMPREHENSIVE-only modules use `twice_weekly` by default
+(configurable per patient), MONTHLY modules use `monthly`.
+
+**D-045 · 2026-08-24 · registry.py's per-module seconds were reverse-engineered; corrected
+to the real timings.**
+Two files described how long each module takes and disagreed. `exam/registry.py`'s
+per-module `seconds` summed to exactly `DAILY_BUDGET_SECONDS = 90` for the six DAILY
+modules (M1=16, M4=20, M7=22, M10=20, M13=8, M19=4) — a target, reverse-engineered.
+`exam/session_plan.py`'s `Step.seconds` for the same six, which are the numbers that
+actually drive the live session timer, sum to 195 (M10=60, M4=40, M1=40, M7=25, M13=20,
+M19=10). Nothing ever computed "these six modules alone" before the Daily Pulse /
+Comprehensive split, so the contradiction stayed invisible for the product's whole life.
+
+**Decision: keep session_plan's durations, correct registry to match.** These durations ARE
+the measurement — sustained phonation needs its seconds to show stability, tapping needs its
+window to show rate and asymmetry — so trimming a clinical task to make a number true would
+degrade what the product measures in order to protect a claim about it. That is backwards.
+Owner decision, 2026-08-24.
+
+Nine modules were understating: M1 16→40, M2 15→20, M3 45→140, M4 20→40, M7 22→25,
+M8 30→55, M10 20→60, M13 8→20, M19 4→10. `DAILY_BUDGET_SECONDS` 90→195.
+
+**M9, M11 and M21 were deliberately NOT changed** even though their registry numbers exceed
+their protocol sums (180 vs 90, 180 vs 60, 180 vs 60). Those three own tasks the daily
+protocol does not run — M9's Unterberger and tandem walk are ASHA-visit only (INV-12), M11
+has three cognition tasks beyond word encoding and recall, M21 has its dynamic SVV
+variants. Their larger numbers are honest. So the rule pinned by
+`test_registry_matches_session_plan_timings` is an inequality, not equality: a module may
+claim MORE time than the daily protocol spends on it, never less. Claiming less is the
+direction that under-promises the patient's real burden, and is how the 90s figure survived.
+
+`session_plan.py`'s own `DAILY_PULSE_BUDGET_SECONDS` — added earlier the same day and also
+hardcoded to 90, in the very file whose steps sum to 195 — is now derived
+(`sum(s.seconds for s in DAILY_PULSE_STEPS)`) rather than asserted. A second hand-written
+constant is precisely how the first drift happened.
+
+Corrected in: README, PRD (FR2, §7, §8), DEVELOPMENT, frontend/README, models.py,
+main.py's OpenAPI description, migration 0012's docstring, and the test that certified the
+wrong number (`test_the_daily_battery_fits_the_ninety_second_budget` → `..._fits_its_capture_budget`).
+**Pitch and landing-page copy deliberately untouched** — the owner is handling the
+public-facing figure separately, and `frontend/src/routes/Landing.tsx` keeps its wording.

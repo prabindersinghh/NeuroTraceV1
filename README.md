@@ -3,7 +3,7 @@
 # NeuroTrace
 
 **A neurological examination, performed daily at home, entirely on the patient's own
-phone.** Ninety seconds of capture for the daily core; about twelve minutes for the full
+phone.** About three minutes for the daily core; about twelve minutes for the full
 twenty-one-task protocol.
 
 Learns what is normal *for one person*, then reports deviation from that — to their family
@@ -61,7 +61,8 @@ exam modules across seven clinical domains, executed by a **21-step session plan
 intensities — FULL and RESEARCH run all 21 steps in ~11m35s, STANDARD 18 steps in ~9m45s,
 LIGHT 11 steps in ~6m35s, for the days when a patient cannot manage more.
 
-Six of those modules form the **daily core**, and it is those six that fit the 90-second
+Six of those modules form the **daily core** (Daily Pulse), running in ~195s of capture —
+three to four minutes once instructions and retries are counted. Those six are the
 capture budget:
 
 | | Module | What it measures | NIHSS |

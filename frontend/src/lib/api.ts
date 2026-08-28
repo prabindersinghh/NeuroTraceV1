@@ -305,14 +305,37 @@ export const api = {
   }),
 
   // --- sessions ---
-  battery: (schedule: SessionType) => request<Battery>(`/sessions/battery/${schedule}`),
+  /** Unused today; kept for the module-schedule battery view. `schedule` is registry.py's
+   *  own daily|weekly|monthly|any vocabulary (module measurement frequency) — a DIFFERENT
+   *  namespace from `SessionType` (D-044), not that enum, despite the old shared naming. */
+  battery: (schedule: "daily" | "weekly" | "monthly" | "any") =>
+    request<Battery>(`/sessions/battery/${schedule}`),
 
   startSession: (patientId: string, payload: { type: SessionType; device_info?: unknown; offline_captured?: boolean; is_practice?: boolean; identity_verified?: boolean; identity_score?: number }) =>
     request<ExamSession>(`/sessions/${patientId}/start`, { method: "POST", json: payload }),
 
-  /** Features only. There is deliberately no media variant of this call. */
+  /** DEPRECATED — the pre-Part-2 single-protocol endpoint. Always returns COMPREHENSIVE
+   *  at the given intensity now (what the old flat daily session actually ran). */
   sessionPlan: (intensity: string) =>
     request<import("./protocol").SessionPlan>(`/sessions/plan/${intensity}`, { auth: false }),
+
+  /** Part 2: the session-type-aware protocol. Features only, no media, same as above. */
+  sessionPlanV2: (sessionType: SessionType, intensity = "FULL", dayIndex = 0) =>
+    request<import("./protocol").SessionPlan>(
+      `/sessions/plan-v2/${sessionType}?intensity=${intensity}&day_index=${dayIndex}`,
+      { auth: false },
+    ),
+
+  /** Which session is due today, per the server's cadence schedule (Part 2.3). The server
+   *  decides so the caregiver dashboard and the patient app cannot disagree. */
+  sessionDue: (patientId: string) =>
+    request<{
+      session_type: SessionType;
+      estimated_seconds: number;
+      step_count: number;
+      comprehensive_days_per_week: number;
+      next_comprehensive_date: string | null;
+    }>(`/sessions/${patientId}/due`),
 
   submitModule: (
     sessionId: string,

@@ -7,6 +7,7 @@ then no deployment mistake, log misconfiguration or breach can leak it.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.deps import CurrentUser, get_patient_for_user
 from ..db import get_session
 from ..exam.registry import MODULES, get_module, modules_for
-from ..exam.session_plan import Intensity, planned_seconds, steps_for
+from ..exam.scheduler import next_comprehensive_due, session_type_due_today
+from ..exam.session_plan import Intensity, planned_seconds, steps_for, steps_for_session_type
 from ..models import AuditLog, ExamSession, ModuleResult, Patient, SessionType
 from ..safety.fast import fast_card
 from ..schemas import (
@@ -55,27 +57,12 @@ async def battery(schedule: str) -> dict:
     }
 
 
-@router.get("/plan/{intensity}")
-async def session_plan(intensity: str) -> dict:
-    """The ordered daily protocol for one intensity. The server is the source of truth.
-
-    The frontend runs exactly this list in exactly this order. Ordering is part of the
-    measurement — each module's baseline absorbs its own position on the fatigue curve —
-    so the order ships from here, not from a constant someone edits in one place and
-    forgets in the other.
-    """
-    try:
-        # The enum's values are uppercase (they mirror the DB column); the URL is
-        # friendlier lowercase. Accept either.
-        level = Intensity(intensity.upper())
-    except ValueError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            "intensity must be full|standard|light|research")
-    steps = steps_for(level)
+def _plan_response(steps: list, *, session_type: str, intensity: str) -> dict:
     first_standing = next(
         (st.position for st in steps if st.block.value.startswith("C_")), None)
     return {
-        "intensity": level.value.lower(),
+        "session_type": session_type,
+        "intensity": intensity,
         "planned_seconds": planned_seconds(steps),
         # The fall-risk gate renders immediately before this position, full screen; the
         # standing block cannot be reached around it.
@@ -88,6 +75,75 @@ async def session_plan(intensity: str) -> dict:
             }
             for st in steps
         ],
+    }
+
+
+@router.get("/plan/{intensity}")
+async def session_plan(intensity: str) -> dict:
+    """DEPRECATED — kept for any caller still on the pre-Part-2 single-protocol model.
+
+    Always returns the full COMPREHENSIVE protocol at the requested intensity (what the
+    old flat daily session actually ran). New callers should use `/plan-v2/{session_type}`,
+    which is session-type aware and is what Daily Pulse / Comprehensive Follow-up actually
+    need — two different batteries, not one battery at different intensities.
+    """
+    try:
+        level = Intensity(intensity.upper())
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "intensity must be full|standard|light|research")
+    steps = steps_for(level)
+    return _plan_response(steps, session_type="COMPREHENSIVE", intensity=level.value.lower())
+
+
+@router.get("/plan-v2/{session_type}")
+async def session_plan_v2(session_type: str, intensity: str = "FULL",
+                          day_index: int = 0) -> dict:
+    """The ordered protocol for one SESSION TYPE — Part 2. The server is the source of
+    truth; the frontend runs exactly this list in exactly this order. Ordering is part of
+    the measurement (D-044): Daily Pulse's six modules land at identical positions
+    whichever session type they were captured through, so a module's baseline is never
+    silently blended from two different points on the fatigue curve.
+    """
+    try:
+        steps = steps_for_session_type(session_type.upper(), intensity, day_index)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return _plan_response(
+        steps, session_type=session_type.upper(), intensity=intensity.lower(),
+    )
+
+
+@router.get("/{patient_id}/due")
+async def session_due_today(patient: AuthorisedPatient) -> dict:
+    """Which session type is due for this patient today, and roughly how long it takes.
+
+    Part 2.3. The SERVER decides, not the client: the caregiver's dashboard and the
+    patient's own app both need this answer and must agree, and duplicating the cadence
+    arithmetic in the frontend is how they would drift apart.
+
+    `estimated_seconds` is raw task time from the protocol — `planned_seconds`'s own
+    docstring is explicit that real sessions run longer once instructions, framing and
+    retries are counted, so patient-facing copy should present this as a floor
+    ("about four minutes"), never as a precise promise.
+    """
+    due = session_type_due_today(
+        patient.enrolment_date, patient.comprehensive_days_per_week,
+        datetime.now(timezone.utc),
+    )
+    steps = steps_for_session_type(due.value, patient.intensity)
+    next_comp = next_comprehensive_due(
+        patient.enrolment_date, patient.comprehensive_days_per_week,
+        datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    return {
+        "session_type": due.value,
+        "estimated_seconds": planned_seconds(steps),
+        "step_count": len(steps),
+        "comprehensive_days_per_week": patient.comprehensive_days_per_week,
+        "next_comprehensive_date": (
+            next_comp.date().isoformat() if patient.comprehensive_days_per_week > 0 else None
+        ),
     }
 
 

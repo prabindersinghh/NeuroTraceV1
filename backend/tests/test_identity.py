@@ -119,7 +119,7 @@ async def test_a_failed_check_is_recorded_but_never_rejects_the_session(
     token = await register(client)
     pid = await make_patient(client, token)
     resp = await client.post(f"/sessions/{pid}/start", json={
-        "type": "daily", "identity_verified": verified, "identity_score": score,
+        "type": "DAILY_PULSE", "identity_verified": verified, "identity_score": score,
     }, headers=auth(token))
     assert resp.status_code == 201, resp.text  # accepted either way
 
@@ -128,7 +128,7 @@ async def test_a_session_that_says_nothing_about_identity_is_not_marked_suspect(
     """Omitted means 'not checked'. It must not read as 'checked and failed'."""
     token = await register(client)
     pid = await make_patient(client, token)
-    resp = await client.post(f"/sessions/{pid}/start", json={"type": "daily"},
+    resp = await client.post(f"/sessions/{pid}/start", json={"type": "DAILY_PULSE"},
                              headers=auth(token))
     assert resp.status_code == 201, resp.text
 
@@ -137,6 +137,6 @@ async def test_the_score_must_be_a_probability(client):
     token = await register(client)
     pid = await make_patient(client, token)
     resp = await client.post(f"/sessions/{pid}/start", json={
-        "type": "daily", "identity_score": 42.0,
+        "type": "DAILY_PULSE", "identity_score": 42.0,
     }, headers=auth(token))
     assert resp.status_code == 422

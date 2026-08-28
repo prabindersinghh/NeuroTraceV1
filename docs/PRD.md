@@ -76,7 +76,8 @@ the Medical Devices Rules framework is in progress. No exemption is claimed.
 FR1  Auth with roles patient | caregiver | clinician; caregiver creates patient profile.
 FR1b Enrolment records pd_diagnosis and other_movement_disorder and BLOCKS enrolment if
      either is true, with a message explaining the validated scope.
-FR2  Guided daily exam session (~90s) with audio-delivered instructions, EN/HI/PA.
+FR2  Guided Daily Pulse session (~195s capture, 3-4 min wall-clock) with audio-delivered
+     instructions, EN/HI/PA. Comprehensive Follow-up (~12 min) twice weekly — D-044.
 FR3  All feature extraction runs on-device; raw media deleted after extraction.
 FR4  Personal baseline: 14-21 days, >=3 sessions/week, first 3 sessions discarded,
      fixed time-of-day window, median+MAD statistics, per-module.
@@ -104,14 +105,17 @@ FR12 Clinician dashboard: ranked patient list, per-domain sparklines, annotated 
 FR13 Demo mode: instantly loads a seeded 21-day patient history for live pitching.
 
 ## 7. NON-FUNCTIONAL
-  · Full session must complete in <=90s on a ₹12,000 Android phone.
+  · Daily Pulse must complete in <=195s of capture on a ₹12,000 Android phone;
+    Comprehensive Follow-up in <=12 min. (Was "<=90s" for an undifferentiated "full
+    session" — a target the protocol never met, and ambiguous after the two-layer
+    split. D-044, D-045.)
   · On-device inference must work with NO internet connection.
   · Privacy: no raw biometric media leaves the device. DPDP Act 2023 aligned.
   · Every clinical computation must be deterministic, reproducible (seed=42) and auditable.
   · Accessibility: audio instructions, icon-driven UI, high contrast, one-hand operation.
 
 ## 8. SUCCESS CRITERIA (demo acceptance)
-  · Complete exam runs end-to-end on a phone, offline, in under 90 seconds.
+  · Daily Pulse runs end-to-end on a phone, offline, in ~195s of capture.
   · Seeded stable week produces ZERO alerts.
   · Seeded decline produces exactly one ALERT, with a correct plain-language explanation
     naming the specific changed findings.

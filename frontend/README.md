@@ -17,7 +17,7 @@ npm run build                        # type-check + production bundle into dist/
 | `/login` `/register` | anyone | Auth, plus the one-click demo button |
 | `/` | caregiver / clinician | Patient list |
 | `/` | patient | A single large "Begin" button, nothing else |
-| `/checkin/:patientId` | patient access | The 90-second capture flow |
+| `/checkin/:patientId` | patient access | The Daily Pulse capture flow (~195s) |
 | `/dashboard/:patientId` | caregiver / clinician | Status card, 3 trend charts, history, alert log |
 
 ## Notes

@@ -27,7 +27,7 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
 | 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
 | 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |
-| 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed; `verify_deploy.sh` **7/7** — identical band sequence on the public URL. Neon still to swap in (SQLite bridge until then) |
+| 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed on **Neon Postgres**; `verify_deploy.sh` **7/7** — identical band sequence on the public URL, and the seed survives redeploys (which container-local SQLite could not do). The first Neon boot found two dialect bugs that rendering had missed — D-014 |
 | 18 | EN / HI / PA throughout | **TEST** | All new surfaces trilingual |
 | 19 | All invariants pinned; suite green by exit code | **LIVE** | 12 invariants; `pytest` **exit 0** — 793 collected / 792 passed / 0 failed / 1 skipped (optional denylist) |
 | 20 | Privacy invariant passing; nothing pushed | **LIVE** | INV-11 green; 22 blobs purged; `preflight_push.sh` 7/7 |

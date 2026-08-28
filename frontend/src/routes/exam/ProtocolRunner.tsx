@@ -40,7 +40,7 @@ import { emptyBalanceRaw } from "@/lib/ondevice/pose";
 import { loadPlan, runnableSteps, type Intensity, type PlanStep, type SessionPlan } from "@/lib/protocol";
 import { speak, warmUpVoices } from "@/lib/speech-synthesis";
 import { taskLabel } from "@/lib/taskLabels";
-import type { FastCard as FastCardData, ModuleFeatures, Patient } from "@/lib/types";
+import type { FastCard as FastCardData, ModuleFeatures, Patient, SessionType } from "@/lib/types";
 
 import { StepAttention } from "./StepAttention";
 import { StepBalance, type BalanceTask } from "./StepBalance";
@@ -85,6 +85,7 @@ export function ProtocolRunner({ practice = false }: Props) {
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [plan, setPlan] = useState<SessionPlan | null>(null);
+  const [sessionType, setSessionType] = useState<SessionType>("COMPREHENSIVE");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [gatePassed, setGatePassed] = useState(false);
@@ -123,7 +124,21 @@ export function ProtocolRunner({ practice = false }: Props) {
         const p = await api.getPatient(patientId);
         setPatient(p);
         const intensity = (practice ? "light" : (p.intensity ?? "FULL").toLowerCase()) as Intensity;
-        const loaded = await loadPlan(intensity);
+        // Which session is due is the SERVER's decision (Part 2.3) — never recomputed here,
+        // so the app and the caregiver's dashboard cannot disagree about what today is.
+        // A practice run is always the short one: familiarisation should not cost twelve
+        // minutes. If the due-check fails we fall back to COMPREHENSIVE rather than the
+        // shorter session — missing a module is a worse failure than running extra ones.
+        let dueType: SessionType = practice ? "DAILY_PULSE" : "COMPREHENSIVE";
+        if (!practice) {
+          try {
+            dueType = (await api.sessionDue(patientId)).session_type;
+          } catch {
+            /* offline or unreachable: keep the COMPREHENSIVE default */
+          }
+        }
+        setSessionType(dueType);
+        const loaded = await loadPlan(intensity, dueType);
         setPlan(loaded);
         store.current.startedAt = performance.now();
       } catch (e) {
@@ -254,7 +269,7 @@ export function ProtocolRunner({ practice = false }: Props) {
       if (!isOnline()) throw new Error("offline");
       const identity = st.identity;
       const session = await api.startSession(patientId, {
-        type: "daily", device_info: deviceInfo, is_practice: practice,
+        type: sessionType, device_info: deviceInfo, is_practice: practice,
         // Unenrolled means "not checked": send verified, so a clinician never reads a
         // missing enrolment as a failed identity check.
         identity_verified: identity ? identity.unenrolled || identity.verified : true,
@@ -279,7 +294,7 @@ export function ProtocolRunner({ practice = false }: Props) {
       if (finalized.fast) setFast(finalized.fast);
     } catch {
       await enqueueSession({
-        localId: newLocalId(), patientId, type: "daily",
+        localId: newLocalId(), patientId, type: sessionType,
         capturedAt: new Date().toISOString(), deviceInfo,
         modules: collected, attempts: 0, isPractice: practice,
       });

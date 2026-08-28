@@ -184,6 +184,16 @@ tablet-area neglect tasks. They are excluded from the daily protocol but NOT del
 one of M9's laterality features comes from them, so removing them would un-lateralise the
 posterior domain.
 
+**INV-14 · A module's position on the fatigue curve is the same in every session type.**
+The two-protocol form of the rule `session_plan.py` has always enforced within one protocol
+(D-027: ordering is part of the measurement, not presentation). `SessionObservation` carries
+raw feature values into a baseline with no position adjustment, so a module sitting at
+position 4 in Daily Pulse and 15 in Comprehensive would blend fresh and fatigued readings
+into one "normal" — and the error masks decline, because a rested reading looks like
+improvement. Daily Pulse's six modules therefore hold positions 1-6 in **both** protocols,
+which is guaranteed by construction (both are derived from the single `PROTOCOL` tuple) and
+pinned by `test_invariants.py::test_inv14_...`. D-044.
+
 **INV-13 · No file may contain a regulatory-exemption claim.** "Outside CDSCO", "not a
 medical device" used as a classification conclusion, "wellness software" framed to avoid
 regulation, a bare "exempt", or an asserted risk class (A/B/C/D) without a completed CDSCO

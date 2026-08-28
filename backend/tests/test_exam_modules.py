@@ -115,8 +115,16 @@ def test_nihss_mappings_are_correct():
     assert MODULES["M12"].nihss_item == 11    # extinction / neglect
 
 
-def test_the_daily_battery_fits_the_ninety_second_budget():
-    """PRD §7. A battery that overruns is a battery patients abandon."""
+def test_the_daily_pulse_battery_fits_its_capture_budget():
+    """PRD §7. A battery that overruns is a battery patients abandon.
+
+    Renamed from `..._fits_the_ninety_second_budget` (D-045). The old name asserted a
+    figure the protocol never met: `DAILY_BUDGET_SECONDS` was 90, every module's `seconds`
+    had been reverse-engineered to sum to it, and this test then certified the result — so
+    the suite was enforcing the reverse-engineered number rather than the real one. The
+    budget is now the true 195s, and `test_session_type_protocols.py` cross-checks it
+    against `session_plan.py`'s per-step timings so the two files cannot drift apart again.
+    """
     assert daily_battery_seconds() <= DAILY_BUDGET_SECONDS
 
 

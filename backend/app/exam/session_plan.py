@@ -133,6 +133,96 @@ PROTOCOL: tuple[Step, ...] = (
          "Cover the camera with your fingertip. Rest your hand."),
 )
 
+#: The six DAILY-schedule modules (`exam/registry.py`) — Part 2's Daily Pulse content,
+#: exactly. Kept here rather than imported from registry.py to avoid a circular import
+#: (registry.py does not import session_plan, and should not need to).
+DAILY_PULSE_MODULES: frozenset[str] = frozenset({"M1", "M4", "M7", "M10", "M13", "M19"})
+
+
+def _renumbered(steps: tuple[Step, ...], start: int = 1) -> tuple[Step, ...]:
+    from dataclasses import replace
+    return tuple(replace(s, position=start + i) for i, s in enumerate(steps))
+
+
+# --------------------------------------------------------------- D-044: two session types
+#
+# WHY THIS IS DERIVED, NOT RETYPED. `PROTOCOL` above is the single source of truth for
+# every step's content, instructions and timing. Splitting it into Daily Pulse and
+# Comprehensive by re-deriving from it — rather than writing two new step lists by hand —
+# means there is exactly one place a task's wording or duration can be edited, and it is
+# structurally impossible for the two protocols to describe the same module differently.
+#
+# WHY DAILY-PULSE MODULES MUST LAND AT THE SAME POSITIONS IN BOTH PROTOCOLS. This is not
+# cosmetic. `SessionObservation` (engine/baseline.py) carries a module's raw feature
+# values into its baseline with NO position-adjustment — the median/MAD is computed
+# directly over whatever the module measured. If M7 (finger tapping) genuinely taps slower
+# late in a session than early (which the whole point of `within_session_fatigue_slope`
+# is to say it does), then a baseline built from M7 readings captured at position 4 in
+# Daily Pulse and position 15 in the OLD flat protocol would silently blend two different
+# physiological states into one "normal" — the exact silent corruption Part 2.4 asked to
+# rule out, just via fatigue position instead of measurement cadence. Consolidating the six
+# Daily Pulse modules at IDENTICAL positions 1-6 in both protocols removes the confound by
+# construction: they are always captured at the same point on the fatigue curve, in either
+# session type. `test_session_type_protocols.py` pins this.
+#
+# The comprehensive-only steps keep their ORIGINAL RELATIVE ORDER from `PROTOCOL`, merely
+# renumbered starting at 7 — so the fall-risk gate's position (derived dynamically by the
+# `/plan/` endpoint from `Block.C_BALANCE` membership, never hardcoded) and the >=300s gap
+# `session_plan.py`'s own `MIN_RECALL_DELAY_SECONDS` requires between M11's word-encoding
+# and delayed-recall steps are both preserved exactly as they were.
+
+DAILY_PULSE_STEPS: tuple[Step, ...] = _renumbered(
+    tuple(s for s in PROTOCOL if s.module in DAILY_PULSE_MODULES)
+)
+
+COMPREHENSIVE_STEPS: tuple[Step, ...] = DAILY_PULSE_STEPS + _renumbered(
+    tuple(s for s in PROTOCOL if s.module not in DAILY_PULSE_MODULES),
+    start=len(DAILY_PULSE_STEPS) + 1,
+)
+
+#: Raw capture time for the whole Daily Pulse, derived rather than asserted — a second
+#: hand-written constant is exactly how registry.py and this file came to disagree
+#: (D-045). ~195s of capture; 3-4 minutes wall-clock with instructions and retries.
+DAILY_PULSE_BUDGET_SECONDS = sum(s.seconds for s in DAILY_PULSE_STEPS)
+
+
+def steps_for_session_type(
+    session_type: str, intensity: Intensity | str | None = None, day_index: int = 0,
+) -> list[Step]:
+    """The ordered steps for one session TYPE — the entry point Part 2 adds.
+
+    DAILY_PULSE ignores intensity: it is already the minimal core, there is nothing left
+    to trim without dropping a module Daily Pulse exists to run every day. COMPREHENSIVE
+    defers to `steps_for`'s existing FULL/STANDARD/LIGHT trimming, applied only to the
+    positions at or after 7 (the comprehensive-only additions) — Daily Pulse's own six
+    steps are never optional or rotated, for the same position-consistency reason they are
+    never renumbered.
+    """
+    if session_type in ("DAILY_PULSE", "daily_pulse"):
+        return list(DAILY_PULSE_STEPS)
+    if session_type in ("COMPREHENSIVE", "comprehensive"):
+        level = Intensity(intensity) if intensity else Intensity.FULL
+        if level in (Intensity.FULL, Intensity.RESEARCH):
+            return list(COMPREHENSIVE_STEPS)
+        core_positions = {s.position for s in DAILY_PULSE_STEPS}
+        if level is Intensity.STANDARD:
+            return [s for s in COMPREHENSIVE_STEPS
+                    if s.position in core_positions or not s.optional_at_standard]
+        # LIGHT: Daily Pulse's six every day, plus one rotating comprehensive-only block.
+        additions = [s for s in COMPREHENSIVE_STEPS if s.position not in core_positions]
+        rotating_blocks = [Block.B_OCULAR, Block.C_BALANCE, Block.D_MOTOR]
+        today = rotating_blocks[day_index % len(rotating_blocks)]
+        return list(DAILY_PULSE_STEPS) + [
+            s for s in additions if s.core or s.block is today
+        ]
+    raise ValueError(
+        f"unknown session_type {session_type!r}; expected DAILY_PULSE or COMPREHENSIVE "
+        "(MONTHLY and ASHA_VISIT use exam/registry.py's modules_for(), not a fixed "
+        "fatigue-ordered protocol — they are not run daily, so position-on-the-fatigue-"
+        "curve is not the confound risk it is for the other two)"
+    )
+
+
 #: Never in the unsupervised daily rotation. Fall risk or hardware.
 #:
 #: Unterberger and tandem walking carry the DIRECTION of deviation — every one of M9's

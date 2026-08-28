@@ -5,7 +5,11 @@ export type Role = "patient" | "caregiver" | "clinician" | "asha_worker" | "admi
  *  for exactly the patient the laterality gate exists to protect. */
 export type Band = "STABLE" | "WATCH" | "ALERT" | "PATTERN_ATYPICAL";
 export type Lang = "en" | "hi" | "pa";
-export type SessionType = "daily" | "weekly" | "monthly";
+/** Part 2 (D-044): renamed from "daily" | "weekly" | "monthly", which described a
+ *  MODULE's measurement schedule, not a session, and never differentiated live content —
+ *  every session ran the full battery regardless. These four values now genuinely drive
+ *  what the server's `/sessions/plan-v2/{session_type}` returns. */
+export type SessionType = "DAILY_PULSE" | "COMPREHENSIVE" | "MONTHLY" | "ASHA_VISIT";
 export type BaselineState = "not_started" | "collecting" | "locked";
 export type StrokeSide = "left" | "right" | "bilateral" | "unknown";
 // DHI added with the posterior-circulation scope widening: for a patient whose deficits

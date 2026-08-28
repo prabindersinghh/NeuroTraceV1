@@ -65,7 +65,7 @@ async def run_day(session, patient: Patient, day: int, drift: float,
     rng_local = make_rng(1000 + day)
     exam = ExamSession(
         patient_id=patient.id, ts=START + timedelta(days=day, hours=hour - 9),
-        type=SessionType.daily, quality_score=quality, identity_verified=identity,
+        type=SessionType.daily_pulse, quality_score=quality, identity_verified=identity,
     )
     session.add(exam)
     await session.flush()
@@ -88,7 +88,7 @@ async def twenty_one_days(session):
     results = []
     for day, (_label, drift) in enumerate(DEMO_PLAN):
         exam = ExamSession(patient_id=patient.id, ts=START + timedelta(days=day),
-                           type=SessionType.daily)
+                           type=SessionType.daily_pulse)
         session.add(exam)
         await session.flush()
         feats = synthetic_session(rng, list(DAILY_MODULES), drift,

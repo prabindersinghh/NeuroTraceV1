@@ -1,11 +1,16 @@
 # DEPLOY — Railway + Neon
 
-> **STATUS 2026-08-23 — DEPLOYED.**
+> **STATUS 2026-08-24 — DEPLOYED ON NEON POSTGRES.**
 > Backend: `https://neurotracev1-production.up.railway.app` (`/health` → `database: up`).
 > Frontend: `https://neuro-trace-v1.vercel.app`.
 > `verify_deploy.sh`: **7 passed, 0 failed** — the deployed engine reproduces the local
-> band sequence exactly. Database is container-local SQLite until Neon: data survives a
-> restart, NOT a redeploy. Swapping in Neon is changing `DATABASE_URL` and redeploying.
+> band sequence exactly.
+>
+> The Neon swap is DONE. Note that `/health` alone does not prove it: that handler only
+> runs `SELECT 1`, so `database: up` says a database is reachable and nothing about which
+> one. The decisive evidence is persistence across a redeploy — 2026-08-23 seed rows are
+> still served by a container built from 2026-08-24 code, which container-local SQLite
+> (no volume) cannot do.
 >
 > **DONE — and the migrations did NOT run clean, despite rendering clean.** Rendering is not
 > running: `alembic upgrade --sql` emits the literal text inside `op.execute` unchanged, so a
@@ -27,9 +32,12 @@ A runbook. Follow it in order; every step is checkable.
 **Why this matters more than anything else outstanding:** the product currently works on one
 machine and nowhere else. A demo that depends on a laptop being awake is not a demo.
 
-**What I could not do:** provisioning needs your accounts and browser sign-in, and Docker
-Desktop's daemon is not running on this machine so I could not execute migrations against a
-real Postgres. Everything that could be prepared without credentials is done — Dockerfile,
+**Historical note (superseded).** This runbook was written before provisioning, when
+migrations had been rendered against the Postgres dialect but never executed — Docker
+Desktop was not running locally. That gap is now closed: the migrations HAVE run against a
+real Neon Postgres, and doing so immediately found two dialect bugs that rendering could
+never have caught (see the status block above and D-014). Everything below is retained
+because the runbook steps are still how a fresh environment is provisioned. Dockerfile,
 `railway.json`, the full migration chain rendered and read against the Postgres dialect, and
 `scripts/verify_deploy.sh`, which checks the deployed engine produces the *identical* band
 sequence rather than merely returning 200.
@@ -42,7 +50,7 @@ sequence rather than merely returning 200.
 |---|---|
 | Cost | Railway ~$5/month hobby; Neon free tier covers a demo |
 | Time | ~30 minutes |
-| Risk | Migrations have been **rendered** for Postgres, never **executed**. Step 3 is the first real test — run it against a Neon *branch*, not `main` |
+| Risk | ~~Migrations have been rendered for Postgres, never executed~~ — **now executed against a real Neon Postgres**, which found two dialect bugs on the first boot (D-014). For a NEW environment, step 3 is still the first real test: run it against a Neon *branch*, not `main` |
 
 Rendering already caught one deploy-breaking bug: migration 0003 emitted
 `DROP CONSTRAINT ck_scores_ck_scores_band_enum`, a doubled prefix naming a constraint that
@@ -237,8 +245,9 @@ railway rollback                 # previous container
 alembic downgrade <revision>     # schema, if a migration is the problem
 ```
 
-Every migration 0003–0008 round-trips `upgrade head` → `downgrade base` on SQLite. On
-Postgres the downgrades are rendered but, like the upgrades, unexecuted until step 3.
+Every migration round-trips `upgrade head` → `downgrade base` on SQLite. The upgrades have
+now also run against a real Neon Postgres; the **downgrades** on Postgres remain rendered
+but unexecuted, so a production rollback is still the least-tested path here.
 
 ---
 

@@ -80,9 +80,27 @@ class WearableMetric(str, enum.Enum):
 
 
 class SessionType(str, enum.Enum):
-    daily = "daily"
-    weekly = "weekly"
-    monthly = "monthly"
+    """What kind of session this was — TASK_FINAL_TECHNICAL_COMPLETION.md Part 2.
+
+    Renamed from `daily | weekly | monthly` (D-044): those values described a MODULE's
+    measurement schedule, not a SESSION, and the values never actually differentiated
+    session content — `weekly`/`monthly` sessions existed as a DB-level concept the
+    frontend never sent (`/battery/weekly` was reachable only by direct API call). Every
+    live session ran the full 21-step battery daily regardless of its `type`. Renaming
+    fixes that: these four values now genuinely drive what `exam/session_plan.py` runs.
+    """
+    #: The six DAILY-schedule modules only, ~195s of capture (3-4 min wall-clock).
+    #: Runs every day. The '90 seconds' this once claimed was a target the protocol
+    #: never met — D-045.
+    daily_pulse = "DAILY_PULSE"
+    #: 6-12 minutes. Daily Pulse's six modules PLUS the WEEKLY-schedule modules. Default
+    #: cadence twice weekly, configurable per patient (`exam/scheduler.py`).
+    comprehensive = "COMPREHENSIVE"
+    #: The MONTHLY-schedule modules — lowest priority, longest natural cadence.
+    monthly = "MONTHLY"
+    #: Supervised, in person. Only tier that may run SUPERVISED_ONLY fall-risk tasks
+    #: (Unterberger, tandem walk, neglect) — INV-12.
+    asha_visit = "ASHA_VISIT"
 
 
 class Band(str, enum.Enum):
@@ -184,6 +202,14 @@ class Patient(Base):
     intensity: Mapped[str] = mapped_column(
         sa.String(16), default="FULL", nullable=False)
 
+    #: How many days per week Comprehensive Follow-up is due (Part 2). Default matches the
+    #: task's stated default cadence; configurable because a frailer patient may need it
+    #: less often and an engaged one more. `exam/scheduler.py` spaces the due days evenly
+    #: across the week from `enrolment_date` rather than requiring the caregiver to pick
+    #: specific weekdays — one fewer setting, and it self-adjusts if the count changes.
+    comprehensive_days_per_week: Mapped[int] = mapped_column(
+        sa.Integer, default=2, nullable=False)
+
     #: Icon-and-audio-first presentation for a patient whose LANGUAGE is affected. This is
     #: presentation only — it changes nothing about what is measured.
     aphasia_mode: Mapped[bool] = mapped_column(
@@ -235,7 +261,8 @@ class ExamSession(Base):
         sa.ForeignKey("patients.id", ondelete="CASCADE"), index=True, nullable=False)
     ts: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), index=True, **_TS)
     type: Mapped[SessionType] = mapped_column(
-        _enum(SessionType, "session_type_enum"), default=SessionType.daily, nullable=False)
+        _enum(SessionType, "session_type_enum"), default=SessionType.daily_pulse,
+        nullable=False)
     device_info: Mapped[dict | None] = mapped_column(sa.JSON)
     # TRD §5: quality and identity gate a session out of the baseline entirely.
     quality_score: Mapped[float] = mapped_column(sa.Float, default=1.0, nullable=False)

@@ -80,7 +80,7 @@ cd frontend && npm test      # JS <-> Python parity
 | Suite | Covers |
 |---|---|
 | `test_engine.py` | median/MAD robustness, practice-session discard, quality rejection, lock condition, robust z, RCI, CUSUM accumulation and decay, both gates, IMPROVING, every confounder |
-| `test_exam_modules.py` | each of M1–M20 on a fixture; the forehead-sparing discriminator; that the asymmetry ratio separates unilateral from bilateral slowing; the 90-second budget |
+| `test_exam_modules.py` | each of M1–M20 on a fixture; the forehead-sparing discriminator; that the asymmetry ratio separates unilateral from bilateral slowing; the Daily Pulse capture budget |
 | `test_safety_slm.py` | FAST in three languages, acute bypass, forbidden-language sweep over the shipped source, band-match assertion, no-numbers-to-the-model assertion, guardrail fallback |
 | `test_session_pipeline.py` | the 21-day simulation; single-domain never alerts; two domains do; improvement never alerts; quality and identity annotation; a rogue model cannot change the band |
 | `test_api.py` | every endpoint, the enrolment gate, access control, FAST on every finalize, the acute bypass over HTTP |

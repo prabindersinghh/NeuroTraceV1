@@ -147,7 +147,7 @@ async def _make_patient(session) -> Patient:
 
 async def _run_day(session, patient, day, drift, *, modules, lateralised=True):
     exam = ExamSession(patient_id=patient.id, ts=START + timedelta(days=day),
-                       type=SessionType.daily)
+                       type=SessionType.daily_pulse)
     session.add(exam)
     await session.flush()
     feats = synthetic_session(make_rng(4000 + day), modules, drift, lateralised=lateralised)
