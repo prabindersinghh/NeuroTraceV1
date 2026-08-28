@@ -91,7 +91,7 @@ and its C3 consent in one transaction, so an unreferenced link cannot be created
   languages without review is not something I should do unattended. Listed in §6.
 
 ### Part 5 — privacy, security, data
-**5.1** `docs/ENDPOINT_DATA_AUDIT.md` — all 67 routes across 12 routers, read individually.
+**5.1** `docs/ENDPOINT_DATA_AUDIT.md` — all 70 routes across 13 routers, read individually.
 **Six access-control gaps found and fixed** (table in §3). Structural fix: every clinician
 access decision now routes through one function, `auth.deps.clinician_may_access_patient`.
 
@@ -489,7 +489,8 @@ Five commits: Part 3+4 backend · Part 4 consent · Parts 3.7e/5/8 · Part 7 · 
 
 **Numbers reconciled across documents:** migrations 0001–0017 (ARCHITECTURE, PROGRESS,
 CHANGELOG agree); six access gaps (ENDPOINT_DATA_AUDIT, CHANGELOG, PROGRESS, this report
-agree); 67 routes (ENDPOINT_DATA_AUDIT and this report agree); Daily Pulse 195s raw task time
+agree); 70 routes across 13 routers (ENDPOINT_DATA_AUDIT and this report agree — the
+figure was 67/12 before Part 4 added `consent.py`, and both were corrected together); Daily Pulse 195s raw task time
 (unchanged from D-045, not contradicted anywhere new).
 
 **One deliberate non-change:** pitch and landing-page copy were not touched, per the standing

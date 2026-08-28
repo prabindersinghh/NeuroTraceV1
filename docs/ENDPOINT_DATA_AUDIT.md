@@ -1,7 +1,7 @@
 # Endpoint data audit — Part 5.1
 
 Every route in the API, what it returns, who may call it, and why that return is minimal.
-Produced by reading all 12 router files end to end (67 routes), not by sampling.
+Produced by reading all 13 router files end to end (70 routes), not by sampling.
 
 **Six real access-control gaps were found and fixed during this audit.** They are listed
 first, because the point of the exercise was to find them, and a table of green rows would
@@ -40,7 +40,7 @@ that `CLINICIAN_SHARING` consent is currently in force. The hand-rolled copies i
 ## The rules this audit judged against
 
 - **INV-1** — raw media never leaves the device. Verified structurally: **no router
-  anywhere accepts `UploadFile`, `File(...)`, or multipart.** Zero matches across all 12
+  anywhere accepts `UploadFile`, `File(...)`, or multipart.** Zero matches across all 13
   files. `ModuleSubmit.raw` carries numbers (gaze coordinates, per-frame scalars already
   derived from landmarks on-device), never a blob.
 - **INV-6** — server-side authorisation on every scoped route. Two documented exceptions,
