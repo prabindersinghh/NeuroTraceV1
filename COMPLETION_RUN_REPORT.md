@@ -452,9 +452,13 @@ supplied hard evidence for its central requirement rather than an assertion.
 - **The Part 3 clinician frontend** — baseline review view, queue entry, ABANDONED reason
   surface.
 - **78-site `rounded-xl`/`2xl` radius doc-vs-practice drift** — untouched.
-- **`graphify-out/` is not in `.gitignore`.** It is untracked and I never staged it, but a
-  future `git add -A` would commit a 5.5 MB artefact that trips INV-11's scanner on its own
-  bait. A one-line ignore entry would close that. Not done — outside the scope ceiling.
+- ~~`graphify-out/` is not in `.gitignore`.~~ **FIXED** — and the check that said otherwise
+  was a false pass worth recording. `git check-ignore graphify-out/` exited 0, which reads
+  like "already ignored"; `git check-ignore graphify-out/GRAPH_REPORT.md` exited 1, and
+  `.gitignore` contained **zero** occurrences of the string "graphify". A bare `git add -A`
+  would have staged **163 files** — a ~5.5 MB artefact that trips INV-11's scanner on its
+  own bait, because it indexes `test_privacy.py`, which necessarily quotes the identifier
+  patterns it hunts for. Now genuinely ignored, verified by re-running `git add -An`.
 
 ### Discovered, not done — your call
 - `awaaz.py:DELETE /awaaz/cards/{card_id}` uses a hand-rolled caregiver-only check rather
