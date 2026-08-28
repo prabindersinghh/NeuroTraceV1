@@ -472,7 +472,21 @@ human face in a real room. Nothing here substitutes for §6 item 3.
      full-suite run (`test_migration.py` does `upgrade head` -> `downgrade base`), not by a
      separate verification -- see §9a.
 
-**Full-suite result: see §9a below.**
+### 9a. Full backend suite — the final gate
+
+```
+backend/   pytest -q                    1047 tests · 1046 passed · 1 skipped · 0 failed
+                                        EXIT=0
+```
+
+Run clean, with nothing else competing, against the final state of the branch. The single
+skip is `test_frontend_dist_if_built_carries_no_exemption_claim`'s sibling guard when a
+build artefact is absent; the bundle scanners themselves DID run earlier against a real
+`frontend/dist`, which is how the Part 8 bundle check was actually exercised.
+
+This settles the two caveats above: **migration 0017 round-trips** (`test_migration.py` runs
+`upgrade head` -> `downgrade base`), and `test_admin.py` passes with `/admin/doctors` in
+`ADMIN_ROUTES`.
 
 Migration round-trip: verified clean across **0001-0016** in a standalone run. **0017 is
 covered by the full-suite result in §9a rather than a separate run** -- stated this way
