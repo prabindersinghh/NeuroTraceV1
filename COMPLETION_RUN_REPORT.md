@@ -1,27 +1,33 @@
 # Autonomous completion run — report
 
-Branch `finish/autonomous-completion`, **not merged**. Five commits off `main`.
+Branch `finish/autonomous-completion`, **not merged**. Nine commits off `main`.
 Run date 2026-08-28.
 
 ---
 
 ## 1. Executive summary
 
-Parts 3 (finished), 3.7e, 4, 5, 7 (prep) and 8 are built, tested and committed. Part 6's
-functional UX work and the final beautification pass are **not done** — I ran out of run
-before reaching them, and I would rather report that plainly than claim a pass I did not
-make. The single most valuable thing this run produced is not a feature: the Part 5.1
-endpoint audit found that Part 3.2's clinician-access fix had landed in one function and
-**six other routes had each hand-rolled their own copy of the check and never received it**,
-the worst of which let any account with the clinician role read *and write* any patient's raw
-module features. A second real defect was found by probing rather than reading: deleting a
-patient destroyed their entire audit trail, because `audit_log.patient_id` cascades.
+Parts 3 (finished), 3.7e, 4, 5, 7 (prep) and 8 are built, tested and committed. Part 6 and
+the beautification pass are **partial**: 6.2 and 6.6 are done and verified in a browser, and
+the accessibility half of the beautification pass is done, but 6.1/6.3/6.4/6.5 and the broad
+spacing-and-typography sweep are not. I would rather report that plainly than claim a pass I
+did not make.
 
-Confidence is high on the backend (every claim below is test-verified by exit code, and the
-security fixes are pinned by tests asserting the *old* behaviour is gone). Confidence is
-lower on anything user-facing, because **nothing has run on a physical handset and nothing
-was deployed** — I had no credentials and did not fabricate a deploy. My own two mistakes are
-written up in §4 rather than quietly fixed.
+**The most valuable output of this run is not a feature — it is nine real defects.** The
+Part 5.1 endpoint audit found that Part 3.2's clinician-access fix had landed in one function
+while **six other routes each kept their own stale copy of the check**; the worst let any
+account with the clinician role read *and write* any patient's raw module features. Probing
+rather than reading turned up that deleting a patient destroyed their entire audit trail
+(`audit_log.patient_id` cascades). Driving the built app in a browser turned up a **PWA that
+could not install** — the manifest pointed at two icons that have never existed — and two
+screens with a broken heading outline. And a stale lowercase enum in the frontend meant four
+surfaces treated every patient as un-baselined.
+
+Confidence is high on the backend: every claim is verified by exit code, and each security
+fix is pinned by a test asserting the *old* behaviour is gone. Confidence is lower on
+anything requiring real hardware, because **nothing has run on a physical handset and nothing
+was deployed** — I had no credentials and did not fabricate a deploy. My own four mistakes
+are written up in §4 rather than quietly fixed.
 
 ML was intentionally parked for the bootcamp — **no ML work was done this run.**
 
@@ -116,8 +122,45 @@ acted on.
 - **UNVERIFIABLE HERE** — `pip-audit` / `npm audit` against a live advisory feed. No network
   access to advisory databases; the SBOM says so rather than implying a clean scan.
 
-### Part 6 — UX and session flow completion
-- **NOT DONE.** No work was performed on 6.1–6.6. See §6.
+### Part 6 — UX and session flow completion *(partial)*
+**6.2 — caregiver notification rules.** Extracted to `frontend/src/lib/notify.ts`: pure,
+no React, no network, unit-tested. Surfaced as a "Needs your attention" panel at the top of
+the dashboard. The rule that needed pinning is a NEGATIVE — **WATCH does not notify** —
+because that is the one a future "let's surface more" change erodes silently. No message
+reassures; the strings say what changed and what to do, never "everything looks fine".
+A patient who is not being monitored (baseline collecting / awaiting a doctor / abandoned)
+produces no band-derived notification, keeping the caregiver surface consistent with the
+Part 3 suppression rather than trusting it.
+
+**6.6 — session-type clarity.** The patient now sees, *before* pressing begin, whether today
+is the short or the longer check-in, roughly how many minutes it takes, how many tasks, and
+that they can pause. The duration is the server's own `estimated_seconds`, rounded **up** —
+never a number typed into the frontend, which is exactly the drift D-045 records.
+
+**Files:** `lib/notify.ts`, `lib/notify.test.ts` (12 tests), `lib/i18n.tsx` (EN/HI/PA for
+every new string), `routes/PatientHome.tsx`, `routes/Dashboard.tsx`.
+
+- **TEST-VERIFIED** — 74 frontend tests pass (up from 62), `tsc -b` and `oxlint` exit 0.
+- **LIVE-VERIFIED** — driven in a real browser against the production build (see §9b).
+- **NOT DONE:** 6.1 (retry-path uniformity audit across every task), 6.3 (Awaaz listener
+  page completion), 6.4 (identity enrolment work), 6.5 (the full instruction-copy pass).
+
+### Final beautification pass *(partial)*
+Done within the locked design system — **no token, no `.patient-scale` rule, and no colour
+semantic was changed**; `index.css` and `tailwind.config.js` are untouched in this branch.
+
+- **Colour is never the only carrier of meaning.** Every band now pairs its colour with a
+  word *and* an icon, so a colour-blind reader, a screen in sunlight, or a greyscale print
+  of the report reach the same conclusion. STABLE stays accent-blue; green stays forbidden.
+- **`aria-live="polite"` on the status line**, so a band that changes while the page is open
+  is announced rather than only re-painted. Polite, not assertive — a status change must not
+  interrupt someone mid-sentence, and this is never the emergency path.
+- **Heading outline and landmarks fixed** on login and register (see §3).
+- **PWA install fixed** (see §3) — the console is now clean on every route checked.
+
+- **NOT DONE:** the broad spacing/rhythm/typography sweep across every route, and the
+  per-dashboard density work. What is here are the accessibility and correctness items;
+  the aesthetic sweep is the part I did not reach.
 
 ### Part 7 — phone readiness (prep only, as scoped)
 **7.1** `/diagnostics` extended: FaceMesh and PoseLandmarker init time, **detection rate**,
@@ -190,6 +233,34 @@ the divergence deliberately — this is the concrete reason ordered replay is a 
 not a preference, and it is the single strongest argument in
 `docs/plans/PLAN_offline_auto_drain.md`.
 
+### A stale lowercase enum made four surfaces treat every patient as un-baselined
+`frontend/src/lib/types.ts` still declared `BaselineState` as the three pre-0015 lowercase
+values (`"not_started" | "collecting" | "locked"`). Migration 0015 replaced those with five
+uppercase ones, so `baseline_state !== "locked"` was comparing against a string the server
+can no longer send. **Four surfaces were wrong at once** — caregiver home, clinic list,
+clinician report and the dashboard all showed the "still collecting" banner permanently,
+including for patients whose baseline a clinician had confirmed.
+
+TypeScript could not catch it: the type itself was the thing that was wrong, so every
+comparison type-checked cleanly against a lie. Found by reading the Part 3 enum change back
+against the frontend rather than trusting that a backend migration had been propagated.
+
+### The PWA manifest pointed at two icons that have never existed
+Found by loading the built app in a browser. `vite.config.ts` declared `/icon-192.png` and
+`/icon-512.png`; `public/` contains only `favicon.svg` and `icons.svg`. Every page load
+logged *"Download error or resource isn't a valid image"*, so **"Add to home screen"
+produced a blank icon, and some Android versions suppress the install prompt outright when
+a manifest's icons cannot be fetched.** For this product that is not cosmetic — the
+installed PWA is the offline/airplane-mode demo. Fixed by pointing at the brand asset that
+exists rather than inventing artwork; console verified clean afterwards.
+
+### Login and register had no `main` landmark and started at `h3`
+Both render their own shell rather than `AppShell`, so they were the only routes without a
+`main` element, and their first heading was the card's hardcoded `h3` — a document outline
+beginning at level 3 with no `h1`. `CardTitle` gained an `as` escape hatch (default `h3`
+unchanged, so no other card is affected) and both screens declare their title as the `h1`.
+Verified live afterwards: `main` present, `heading [level=1]`.
+
 ### `/diagnostics` could not produce a report on a failing device
 The copy-JSON block rendered only after a successful FPS measurement, so the one device where
 nothing worked was the one device you could not get a report from. The report is now always
@@ -232,6 +303,18 @@ exactly like a hang. I did it anyway, watched a suite crawl at ~225s per test, a
 diagnosing an imaginary deadlock before checking the process list and finding an orphan from
 a timed-out foreground run. Killing it restored normal speed immediately.
 
+**I built a diagnostics page I had never looked at.** Everything in Part 7 was written,
+type-checked and shipped without once loading it in a browser. When I finally did — at the
+end, with Playwright — it worked, but the very first page load also surfaced a PWA that
+cannot install and a login screen with no `main` landmark, neither of which any amount of
+reading would have shown me. The lesson is the repo's own: a green suite is not a running
+product, and I had four clean verification gates telling me things were fine.
+
+**My Part 8 scanner's file scope silently excludes `index.html`.** It covers
+`frontend/src/**`, `docs/**` and both READMEs — which means the shipped `<title>` and meta
+description were never scanned, and they still carry the "90-second" figure D-045 corrected.
+The scanner looked comprehensive and was not; I only noticed because the browser tab told me.
+
 **A stale `PROGRESS.md` claim, corrected.** PROGRESS still said *"`consent_ref` is nullable
 and Part 4 owes it a backfill — do not let Part 4 ship without that migration."* Part 4 has
 now shipped that migration, so the note was actively misleading. Corrected in the same commit
@@ -256,35 +339,46 @@ supplied hard evidence for its central requirement rather than an assertion.
 
 ## 6. Blocked on you — prioritised
 
-1. **Part 6 (functional UX) and the final beautification pass are not done.** This is the
-   largest gap and it is mine, not a blocker: I did not reach them. Everything they depend on
-   is green, so they can start immediately.
-2. **Physical-phone validation.** `/diagnostics` and `PHONE_TEST_RESULTS.md` are prepared so
+1. **Part 6 is partial and the beautification pass is partial.** 6.2 and 6.6 are built and
+   verified; 6.1, 6.3, 6.4 and 6.5 are not. The beautification work done is the accessibility
+   and correctness half; the broad spacing/typography sweep is not done. This is the largest
+   remaining gap and it is mine, not a blocker — everything it depends on is green.
+
+2. **The shipped page title and meta description still say "90-second".** `frontend/index.html`
+   carries *"a 90-second neurological exam"* in the `<title>` and *"a 90-second daily
+   neurological check-in"* in the meta description — the figure D-045 corrected to 195s of raw
+   task time. **I did not change it**, because D-045 explicitly reserves the public-facing
+   figure for you and says the landing copy stays as it is. But that decision was recorded
+   about `Landing.tsx`, and this is the browser tab title and the SEO/social description,
+   which you may not have had in view. Related: my Part 8 scanner's file scope covers
+   `frontend/src/**` and `docs/**` but **not `index.html`**, so it would not have caught this
+   — that scope gap is mine.
+3. **Physical-phone validation.** `/diagnostics` and `PHONE_TEST_RESULTS.md` are prepared so
    the first run yields a complete record. **Nothing has executed on a handset.** Unverifiable
    until you run it: camera framing at real distances, MediaPipe FaceMesh/PoseLandmarker on
    real hardware, SVV handset tilt, real-network offline sync, battery/thermal/latency.
    *Prepared to make it fast:* copy-paste JSON, ten pre-listed failure modes to provoke, and
    a per-module grid.
-3. **Part 7.2 and 7.4 not completed.** 7.2 (a specific, actionable message for every CV
+4. **Part 7.2 and 7.4 not completed.** 7.2 (a specific, actionable message for every CV
    failure mode) and 7.4 (proving offline model loading with the network actually disabled)
    both need the browser driven end to end; the MCP browser servers were unavailable this
    session. The diagnostics page now at least *measures* model load and detection rate.
-4. **Deploy and verify (Part 9).** **Nothing was deployed and `verify_deploy.sh` was not
+5. **Deploy and verify (Part 9).** **Nothing was deployed and `verify_deploy.sh` was not
    run** — I had no credentials and will not fabricate a deploy. Everything is committed and
    deployable; `docs/DEPLOY.md` and `scripts/verify_deploy.sh` are the runbook. After
    deploying: check `/health` for `database: up`, then run the script. **Migrations 0014–0017
    must be applied**, and 0016 carries a data backfill.
-5. **The six consent texts (4.4) in EN/HI/PA.** The mechanism is complete; the strings are
+6. **The six consent texts (4.4) in EN/HI/PA.** The mechanism is complete; the strings are
    not written. Plain-language medical consent copy in three languages should not be drafted
    unattended.
-6. **Two dependency decisions** (`docs/SBOM.md`): `python-multipart` is installed and
+7. **Two dependency decisions** (`docs/SBOM.md`): `python-multipart` is installed and
    **completely unused** — the one dependency whose sole purpose is what INV-1 forbids;
    deleting one line would make the invariant structurally true rather than only test-true.
    And `passlib` is unmaintained, which is why `bcrypt` is pinned at 4.0.1; migrating off it
    is worth scheduling.
-7. **Run `pip-audit` and `npm audit`** against a live advisory feed. No network access to
+8. **Run `pip-audit` and `npm audit`** against a live advisory feed. No network access to
    advisory databases here, so the SBOM says so rather than implying a clean scan.
-8. **Approve or reject the three plans** in `docs/plans/`.
+9. **Approve or reject the three plans** in `docs/plans/`.
 
 ---
 
@@ -347,6 +441,29 @@ backend/   pytest tests/test_offline_ordering.py \
            tests/test_regulatory_claims.py                   39 passed  EXIT=0
 backend/   pytest tests/test_erasure.py + test_invariants.py            EXIT=0
 ```
+
+### 9b. Live verification in a browser (Playwright, production build)
+
+Not a test run — I drove the actual built app and read what the page really renders.
+
+```
+GET /                 landing: skip-link, banner, nav, main, contentinfo, h1/h2 outline OK
+GET /diagnostics      new rows render: Browser "Chromium 152" · OS "Windows" · Form factor
+                      report JSON present with ZERO probes run  <- the fix that mattered
+                      model probe clicked and completed:
+                        FaceMesh        496 ms load · 100% of 30 frames · 16 ms/frame
+                        PoseLandmarker  274 ms load · 100% of 30 frames · 44 ms/frame
+                        camera          15 fps measured, clock rvfc, correct sub-45fps warning
+GET /login            BEFORE: no <main>, first heading h3.  AFTER: main present, heading
+                      [level=1].  Console: 0 errors, 0 warnings.
+manifest              BEFORE: "Download error or resource isn't a valid image" on every load.
+                      AFTER: clean.
+```
+
+**Read these model numbers carefully.** They prove the *mechanism* works and that the page
+reports real measurements. They are **not** evidence about phone performance: this is desktop
+Chromium, and the 100% detection rate is against Playwright's synthetic camera pattern, not a
+human face in a real room. Nothing here substitutes for §6 item 3.
 
 **Full-suite result: see §9a below.**
 
