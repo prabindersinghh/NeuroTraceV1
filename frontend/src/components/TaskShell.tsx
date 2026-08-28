@@ -1,11 +1,24 @@
 /**
- * The universal task pattern — every task, no exceptions (SPEC v4 Part 3).
+ * The universal task pattern (SPEC v4 Part 3).
  *
  *   DEMO → INSTRUCT → POSITION → COUNTDOWN → PERFORM → QUALITY → CONFIRM
  *
- * Wrapping this in one component is not tidiness. It is what guarantees that the twentieth
- * task of a twelve-minute session behaves exactly like the first, when whoever built it was
- * tired and tempted to skip the framing guide.
+ * ⚠ NOT YET WIRED INTO THE LIVE PROTOCOL. As of 2026-08, nothing renders this component.
+ * `ProtocolRunner` imports the eleven Step* components directly and wraps them in its own
+ * frame, so the machine described below is a design, not a shipped guarantee. The header
+ * used to say "every task, no exceptions", which was read by every subsequent reader as a
+ * statement of fact about the running app — it was not, and a comment that asserts a
+ * safety property the code does not enforce is worse than no comment.
+ *
+ * Whether to route the runner through this component or retire it is a deliberate open
+ * decision, to be taken on its own branch and ideally after physical-phone validation —
+ * see UX-CHANGES.md, "Deferred — needs its own PLAN". Until then the LIVE rules are
+ * enforced in `ProtocolRunner` and pinned by `lib/taskFlow.test.ts`; the two-retry limit
+ * itself is shared from `lib/taskFlow.ts` so the two cannot drift apart.
+ *
+ * What the pattern is FOR, if it is adopted: guaranteeing that the twentieth task of a
+ * twelve-minute session behaves exactly like the first, when whoever built it was tired
+ * and tempted to skip the framing guide.
  *
  * THREE RULES THIS ENFORCES STRUCTURALLY
  *
@@ -26,6 +39,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useI18n } from "../lib/i18n";
 import { Button } from "./ui/button";
+import { MAX_RETRIES } from "../lib/taskFlow";
 
 export type Phase =
   | "demo" | "instruct" | "position" | "countdown" | "perform" | "quality" | "confirm";
@@ -57,15 +71,19 @@ export interface TaskShellProps {
   assessQuality?: () => boolean;
 }
 
-const MAX_RETRIES = 2;
 
 const COPY = {
   ready: { en: "Ready", hi: "तैयार", pa: "ਤਿਆਰ" },
   watch: { en: "Watch how", hi: "देखिए कैसे", pa: "ਦੇਖੋ ਕਿਵੇਂ" },
+  // The outline renders `border-accent` — BLUE. This copy said "green" in all three
+  // languages, which was both factually wrong and a reference to a colour the design
+  // system forbids as a status (index.css: a green "all clear" invites a family to stop
+  // looking). Describing the shape rather than the colour also survives any future
+  // re-theming, and works for a patient who cannot distinguish the two hues.
   position: {
-    en: "Move so the outline turns green",
-    hi: "ऐसे बैठिए कि रूपरेखा हरी हो जाए",
-    pa: "ਇਸ ਤਰ੍ਹਾਂ ਬੈਠੋ ਕਿ ਰੂਪਰੇਖਾ ਹਰੀ ਹੋ ਜਾਵੇ",
+    en: "Move until the outline lights up",
+    hi: "रूपरेखा जगमगाने तक अपनी जगह ठीक कीजिए",
+    pa: "ਰੂਪਰੇਖਾ ਜਗਮਗਾਉਣ ਤੱਕ ਆਪਣੀ ਥਾਂ ਠੀਕ ਕਰੋ",
   },
   start: { en: "Start", hi: "शुरू करें", pa: "ਸ਼ੁਰੂ ਕਰੋ" },
   pause: { en: "Pause", hi: "रोकें", pa: "ਰੋਕੋ" },
