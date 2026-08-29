@@ -96,3 +96,18 @@ frontend/*.mjs
 # like a pass and is not one - the files inside were never matched, and `git add -A` would
 # have staged 163 of them.
 graphify-out/
+
+# Video, unconditionally (INV-11).
+#
+# Three recordings sat untracked in the repo root - two screen captures and one named after
+# a person. Untracked is not ignored: `git add -A` would have staged all three, and the
+# preflight's media checks look for IMAGE extensions, so nothing downstream would have
+# caught it. A screen recording of this product shows patient-facing screens by definition,
+# and a file named after someone is the exact thing INV-11 exists to keep out.
+#
+# No exception list here on purpose. Demo footage belongs in the deck, not the repository.
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
