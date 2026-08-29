@@ -10,6 +10,9 @@
  * four requests at once does not burn four refresh tokens.
  */
 import type {
+  CaretakerLink,
+  CaretakerRelationship,
+  NotificationChannel,
   AcuteResponse,
   AcuteSymptom,
   AshaHousehold,
@@ -183,6 +186,47 @@ export const api = {
     full_name?: string;
     lang?: string;
   }) => request<AuthResponse>("/auth/register", { method: "POST", json: payload, auth: false }),
+
+  // --- caretakers: family access, owning-caregiver only (D-054) ---------------------
+  //
+  // Every one of these 403s for anyone but the owning caregiver, enforced server-side. The
+  // UI hides them from other roles for clarity, never as the boundary — that is INV-6.
+  listCaretakers: (patientId: string) =>
+    request<{ patient_id: string; caretakers: CaretakerLink[] }>(
+      `/caretakers/links/${patientId}`),
+
+  addCaretaker: (payload: {
+    patient_id: string;
+    email: string;
+    full_name: string;
+    relationship: CaretakerRelationship;
+  }) =>
+    request<{
+      id: string;
+      caretaker_id: string;
+      consent_ref: string | null;
+      /** Always false for now: accounts are created disabled until the auth pass adds an
+       *  invite flow. The UI says so rather than implying the person can sign in. */
+      login_enabled: boolean;
+      detail: string;
+    }>("/caretakers/links", { method: "POST", json: payload }),
+
+  revokeCaretaker: (linkId: string, reason: string) =>
+    request<{ detail: string }>(
+      `/caretakers/links/${linkId}?reason=${encodeURIComponent(reason)}`,
+      { method: "DELETE" }),
+
+  addCaretakerChannel: (payload: {
+    patient_id: string;
+    caretaker_id: string;
+    channel: NotificationChannel;
+    destination: string;
+  }) =>
+    request<{ id: string; channel: string; verified: boolean }>(
+      "/caretakers/channels", { method: "POST", json: payload }),
+
+  revokeCaretakerChannel: (channelId: string) =>
+    request<{ detail: string }>(`/caretakers/channels/${channelId}`, { method: "DELETE" }),
 
   login: (payload: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", json: payload, auth: false }),

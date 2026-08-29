@@ -1,4 +1,27 @@
-export type Role = "patient" | "caregiver" | "clinician" | "asha_worker" | "admin";
+/** `caretaker` is family ADDITIONAL to the caregiver who enrolled the patient — a second
+ *  sibling, a relative abroad. They see everything clinical about their own linked patient
+ *  and nothing about anyone else's; the caregiver keeps consent, linking and erasure.
+ *  See docs/plans/PLAN_caretaker_onboarding.md and D-054. */
+export type Role =
+  | "patient"
+  | "caregiver"
+  | "clinician"
+  | "asha_worker"
+  | "admin"
+  | "caretaker";
+
+export type CaretakerRelationship = "SON" | "DAUGHTER" | "SPOUSE" | "SIBLING" | "OTHER";
+export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL";
+
+export interface CaretakerLink {
+  id: string;
+  caretaker_id: string;
+  full_name: string | null;
+  relationship: CaretakerRelationship;
+  active: boolean;
+  linked_at: string;
+  unlinked_at: string | null;
+}
 /** PATTERN_ATYPICAL is a real band the engine emits, not a placeholder: persistent,
  *  cross-modal, but SYMMETRIC change. Leaving it out of this union is how the dashboard
  *  came to crash on it — `BAND_STYLE[band]` returned undefined and `style.ring` threw,

@@ -249,6 +249,77 @@ export const STRINGS = {
   startCheckin: { en: "Start check-in", hi: "जाँच शुरू करें", pa: "ਜਾਂਚ ਸ਼ੁਰੂ ਕਰੋ" },
   buildingBaseline: { en: "Learning their normal", hi: "उनका सामान्य स्तर सीख रहे हैं", pa: "ਉਹਨਾਂ ਦਾ ਆਮ ਪੱਧਰ ਸਿੱਖ ਰਹੇ ਹਾਂ" },
 
+  // --- family caretaker access (D-054) ---
+  // "Family" in the UI, `caretaker` in the code. Nobody calls their son a caretaker, and a
+  // screen that used the schema's word would read as institutional rather than domestic.
+  familyTitle: { en: "Your family member", hi: "आपके परिवार का सदस्य", pa: "ਤੁਹਾਡੇ ਪਰਿਵਾਰ ਦਾ ਮੈਂਬਰ" },
+  familySubtitle: {
+    en: "Everything their daily check-ins show.",
+    hi: "उनकी रोज़ाना जाँच जो कुछ दिखाती है, सब कुछ।",
+    pa: "ਉਹਨਾਂ ਦੀਆਂ ਰੋਜ਼ਾਨਾ ਜਾਂਚਾਂ ਜੋ ਵੀ ਦਿਖਾਉਂਦੀਆਂ ਹਨ, ਸਭ ਕੁਝ।",
+  },
+  familyNoPatients: {
+    en: "Nobody has shared a family member with you yet.",
+    hi: "अभी तक किसी ने आपके साथ कोई सदस्य साझा नहीं किया है।",
+    pa: "ਹਾਲੇ ਤੱਕ ਕਿਸੇ ਨੇ ਤੁਹਾਡੇ ਨਾਲ ਕੋਈ ਮੈਂਬਰ ਸਾਂਝਾ ਨਹੀਂ ਕੀਤਾ।",
+  },
+  familyOpenStatus: { en: "See how they are", hi: "देखें वे कैसे हैं", pa: "ਦੇਖੋ ਉਹ ਕਿਵੇਂ ਹਨ" },
+  familyOpenReport: { en: "Full report", hi: "पूरी रिपोर्ट", pa: "ਪੂਰੀ ਰਿਪੋਰਟ" },
+  familyScopeNote: {
+    en: "You can see everything about them. Changing their settings, adding other family members, and removing their data stay with whoever set up their account.",
+    hi: "आप उनके बारे में सब कुछ देख सकते हैं। उनकी सेटिंग बदलना, परिवार के और सदस्य जोड़ना और उनका डेटा हटाना — ये उनके पास रहते हैं जिन्होंने खाता बनाया।",
+    pa: "ਤੁਸੀਂ ਉਹਨਾਂ ਬਾਰੇ ਸਭ ਕੁਝ ਦੇਖ ਸਕਦੇ ਹੋ। ਉਹਨਾਂ ਦੀਆਂ ਸੈਟਿੰਗਾਂ ਬਦਲਣਾ, ਹੋਰ ਪਰਿਵਾਰਕ ਮੈਂਬਰ ਜੋੜਨਾ ਅਤੇ ਉਹਨਾਂ ਦਾ ਡਾਟਾ ਹਟਾਉਣਾ — ਇਹ ਉਸ ਕੋਲ ਰਹਿੰਦੇ ਹਨ ਜਿਸ ਨੇ ਖਾਤਾ ਬਣਾਇਆ।",
+  },
+
+  familyAccessTitle: { en: "Family access", hi: "पारिवारिक पहुँच", pa: "ਪਰਿਵਾਰਕ ਪਹੁੰਚ" },
+  familyAccessSubtitle: {
+    en: "Who else in the family can see how they are doing.",
+    hi: "परिवार में और कौन देख सकता है कि वे कैसे हैं।",
+    pa: "ਪਰਿਵਾਰ ਵਿੱਚ ਹੋਰ ਕੌਣ ਦੇਖ ਸਕਦਾ ਹੈ ਕਿ ਉਹ ਕਿਵੇਂ ਹਨ।",
+  },
+  familyAccessWarning: {
+    en: "A family member you add sees the same full picture you do — every check-in, every change, every report. Add only people you would show it to in person.",
+    hi: "जिस सदस्य को आप जोड़ेंगे उसे वही पूरी जानकारी दिखेगी जो आपको दिखती है — हर जाँच, हर बदलाव, हर रिपोर्ट। सिर्फ़ उन्हें जोड़ें जिन्हें आप ख़ुद यह दिखाते।",
+    pa: "ਜਿਸ ਮੈਂਬਰ ਨੂੰ ਤੁਸੀਂ ਜੋੜੋਗੇ ਉਸ ਨੂੰ ਉਹੀ ਪੂਰੀ ਜਾਣਕਾਰੀ ਦਿਖੇਗੀ ਜੋ ਤੁਹਾਨੂੰ ਦਿਖਦੀ ਹੈ — ਹਰ ਜਾਂਚ, ਹਰ ਬਦਲਾਅ, ਹਰ ਰਿਪੋਰਟ। ਸਿਰਫ਼ ਉਹਨਾਂ ਨੂੰ ਜੋੜੋ ਜਿਨ੍ਹਾਂ ਨੂੰ ਤੁਸੀਂ ਖ਼ੁਦ ਇਹ ਦਿਖਾਉਂਦੇ।",
+  },
+  familyAdd: { en: "Add a family member", hi: "सदस्य जोड़ें", pa: "ਮੈਂਬਰ ਜੋੜੋ" },
+  familyAddHint: {
+    en: "They will be able to sign in once invitations are switched on.",
+    hi: "जब निमंत्रण चालू होंगे तब वे साइन इन कर सकेंगे।",
+    pa: "ਜਦੋਂ ਸੱਦੇ ਚਾਲੂ ਹੋਣਗੇ ਤਾਂ ਉਹ ਸਾਈਨ ਇਨ ਕਰ ਸਕਣਗੇ।",
+  },
+  familyInvitePending: {
+    en: "Added. They cannot sign in yet — invitations are not switched on, so nothing has been sent to them.",
+    hi: "जोड़ दिया गया। वे अभी साइन इन नहीं कर सकते — निमंत्रण चालू नहीं हैं, इसलिए उन्हें कुछ नहीं भेजा गया।",
+    pa: "ਜੋੜ ਦਿੱਤਾ ਗਿਆ। ਉਹ ਹਾਲੇ ਸਾਈਨ ਇਨ ਨਹੀਂ ਕਰ ਸਕਦੇ — ਸੱਦੇ ਚਾਲੂ ਨਹੀਂ ਹਨ, ਇਸ ਲਈ ਉਹਨਾਂ ਨੂੰ ਕੁਝ ਨਹੀਂ ਭੇਜਿਆ ਗਿਆ।",
+  },
+  familyName: { en: "Their name", hi: "उनका नाम", pa: "ਉਹਨਾਂ ਦਾ ਨਾਮ" },
+  familyEmail: { en: "Their email", hi: "उनका ईमेल", pa: "ਉਹਨਾਂ ਦਾ ਈਮੇਲ" },
+  familyRelationship: { en: "Relation to the patient", hi: "मरीज़ से रिश्ता", pa: "ਮਰੀਜ਼ ਨਾਲ ਰਿਸ਼ਤਾ" },
+  familyActive: { en: "Can see them now", hi: "अभी देख सकते हैं", pa: "ਹੁਣ ਦੇਖ ਸਕਦੇ ਹਨ" },
+  familyNone: { en: "No other family member has access yet.", hi: "अभी किसी और सदस्य के पास पहुँच नहीं है।", pa: "ਹਾਲੇ ਕਿਸੇ ਹੋਰ ਮੈਂਬਰ ਕੋਲ ਪਹੁੰਚ ਨਹੀਂ ਹੈ।" },
+  familyPast: { en: "No longer has access", hi: "अब पहुँच नहीं है", pa: "ਹੁਣ ਪਹੁੰਚ ਨਹੀਂ ਹੈ" },
+  familyPastNote: {
+    en: "Kept on purpose, so it stays clear who could see this and until when.",
+    hi: "जानबूझकर रखा गया है, ताकि साफ़ रहे कि कौन कब तक देख सकता था।",
+    pa: "ਜਾਣਬੁੱਝ ਕੇ ਰੱਖਿਆ ਗਿਆ ਹੈ, ਤਾਂ ਜੋ ਸਾਫ਼ ਰਹੇ ਕਿ ਕੌਣ ਕਦੋਂ ਤੱਕ ਦੇਖ ਸਕਦਾ ਸੀ।",
+  },
+  familyMember: { en: "Family member", hi: "परिवार का सदस्य", pa: "ਪਰਿਵਾਰ ਦਾ ਮੈਂਬਰ" },
+  familyRemove: { en: "Remove access", hi: "पहुँच हटाएँ", pa: "ਪਹੁੰਚ ਹਟਾਓ" },
+  familyRemoveReason: {
+    en: "Why are you removing their access?",
+    hi: "आप उनकी पहुँच क्यों हटा रहे हैं?",
+    pa: "ਤੁਸੀਂ ਉਹਨਾਂ ਦੀ ਪਹੁੰਚ ਕਿਉਂ ਹਟਾ ਰਹੇ ਹੋ?",
+  },
+  familyAddedOn: { en: "added", hi: "जोड़ा गया", pa: "ਜੋੜਿਆ ਗਿਆ" },
+  familyRemovedOn: { en: "removed", hi: "हटाया गया", pa: "ਹਟਾਇਆ ਗਿਆ" },
+
+  relSON: { en: "Son", hi: "बेटा", pa: "ਪੁੱਤਰ" },
+  relDAUGHTER: { en: "Daughter", hi: "बेटी", pa: "ਧੀ" },
+  relSPOUSE: { en: "Spouse", hi: "जीवनसाथी", pa: "ਜੀਵਨ ਸਾਥੀ" },
+  relSIBLING: { en: "Brother or sister", hi: "भाई या बहन", pa: "ਭਰਾ ਜਾਂ ਭੈਣ" },
+  relOTHER: { en: "Other family", hi: "अन्य परिजन", pa: "ਹੋਰ ਪਰਿਵਾਰ" },
+
   // --- what reaches the caregiver (Part 6.2) ---
   // NONE of these reassure. "Everything looks fine" is a claim this product cannot make -
   // it watches a handful of features for a few minutes a day. Silence means "nothing

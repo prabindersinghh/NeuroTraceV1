@@ -20,6 +20,8 @@ import { Login } from "@/routes/Login";
  * plus a second round trip, which is worse on exactly the connections this is built for.
  */
 const CaregiverHome = lazy(() => import("@/routes/CaregiverHome").then((m) => ({ default: m.CaregiverHome })));
+const CaretakerHome = lazy(() => import("@/routes/CaretakerHome").then((m) => ({ default: m.CaretakerHome })));
+const FamilyAccess = lazy(() => import("@/routes/FamilyAccess").then((m) => ({ default: m.FamilyAccess })));
 const Clinic = lazy(() => import("@/routes/Clinic").then((m) => ({ default: m.Clinic })));
 const ClinicianReport = lazy(() => import("@/routes/ClinicianReport"));
 const Dashboard = lazy(() => import("@/routes/Dashboard").then((m) => ({ default: m.Dashboard })));
@@ -82,6 +84,11 @@ function Home() {
   const { user } = useAuth();
   if (user?.role === "patient") return <PatientHome />;
   if (user?.role === "clinician") return <Clinic />;
+  // Family, ADDITIONAL to the caregiver who enrolled the patient (D-054). Before this
+  // branch a caretaker fell through to CaregiverHome and was shown an "add a patient" form
+  // and an enrolment flow that 403s — a control that cannot work reads as a broken product
+  // rather than a boundary.
+  if (user?.role === "caretaker") return <CaretakerHome />;
   return <CaregiverHome />;
 }
 
@@ -110,6 +117,7 @@ export default function App() {
           <Route path="/awaaz/:patientId" element={<RequireAuth><Awaaz /></RequireAuth>} />
           <Route path="/onboarding/:patientId" element={<RequireAuth><Onboarding /></RequireAuth>} />
           <Route path="/exam/:patientId/practice" element={<RequireAuth><ExamPractice /></RequireAuth>} />
+          <Route path="/family/:patientId" element={<RequireAuth><FamilyAccess /></RequireAuth>} />
           <Route path="/dashboard/:patientId" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

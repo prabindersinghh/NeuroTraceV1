@@ -7,7 +7,7 @@
  * would put them in a product that structurally cannot watch for what threatens them.
  * The form says so plainly rather than letting the server reject it silently.
  */
-import { ChevronRight, Plus, Stethoscope } from "lucide-react";
+import { ChevronRight, Plus, Stethoscope, Users } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -145,6 +145,17 @@ function PatientCard({ patient }: { patient: Patient }) {
           )}
         >
           {t("startCheckin")}
+        </Link>
+        {/* Family access lives on the patient card because it is a per-patient decision,
+            not an account-wide one: a caregiver managing two parents shares each of them
+            with a different set of relatives. Owning-caregiver only (D-054) — the server
+            403s anyone else, and this surface is simply not offered to them. */}
+        <Link
+          to={`/family/${patient.id}`}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "w-full")}
+        >
+          <Users className="mr-1 h-4 w-4" aria-hidden />
+          {t("familyAccessTitle")}
         </Link>
       </CardContent>
     </Card>
