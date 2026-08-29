@@ -23,7 +23,7 @@ from __future__ import annotations
 import uuid
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 revision = "0016"
 down_revision = "0015"
@@ -73,6 +73,23 @@ def upgrade() -> None:
     # identically on both SQLite and Postgres. The number of pre-Part-4 links is small
     # (real clinician relationships, not synthetic bulk data), so row-by-row is not a
     # performance concern here the way a synthetic-fixture backfill might be.
+    # OFFLINE-MODE GUARD. `alembic upgrade --sql` has no live connection, so `bind.execute`
+    # returns None and this backfill raised `AttributeError: 'NoneType' has no attribute
+    # 'fetchall'` — which stopped the Postgres RENDER dead at 0016 and silently took the
+    # portability check for every later migration with it. That check is how this repo
+    # catches SQLite-isms before a real Postgres does (D-014), so losing it is worse than it
+    # looks.
+    #
+    # A data backfill cannot be expressed as static SQL anyway: it reads rows to decide what
+    # to write. In offline mode it is therefore skipped with a visible marker in the emitted
+    # script, rather than pretending to have run.
+    if context.is_offline_mode():
+        op.execute(
+            "-- SKIPPED IN OFFLINE MODE: consent_ref backfill reads existing rows. "
+            "Run this migration against a live connection (D-046)."
+        )
+        return
+
     bind = op.get_bind()
     links = bind.execute(sa.text(
         "SELECT id, patient_id, linked_at, linked_by FROM patient_clinician_links "

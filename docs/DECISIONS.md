@@ -827,8 +827,9 @@ be provably correct *before* the first real caretaker can sign in, not after.
 **D-055 · 2026-08-29 · OPEN — a migrated SQLite schema carries stale duplicate CHECK
 constraints, and `patients` is un-insertable because of it.**
 
-**Status: ONE HALF FIXED, ONE HALF OPEN. The open half is a deploy risk and needs a
-reviewed change.**
+**Status: RESOLVED 2026-08-29. Three tables were affected, not two. Fixed in 0018 and 0020,
+with 0015's Postgres deploy blocker removed and a regression test that compares the two
+schema paths directly.**
 
 Found while writing the caretaker migration tests — the first tests in this repo that insert
 a privileged user or a patient into an **alembic-migrated** database rather than one built by
@@ -882,3 +883,70 @@ being quietly forgotten.
 **Not affected:** every functional test and the running application, which build the schema
 from `Base.metadata` where the convention applies uniformly and only one constraint exists.
 The bug lives strictly in the migration path.
+
+---
+
+### D-055, RESOLVED — the full account
+
+**It was three tables, not two.** A table-by-table diff of a migrated database against a
+`create_all` database — the check that had never been run — found `patients`, `scores` and
+`alerts` diverging, on top of the `users` case already fixed in 0018. What each divergence
+actually cost:
+
+| Table | Consequence on a migrated database |
+|---|---|
+| `patients` | **No `baseline_state` value was insertable.** No patient could be created at all. |
+| `scores`, `alerts` | **`PATTERN_ATYPICAL` was unstorable** — the band that keeps a Parkinson's patient out of the stroke-alert path (INV-2). |
+| `users` | `asha_worker`, `admin`, `caretaker` could not be created (fixed in 0018). |
+
+**The root cause was not naming — it was reflection.** The tempting diagnosis is a prefix
+mismatch between the bare `sa.Enum(name=...)` constraint and the convention-prefixed one, to
+be fixed by passing a naming convention to `batch_alter_table`. That was tried and it failed,
+because one layer down **SQLAlchemy's SQLite CHECK reflection mis-parses multi-constraint
+DDL**: asked to reflect `CONSTRAINT pk_t PRIMARY KEY (id), CONSTRAINT state_enum CHECK (...)`
+it returns the name as `"pk_t PRIMARY KEY (id), CONSTRAINT state_enum"`. Batch mode cannot
+match a name that was never parsed, so it re-emits the constraint mangled and alongside the
+new one. No naming convention repairs that.
+
+**The fix** is `batch_alter_table(..., copy_from=...)`, which skips reflection and rebuilds
+from the Table it is given — `Base.metadata.tables[...]`, the same definition `create_all`
+uses, so the migrated schema converges on the model by construction rather than by drops that
+guess at names. Three details had to be right, each found by testing:
+
+1. The copy must be **detached** (`to_metadata`), or the live application metadata is mutated.
+2. The **naming convention must be carried onto the copy**, or the constraints land bare.
+3. The **enum type's own `name` is what becomes the constraint name** under `copy_from` — a
+   table-level `CheckConstraint` is ignored entirely. Prefixing the type name is what makes
+   the rebuild match `create_all`.
+
+And `copy_from` **does not carry indexes**: `patients` went from three to none, and the next
+downgrade failed on `DROP INDEX ix_patients_asha_worker_id`. They are recreated from the same
+model definition.
+
+**0015's deploy blocker is removed.** It emitted
+`ALTER TABLE patients DROP CONSTRAINT ck_patients_baseline_state_enum` — a name that has never
+existed on either dialect — which would have failed the next Neon deploy outright. Both
+candidate spellings are now dropped with `IF EXISTS`, and the SQLite path leaves constraint
+work to 0020, which is the only mechanism that converges there.
+
+**Two further defects were caught by rendering rather than by running:**
+
+- `0020`'s Postgres branch first emitted `CHECK (col IN (__[POSTCOMPILE_param_1]))` — a bind
+  placeholder, not SQL. It would have rendered happily and failed the moment Postgres parsed
+  it, which is precisely what D-014 exists to catch. The CHECK text is now built from the
+  enum values literally.
+- `0016`'s consent backfill raised `AttributeError` under `alembic upgrade --sql`, because
+  `bind.execute` returns None with no live connection. That stopped the Postgres render at
+  0016 and silently took the portability check for every later migration with it. It now
+  skips with a visible marker in offline mode.
+
+**Verified:** the schema diff reports **no mismatches on any table**; every previously-blocked
+value inserts against the migrated schema (five roles, five baseline states, all four bands in
+both `scores` and `alerts`); `upgrade head` → `downgrade base` round-trips clean (INV-7); and
+the chain renders valid literal SQL for Postgres.
+
+**Guarded by two new tests** in `test_migration.py`:
+`test_the_migrated_schema_matches_create_all` (the diff that never existed, comparing names as
+well as presence) and `test_every_role_and_band_is_insertable_after_migration` (the
+behavioural half — a clean constraint diff can still be wrong).
+

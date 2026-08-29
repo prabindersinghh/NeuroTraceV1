@@ -88,19 +88,6 @@ def test_downgrade_removes_the_schema(migrated_db: Path):
     assert remaining == set()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "BLOCKED BY A PRE-EXISTING MIGRATION DEFECT, not by this feature. A migrated "
-        "SQLite `patients` table carries two conflicting baseline_state CHECK constraints "
-        "— `baseline_state_enum` (lowercase, from 0002) and "
-        "`ck_patients_baseline_state_enum` (uppercase, from 0015) — so NO value satisfies "
-        "both and no patient row can be inserted. This test needs a real patient because "
-        "env.py refuses a migration that leaves a dangling foreign key. Marked strict so it "
-        "turns into a failure the moment the defect is fixed, rather than being forgotten. "
-        "See COMPLETION_RUN_REPORT / the caretaker report for the full diagnosis."
-    ),
-)
 def test_downgrading_0019_deletes_only_caretaker_consents(migrated_db: Path):
     """0019's downgrade removes C7 rows. It must remove NOTHING ELSE.
 
@@ -201,3 +188,128 @@ def test_downgrading_0018_demotes_caretakers_instead_of_deleting_them(migrated_d
 
     assert len(rows) == 1, "the caretaker account was DELETED on downgrade (INV-7)"
     assert rows[0][0] == "caregiver", f"demoted to {rows[0][0]!r}, expected 'caregiver'"
+
+
+def test_the_migrated_schema_matches_create_all(migrated_db: Path):
+    """D-055's regression guard: the migrated schema and the `create_all` schema must agree
+    on every CHECK constraint, on every table.
+
+    This is the check that did not exist, and its absence is why three tables drifted
+    unnoticed for months. Every functional test builds the schema with
+    `Base.metadata.create_all()`, so the migrated path was never compared against it — and
+    the divergence was not cosmetic: `patients` could not accept ANY `baseline_state`,
+    `scores` and `alerts` could not store `PATTERN_ATYPICAL`, and `users` could not hold an
+    `asha_worker`, `admin` or `caretaker`.
+
+    Compares NAMES as well as presence. A constraint that is right in substance but differs
+    in name is exactly what enabled the bug: `drop_constraint("band_enum")` under batch mode
+    prefixes the name, so it hits on one schema and misses on the other.
+    """
+    import asyncio
+    import re
+
+    from sqlalchemy import MetaData
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from app.models import Base
+
+    created = migrated_db.parent / "created_check.sqlite3"
+
+    async def build() -> None:
+        eng = create_async_engine(f"sqlite+aiosqlite:///{created.as_posix()}")
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await eng.dispose()
+
+    asyncio.run(build())
+
+    def checks(db: Path) -> dict[str, set[str]]:
+        con = sqlite3.connect(db)
+        try:
+            out = {}
+            for name, sql in con.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL"
+            ):
+                if name.startswith("sqlite_") or name == "alembic_version":
+                    continue
+                out[name] = set(re.findall(r"CONSTRAINT\s+(\w+)\s+CHECK", sql or ""))
+            return out
+        finally:
+            con.close()
+
+    mig, cre = checks(migrated_db), checks(created)
+    drift = {
+        table: {"migrated_only": sorted(mig.get(table, set()) - cre.get(table, set())),
+                "create_all_only": sorted(cre.get(table, set()) - mig.get(table, set()))}
+        for table in sorted(set(mig) | set(cre))
+        if mig.get(table, set()) != cre.get(table, set())
+    }
+    assert drift == {}, (
+        "the migrated schema and the create_all schema disagree about CHECK constraints. "
+        "That divergence is D-055, and it made three tables partly or wholly "
+        f"un-insertable.\n{drift}"
+    )
+
+
+def test_every_role_and_band_is_insertable_after_migration(migrated_db: Path):
+    """The behavioural half of D-055, asserted on the MIGRATED schema.
+
+    A constraint diff can look clean and still be wrong, so this inserts the values that
+    were actually blocked: three roles, four baseline states, and the PATTERN_ATYPICAL band
+    in both tables that carry it.
+    """
+    import uuid as uuid_module
+
+    con = sqlite3.connect(migrated_db)
+    try:
+        now = "2026-08-29 00:00:00"
+        for role in ("caregiver", "clinician", "asha_worker", "admin", "caretaker"):
+            con.execute(
+                "INSERT INTO users (id, email, pw_hash, role, created_at) VALUES (?,?,?,?,?)",
+                (str(uuid_module.uuid4()), f"{role}@example.com", "h", role, now),
+            )
+
+        owner = str(uuid_module.uuid4())
+        con.execute(
+            "INSERT INTO users (id, email, pw_hash, role, created_at) VALUES (?,?,?,?,?)",
+            (owner, "owner@example.com", "h", "caregiver", now),
+        )
+        for state in ("NOT_STARTED", "IN_PROGRESS", "DOCTOR_REVIEW_PENDING",
+                      "LOCKED", "ABANDONED"):
+            con.execute(
+                "INSERT INTO patients (id, caregiver_id, name, stroke_side, baseline_state,"
+                " intensity, comprehensive_days_per_week, pd_diagnosis,"
+                " other_movement_disorder, aphasia_mode, onboarding_complete,"
+                " deployment_tier, enrolment_date, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (str(uuid_module.uuid4()), owner, "T", "unknown", state, "FULL", 2,
+                 0, 0, 0, 0, "TIER_1_PHONE", now, now),
+            )
+
+        # PATTERN_ATYPICAL is the band that keeps a Parkinson's patient out of the stroke
+        # alert path (INV-2). It was unstorable on a migrated database.
+        for band in ("STABLE", "WATCH", "ALERT", "PATTERN_ATYPICAL"):
+            patient = str(uuid_module.uuid4())
+            session_id = str(uuid_module.uuid4())
+            con.execute(
+                "INSERT INTO sessions (id, patient_id, ts, type, quality_score,"
+                " identity_verified, off_window, completed, offline_captured, is_practice)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (session_id, patient, now, "DAILY_PULSE", 1.0, 1, 0, 0, 0, 0),
+            )
+            con.execute(
+                "INSERT INTO scores (id, patient_id, session_id, domain_devs_json, band,"
+                " gate1_passed, gate2_passed, gate3_passed, symmetric_pattern,"
+                " cumulative_drift, drift_flagged, confidence, improving, baseline_phase,"
+                " explanation_source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (str(uuid_module.uuid4()), patient, session_id, "{}", band,
+                 0, 0, 0, 0, 0.0, 0, 1.0, 0, 0, "template", now),
+            )
+            con.execute(
+                "INSERT INTO alerts (id, patient_id, score_id, band, explanation_en,"
+                " created_at) VALUES (?,?,?,?,?,?)",
+                (str(uuid_module.uuid4()), patient, str(uuid_module.uuid4()), band, "x", now),
+            )
+        con.commit()
+    finally:
+        con.close()
