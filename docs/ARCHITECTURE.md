@@ -62,7 +62,7 @@ per-request cost to users with intermittent data.
 
 | Table | Holds |
 |---|---|
-| `users` | accounts; role ∈ patient / caregiver / clinician / asha_worker |
+| `users` | accounts; role ∈ patient / caregiver / clinician / caretaker / asha_worker / admin |
 | `patients` | enrolment, stroke details, `deployment_tier`, exclusions, ASHA assignment |
 | `sessions` | one exam sitting |
 | `module_results` | extracted features per module — **numbers only** |
@@ -193,7 +193,7 @@ Domains that **can** establish laterality: `cranial_nerves`, `motor`, `coordinat
 
 Bands: `STABLE`, `WATCH`, `ALERT`, `PATTERN_ATYPICAL`.
 
-Migrations applied: 0001–0019.
+Migrations applied: 0001–0020.
 
 **Two yardsticks, every session.** The adaptive baseline answers "is today unlike recently";
 the frozen reference answers "how far from the normal we established". A slow decline keeps
