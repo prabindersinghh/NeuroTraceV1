@@ -141,6 +141,30 @@ class LinkCreate(BaseModel):
     clinician_role: str = Field(pattern="^(TREATING_PHYSICIAN|CONSULTING_NEUROLOGIST|CLINICAL_REVIEWER)$")
 
 
+class CaretakerLinkCreate(BaseModel):
+    """Create a family account and link it. Owning caregiver only.
+
+    `relationship` is required rather than optional: "who is this person to the patient" is
+    the first thing anyone asks about an account with access, and OTHER exists so the answer
+    is never forced to be wrong.
+    """
+
+    patient_id: uuid.UUID
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=120)
+    relationship: str = Field(pattern="^(SON|DAUGHTER|SPOUSE|SIBLING|OTHER)$")
+
+
+class CaretakerChannelCreate(BaseModel):
+    """Where to reach a caretaker. `destination` is health-adjacent PII — see
+    `models.CaretakerChannel` for the four rules that follow from that."""
+
+    patient_id: uuid.UUID
+    caretaker_id: uuid.UUID
+    channel: str = Field(pattern="^(WHATSAPP|SMS|EMAIL)$")
+    destination: str = Field(min_length=3, max_length=190)
+
+
 class ConsentSet(BaseModel):
     """PUT body for one of the six consents (Part 4). `version` defaults to the current
     wording for that type when omitted — a caller only needs to pass it when it is agreeing

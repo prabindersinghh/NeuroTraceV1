@@ -4,6 +4,131 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-29 — Caretaker onboarding: family access, scoped and pinned (backend)
+
+Branch `feat/caretaker-onboarding`, off the merged `main`. **Backend only — frontend not
+started**, per the agreed checkpoint.
+
+### What a caretaker is
+Family, **additional** to the caregiver who enrolled the patient: the second sibling, the
+relative abroad (D-054, Reading A). The first family member to set the product up stays the
+`caregiver`/owner and keeps consent management, linking and erasure. The caretaker sees
+everything clinical about their own linked patient and holds none of the owner's controls.
+
+Reading B — renaming the family role so `caregiver` became professional — was rejected before
+any code: it would migrate every `caregiver` row and rewrite every "owning caregiver" check
+across `patients.py`, `consent.py`, `erasure.py` and `clinician.py`, churning tested code in
+the consent and erasure authorisation paths for no functional gain.
+
+### The boundary, which was the whole point
+`auth.deps.caretaker_may_access_patient` — an **active** `patient_caretaker_links` row **and**
+current **C7 (`CARETAKER_SHARING`)**. Neither alone is sufficient, mirroring the clinician
+rule exactly.
+
+`caretaker_is_linked` is callable from **exactly one place**, inside that function, and a
+source assertion pins it. That property is not decoration: it is what would have prevented the
+six-route bug, and it is the only thing that catches a *new* route obtaining the link check
+without the consent check, because no behavioural test can cover a route that does not exist
+yet. A second source assertion checks that no router compares against `Role.caretaker` without
+delegating within the next three lines.
+
+Routes that inherit the boundary through `get_patient_for_user` needed nothing. The two that
+resolve a patient *without* the dependency were updated in the same commit —
+`sessions.py:_assert_can_access` and `wearable.py:acknowledge_fall` — because splitting that
+across commits is precisely how the original gap survived.
+
+### See everything; silence nothing
+Family read the full clinical picture: dashboard, report, trends, confounders, the patient's
+real name. They may acknowledge a **fall** — they are the person in the house and a fall needs
+answering now. They may **not** acknowledge an **alert**: seeing one is right, silencing one is
+a clinical action, and a worried family member dismissing a real deterioration is the failure
+that split refuses. The test asserts both halves *in the same test*, because the next person to
+read the code will otherwise collapse them into one rule.
+
+Consent management, linking further family, editing and erasure all 403 for a caretaker.
+
+### Consent reuses the existing machinery
+One new `ConsentType` value. `services/consent.py` needed **no structural change** —
+`CURRENT_VERSIONS` is a dict comprehension over the enum, so C7 picked up a version
+automatically (verified: 7 versions for 7 types). Deliberately **not** default-OFF: C4/C5 are
+opt-in because the product works without them, but a caretaker who can see nothing is not a
+feature.
+
+**`consent_ref` is populated at creation**, not nullable-then-backfilled. D-046 exists because
+Part 3 shipped links whose consent lived only in an audit event and needed a later migration to
+reference it; the consent table already exists now, so the link and its C7 row are written in
+one transaction and that debt is simply not incurred.
+
+### The WhatsApp number is health-adjacent PII
+A phone number alone is contact metadata. Joined to a family link it says *this person is
+caring for a stroke survivor* — a health inference about a named individual. So it is deleted
+on erasure (the link is only revoked, as clinician links are), never returned by any admin
+surface (D-041), and **never written into an `audit_log.meta_json`**: that table is append-only
+and survives erasure by design (D-050), so a number there would be un-erasable — the retention
+property becomes a liability. The audit row records `channel_id` and nothing else, and a test
+asserts the destination string appears nowhere in the audit output.
+
+Scoped per patient as well as per caretaker, so erasing one patient cannot take another
+patient's routing with it.
+
+### Auth deferred, authorisation not
+Caretaker accounts are created **disabled** — `pw_hash` is a sentinel no password can match,
+rather than an empty string, which would be a subtler thing to get wrong later. Invite and
+credential setup belong to the auth pass. The boundary is built and tested now regardless,
+because it has to be provably correct *before* the first real caretaker can sign in.
+
+### Migrations
+`0018_caretaker_links` (role widening + both tables + indexes) and `0019_caretaker_consent`
+(the `consent_type_enum` widening) are **kept separate** — same discipline as 0014/0015, so the
+constraint rewrite sits in one short reviewable file. Both pass the **bare** constraint name to
+`batch_alter_table`; passing the rendered name doubles the prefix, the trap 0003, 0012 and 0015
+all hit.
+
+`0019`'s downgrade **deletes** C7 rows rather than relabelling them, and the reasoning is worth
+recording: 0011 and 0018 *demote* users because deleting a person's account to satisfy a
+constraint would lose data INV-7 protects. A consent row is different — relabelling a C7 grant
+as `CLINICIAN_SHARING` would fabricate a consent the caregiver never gave, saying they agreed
+to share with a doctor when they agreed to share with family. A false consent record is worse
+than an absent one.
+
+### A migration defect found by the new tests (D-055)
+
+The caretaker migration tests are the first in this repo to insert a privileged user or a
+patient into an **alembic-migrated** database — every functional test builds the schema with
+`Base.metadata.create_all()` instead, so the migrated schema had never been exercised with
+real rows. Two defects fell out immediately.
+
+**`users` — fixed here.** Since 0005 the table carried `ck_users_ck_users_role_enum` (the
+original three roles) beside `ck_users_role_enum` (the current set). Both enforced, so an
+alembic-migrated SQLite database **could not create an `asha_worker`, `admin` or `caretaker`
+account at all** — verified by inserting each role in turn. 0018 now drops the stale duplicate
+under a SQLite-only guard; all five roles insert cleanly afterwards.
+
+**`patients` — NOT fixed, and it is a pre-deploy blocker.** `baseline_state_enum` (lowercase,
+from 0002) sits beside `ck_patients_baseline_state_enum` (uppercase, from 0015), and **no
+value satisfies both**. Worse, rendering 0015 for Postgres emits a `DROP CONSTRAINT` for a
+name that has never existed there, so **0015 should be expected to fail on the next Neon
+deploy**. Nothing has shipped — 0014–0019 have never been deployed.
+
+The mechanism is the third variant of D-014's trap: `sa.Enum(name=...)` inside a migration is
+not attached to `Base.metadata`, so the naming convention never applies and the constraint
+lands under the bare name — but `batch_alter_table` *does* apply the convention, so a later
+`drop_constraint` targets a name that was never created.
+
+The obvious fix (`naming_convention={"ck": "%(constraint_name)s"}`) **was tried and did not
+work** — the duplicate survived on SQLite — so it was reverted rather than left in place
+looking like a fix. `test_downgrading_0019_deletes_only_caretaker_consents` is
+`xfail(strict=True)` naming the defect, so it becomes a hard failure the moment it is
+repaired. Full diagnosis in D-055.
+
+### Recovered from a session crash
+A session teardown mid-write **corrupted `docs/SECURITY.md` and `docs/DATA_INVENTORY.md`**,
+replacing them with fragments of compiled Python. Caught by inspecting the files rather than
+trusting the "changed on disk" notice, restored from git, and the intended edits re-applied.
+Worth recording because the corruption was silent and neither file is covered by a test.
+
+---
+
 ## 2026-08-28 (final) — D-045 enforced everywhere, python-multipart removed, PWA install fixed
 
 Three owner-directed actions closing out the autonomous run.

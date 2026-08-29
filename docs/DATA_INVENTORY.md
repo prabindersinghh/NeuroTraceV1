@@ -47,7 +47,8 @@ audit row while destroying the linkage that makes it useful.
 | `patients` | enrolment, stroke details, deployment tier, exclusions, ASHA assignment, `calibration_json` (device calibration **and** the face-identity vector), `baseline_state`, `erased_at` | Until erasure, then a stripped tombstone kept indefinitely | `erase_patient_data()` clears every identifying field in place. |
 | `clinician_profiles` | clinician's name, qualification, registration number, authority, specialty, affiliation | Life of the clinician account | Staff metadata, not patient data. Unaffected by patient erasure. |
 | `patient_clinician_links` | who may see this patient, `linked_at`/`unlinked_at`, `consent_ref` | Indefinite — **revoked, never deleted** | Erasure sets `unlinked_at` with reason `patient data erased`. The row survives so the history of who could see this patient stays recoverable (INV-8). |
-| `consents` | six independent consents: type, version, granted/withdrawn, actor, IP, device context | Indefinite | **Retained through erasure.** Evidence about a decision, carrying no measurement. |
+| `consents` | seven independent consents: type, version, granted/withdrawn, actor, IP, device context | Indefinite | **Retained through erasure.** Evidence about a decision, carrying no measurement. |
+| `patient_caretaker_links` | which family may see this patient, `linked_at`/`unlinked_at`, `consent_ref` | Indefinite — **revoked, never deleted** | Erasure sets `unlinked_at` with reason `patient data erased`. The row survives so the history of who could see this patient stays recoverable (INV-8). |
 | `audit_log` | who did what, when, to which patient ref | **Append-only, indefinite (INV-8)** | **Never deleted.** No code path anywhere deletes from this table. Erasure adds a `patient.erased` row to it. |
 
 ### Clinical measurements — all deleted on erasure
@@ -67,6 +68,12 @@ audit row while destroying the linkage that makes it useful.
 | `wearable_data` | vendor device readings | Logged and trended; never re-claimed as our measurement (INV-5). |
 | `fall_events` | device-reported falls | Events, not trends — bypass the engine (INV-3). |
 | `asha_visits` | one household visit, idempotent | Keyed on the worker, not the patient. |
+
+### Caretaker contact — deleted on erasure
+
+| Table | Holds | Why it is treated as clinical |
+|---|---|---|
+| `caretaker_channels` | a caretaker's WhatsApp/SMS/email destination, per patient | **Health-adjacent PII.** A phone number alone is contact metadata; the same number joined to a family link says *this person is caring for a stroke survivor*, which is a health inference about a named individual. Deleted on erasure, invisible to every admin surface (D-041), and never written into an `audit_log.meta_json` — that table survives erasure by design (D-050), so a number there would be un-erasable. Scoped per patient as well as per caretaker, so erasing one patient cannot take another patient's routing with it. |
 
 ### Awaaz — all deleted on erasure
 

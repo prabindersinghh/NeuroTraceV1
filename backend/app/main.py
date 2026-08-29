@@ -15,6 +15,7 @@ from .routers import admin as admin_router, asha as asha_router
 from .routers import clinician as clinician_router
 from .routers import auth as auth_router
 from .routers import awaaz as awaaz_router
+from .routers import caretaker as caretaker_router
 from .routers import clinical_data as clinical_router
 from .routers import consent as consent_router
 from .routers import dashboard as dashboard_router
@@ -72,6 +73,7 @@ app.include_router(awaaz_router.router)
 app.include_router(admin_router.router)
 app.include_router(clinician_router.router)
 app.include_router(consent_router.router)
+app.include_router(caretaker_router.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])

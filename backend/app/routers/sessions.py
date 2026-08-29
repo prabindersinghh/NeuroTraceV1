@@ -327,7 +327,7 @@ async def _assert_can_access(db: AsyncSession, patient_id: uuid.UUID, user) -> P
     (`POST /sessions/{id}/module/{code}`, `POST /sessions/{id}/finalize`) and read them back
     (`GET /sessions/{id}/modules`). Found in the Part 5.1 endpoint data audit.
     """
-    from ..auth.deps import clinician_may_access_patient
+    from ..auth.deps import caretaker_may_access_patient, clinician_may_access_patient
     from ..models import Role
 
     patient = await db.get(Patient, patient_id)
@@ -339,6 +339,8 @@ async def _assert_can_access(db: AsyncSession, patient_id: uuid.UUID, user) -> P
     )
     if not allowed and user.role is Role.clinician:
         allowed = await clinician_may_access_patient(db, user.id, patient.id)
+    if not allowed and user.role is Role.caretaker:
+        allowed = await caretaker_may_access_patient(db, user.id, patient.id)
     if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to access this patient")
     return patient

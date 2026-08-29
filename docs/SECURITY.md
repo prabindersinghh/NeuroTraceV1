@@ -38,6 +38,7 @@ name — that is D-040, and this restriction is the fix.
 | `caregiver` | only their own patients: status, "what changed", report, confounders, trends, FAST | enrol, run exams, log symptoms/vertigo, acknowledge falls, grant/withdraw consent, erase |
 | `clinician` | **only linked, C3-consented patients**: trajectory, drivers, baseline review, audit, export | acknowledge alerts, CONFIRM/EXTEND/FLAG_CONCERN a baseline |
 | `asha_worker` | **only assigned households**: name, age, village, due modules | run deep assessment, sync visits. Never bands or history. |
+| `caretaker` | **only their own linked, C7-consented patients**: everything clinical the caregiver sees | acknowledge falls. **Not** alerts, consent, linking or erasure |
 | `admin` | **operational only**: counts, band distribution, gate funnel, identity-flag rate, audit trail (patient refs truncated to 8 chars), clinician census | provision privileged accounts. **No patient clinical content at all.** |
 
 ### The clinician access rule, precisely
@@ -59,6 +60,20 @@ including one (`sessions.py:_assert_can_access`) that still granted any clinicia
 read **and write** access to any patient's raw module features. Every one of those call
 sites now delegates to the single function. See `ENDPOINT_DATA_AUDIT.md` for the full list
 and the regression tests that pin each.
+
+### The caretaker access rule
+
+Identical in shape to the clinician rule, with a different pair: an **active**
+`patient_caretaker_links` row **and** current **C7 (`CARETAKER_SHARING`)**. Both are checked
+in one place, `auth.deps.caretaker_may_access_patient`, and `caretaker_is_linked` is callable
+from nowhere else — pinned by a source assertion in `test_caretaker_link.py`, because a route
+that obtains the link check without the consent check is exactly how the clinician equivalent
+went wrong across six routes.
+
+Family see everything clinical about their own patient. They may acknowledge a **fall** — they
+are the person in the house — but **not an alert**: seeing one is right, silencing one is a
+clinical action. Consent management, linking further family, and erasure all stay with the
+owning caregiver.
 
 ### Admin is deliberately not a superuser
 

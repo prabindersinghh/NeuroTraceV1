@@ -12,7 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.deps import CurrentUser, get_patient_for_user, require_roles
 from ..db import get_session
 from ..engine.baseline import EnrolmentError, check_enrolment
-from ..models import AuditLog, ConsentType, Patient, PatientClinicianLink, Role, User
+from ..models import (
+    AuditLog,
+    ConsentType,
+    Patient,
+    PatientCaretakerLink,
+    PatientClinicianLink,
+    Role,
+    User,
+)
 from ..services.consent import consent_currently_granted
 from ..services.erasure import erase_patient_data
 from ..schemas import (
@@ -115,7 +123,24 @@ async def list_patients(user: CurrentUser, db: Session) -> list[PatientRead]:
         rows = [p for p in rows
                if await consent_currently_granted(db, p.id, ConsentType.CLINICIAN_SHARING)]
         return [PatientRead.model_validate(p) for p in rows]
+    elif user.role is Role.caretaker:
+        # Family: their own linked patients and nobody else's. Same two conditions as the
+        # clinician branch above — active link AND current consent — because a roster that
+        # listed a patient the per-patient routes would then 403 on is its own kind of leak.
+        stmt = stmt.join(
+            PatientCaretakerLink, PatientCaretakerLink.patient_id == Patient.id,
+        ).where(
+            PatientCaretakerLink.caretaker_id == user.id,
+            PatientCaretakerLink.unlinked_at.is_(None),
+        )
+        rows = list(await db.scalars(stmt))
+        rows = [p for p in rows
+               if await consent_currently_granted(db, p.id, ConsentType.CARETAKER_SHARING)]
+        return [PatientRead.model_validate(p) for p in rows]
     else:
+        # THE FALLTHROUGH THAT STOPPED THE ORIGINAL LEAK. Any role without an explicit
+        # branch gets nothing — admin included, because this route returns clinical rows
+        # (name, age, stroke details) and INV-11 keeps those off every admin surface.
         return []
     rows = await db.scalars(stmt)
     return [PatientRead.model_validate(p) for p in rows]

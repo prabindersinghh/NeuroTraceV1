@@ -120,6 +120,24 @@ the link meaningless as an access control. Baseline-gate routes are double-gated
 authorisation *and* clinician role). Revocation is a soft delete (`unlinked_at`), never a
 row deletion (INV-8).
 
+## caretaker.py — 5 routes (new, family access)
+
+| Route | Gate | Returns / why minimal |
+|---|---|---|
+| `POST /caretakers/links` | **owning caregiver only** | Creates the family account, the link and the C7 consent in ONE transaction. Neither the patient nor another caretaker may call it — a caretaker minting caretakers voids the boundary. Returns ids and `login_enabled: false`; the account is created disabled until the auth pass. |
+| `DELETE /caretakers/links/{id}` | owning caregiver only | Sets `unlinked_at`; the row is retained (INV-8). |
+| `GET /caretakers/links/{patient_id}` | owning caregiver only | Who has family access. A caretaker does not get the roster of other caretakers — it is not theirs to audit. |
+| `POST /caretakers/channels` | owning caregiver only | Registers a WhatsApp/SMS destination. The audit row records `channel_id` and **never** the destination, because `audit_log` survives erasure (D-050) and a number there would be un-erasable. |
+| `DELETE /caretakers/channels/{id}` | owning caregiver only | Sets `revoked_at`. |
+
+**Caretaker read access is not in this table** because it adds no routes: family read through
+the *existing* patient-scoped routes, gated by `get_patient_for_user` →
+`caretaker_may_access_patient` (active link **and** current C7). The two routes that resolve a
+patient without the dependency — `sessions.py:_assert_can_access` and
+`wearable.py:acknowledge_fall` — were updated in the same commit, which is the lesson from the
+six-gap audit above. `dashboard.py:acknowledge_alert` was deliberately **not**: family may see
+an alert, never silence it.
+
 ## consent.py — 2 routes (new, Part 4)
 
 `GET /consents/{patient_id}` and `PUT /consents/{patient_id}/{consent_type}`, both restricted

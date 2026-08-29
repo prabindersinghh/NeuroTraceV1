@@ -152,6 +152,78 @@ Part 9's deploy-and-verify, and the Part 3 clinician frontend.
 
 ---
 
+### Caretaker onboarding — backend (2026-08-29)
+
+Branch `feat/caretaker-onboarding`, off the merged `main`. **Backend only; the frontend has
+not been started**, per the agreed checkpoint.
+
+**A caretaker is family ADDITIONAL to the caregiver who enrolled the patient** (D-054,
+Reading A) — the second sibling, the relative abroad. The first family member stays the
+`caregiver`/owner and keeps consent management, linking and erasure.
+
+**The boundary is the deliverable, not the feature.** `caretaker_may_access_patient` requires
+an active `patient_caretaker_links` row AND current C7 consent; `caretaker_is_linked` is
+callable from exactly one place, pinned by a source assertion. The two routes that resolve a
+patient without `get_patient_for_user` — `sessions.py:_assert_can_access` and
+`wearable.py:acknowledge_fall` — were updated in the same commit, because splitting that is
+how the original six-route gap survived.
+
+**Family see everything and silence nothing.** Full clinical read; may acknowledge a fall,
+may not acknowledge an alert. Both halves asserted in one test so nobody collapses them.
+
+**The WhatsApp destination is health-adjacent PII**: deleted on erasure (the link is revoked
+and kept), invisible to admin, and never written into `audit_log.meta_json` — that table
+survives erasure, so a number there would be un-erasable.
+
+**Migrations 0018 (additive + role widening) and 0019 (consent enum) are separate**, and
+0019's downgrade deletes C7 rows rather than relabelling them: relabelling would fabricate a
+consent the caregiver never gave.
+
+**Frontend: DONE.** `CaretakerHome` (family see everything — dashboard, report, emergency)
+and `FamilyAccess` (owning-caregiver only; warns before the form that adding a member shares
+the full picture, requires a reason to revoke, shows revoked links rather than hiding them,
+and says plainly that a new member cannot sign in yet). Copy says "family", not "caretaker".
+
+**Still to do:** the auth pass (invite flow, credentials — accounts are created disabled
+until then).
+
+**Recovered from a session crash:** a teardown mid-write corrupted `docs/SECURITY.md` and
+`docs/DATA_INVENTORY.md` with fragments of compiled Python. Caught by inspecting the files,
+restored from git, edits re-applied. Neither file is covered by a test, which is why it was
+silent.
+
+---
+
+### D-055 resolved — the migrated schema now matches create_all (2026-08-29)
+
+**It was three tables, not two.** The table-by-table diff that had never been run found
+`patients`, `scores` and `alerts` diverging, on top of `users` (already fixed in 0018).
+
+| Table | What it actually cost |
+|---|---|
+| `patients` | **No `baseline_state` value was insertable** — no patient could be created |
+| `scores`, `alerts` | **`PATTERN_ATYPICAL` unstorable** — the band that keeps a Parkinson's patient out of the stroke-alert path (INV-2) |
+| `users` | `asha_worker`, `admin`, `caretaker` uncreatable (fixed in 0018) |
+
+**Root cause is reflection, not naming.** SQLAlchemy's SQLite CHECK reflection mis-parses
+multi-constraint DDL, returning a name like `"pk_t PRIMARY KEY (id), CONSTRAINT state_enum"`.
+Batch mode cannot match a name that was never parsed, so it re-emits the constraint mangled
+beside the new one. Passing a naming convention was tried and failed for exactly that reason.
+0020 uses `copy_from` instead, which skips reflection and rebuilds from the model.
+
+**0015's deploy blocker is gone** — it dropped a constraint name that has never existed on
+either dialect and would have failed the next Neon deploy.
+
+**Two more caught by rendering, not running:** 0020's Postgres branch first emitted a bind
+placeholder instead of SQL, and 0016's backfill raised under `--sql`, which had silently
+disabled the Postgres portability check for every migration after it.
+
+Guarded by `test_the_migrated_schema_matches_create_all` (the diff that never existed) and
+`test_every_role_and_band_is_insertable_after_migration` (the behavioural half — a clean diff
+can still be wrong). Migrations now run 0001–0020.
+
+---
+
 ### Owner-directed close-out (2026-08-28, final)
 
 Three actions after the run report, all verified:

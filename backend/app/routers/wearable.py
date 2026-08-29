@@ -191,7 +191,7 @@ async def acknowledge_fall(fall_id: uuid.UUID, user: CurrentUser,
     account. Now uses the same active-link check every other clinician-facing route uses.
     Found in the Part 5.1 endpoint data audit.
     """
-    from ..auth.deps import clinician_may_access_patient
+    from ..auth.deps import caretaker_may_access_patient, clinician_may_access_patient
     from ..models import Role
 
     event = await db.get(FallEvent, fall_id)
@@ -203,6 +203,12 @@ async def acknowledge_fall(fall_id: uuid.UUID, user: CurrentUser,
     allowed = patient.caregiver_id == user.id
     if not allowed and user.role is Role.clinician:
         allowed = await clinician_may_access_patient(db, user.id, patient.id)
+    # A caretaker MAY acknowledge a fall (owner decision, 2026-08-29). They are the person
+    # in the house, and a fall needs answering now rather than at the next clinic contact.
+    # This is deliberately NOT symmetric with acknowledging an ALERT, which stays
+    # clinician-only — see `dashboard.py:acknowledge_alert`.
+    if not allowed and user.role is Role.caretaker:
+        allowed = await caretaker_may_access_patient(db, user.id, patient.id)
     if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your patient")
     event.acknowledged_at = datetime.now(timezone.utc)
