@@ -950,3 +950,45 @@ the chain renders valid literal SQL for Postgres.
 well as presence) and `test_every_role_and_band_is_insertable_after_migration` (the
 behavioural half — a clean constraint diff can still be wrong).
 
+
+---
+
+### D-056 — the consent backfill bound a tz-aware datetime to a naive column
+
+**2026-08-30. Found by running the chain on a Neon branch of production, not by rendering.**
+
+`0016` creates `consents.granted_at` as `sa.DateTime(timezone=True)` — correct. But the
+lightweight `sa.table()` literal it uses for the backfill INSERT declared the same column as
+`sa.DateTime()`, naive. `granted_at` is copied from `patient_clinician_links.linked_at`, a
+`timestamptz`, so the value arrives tz-AWARE. SQLAlchemy therefore bound the parameter as
+`$6::TIMESTAMP WITHOUT TIME ZONE` and asyncpg refused it:
+
+```
+asyncpg.exceptions.DataError: invalid input for query argument $6:
+  datetime.datetime(2026, 8, 29, 20, 8, 16, tzinfo=utc)
+  (can't subtract offset-naive and offset-aware datetimes)
+```
+
+The chain died at 0016 and would have taken the production deploy with it.
+
+**Why neither existing guard could see it.** This is D-014's lesson with a new face — and this
+time *rendering could not have caught it either*:
+
+- **SQLite** is permissive about datetime binding, so the round-trip test passes.
+- **`alembic upgrade --sql`** SKIPS this backfill entirely. It reads existing rows, so it is
+  guarded by the offline-mode check added while fixing D-055 — meaning the statement never
+  appears in the rendered SQL at all.
+
+Both of this repo's migration guards are structurally blind to a bug in a data backfill's
+*parameter binding*. Only executing the chain against real Postgres rows surfaces it.
+
+**The rule this establishes:** a migration that writes rows is not verified by rendering or by
+SQLite. It is verified by running it on a Neon branch of production. `DEPLOY.md` step 4 already
+said to do this; D-056 is the first time it caught something, and it caught a total deploy
+failure.
+
+**Verified on branch `predeploy-chain-20260829-201241`, copied from production main:**
+`alembic upgrade head` 0011 → 0020 exit 0; patients 1 → 1 with `baseline_state` mutated
+`locked` → `LOCKED`; users 5 → 5; scores 21 → 21; alerts 1 → 1; zero NULL `consent_ref`; all
+five roles insertable by real INSERT; `PATTERN_ATYPICAL` present in both band CHECKs; no
+doubled `ck_x_ck_x_` names.

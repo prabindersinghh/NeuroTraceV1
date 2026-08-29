@@ -250,7 +250,21 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-08-28 · Part 3 (doctor-in-the-loop baseline) backend complete —
+**Last updated:** 2026-08-30 · **`feat/caretaker-onboarding` is merged to `main` and
+pushed** (`--no-ff`), together with the D-055 repair. The reconcile also caught Deepesh's
+README rewrite reintroducing the "90-second" Daily Pulse figure in four places — three of
+which git merged silently — corrected against `app/models.py:92` (~195s).
+
+**Deploy status: NOT deployed.** Neon production is at **0011**, so the undeployed chain is
+**0012 → 0020**, nine migrations. The chain has now been run end to end against a **Neon
+branch of production with real rows**: the first attempt FAILED at 0016 (D-056 — a tz-aware
+datetime bound to a naive column, invisible to both SQLite and `--sql` rendering); after the
+one-line fix, the branch run passes all nine checks with `alembic upgrade head` exit 0,
+including patients 1 → 1 with `baseline_state` mutated `locked` → `LOCKED`. Running it
+against Neon `main` is the owner's call and has not been done. Production is currently
+self-consistent (old code, old schema, `/health` `database: up`).
+
+· Earlier: Part 3 (doctor-in-the-loop baseline) backend complete —
 see "Part 3, as built" above. Before it, Part 2 (`6739186`) and a **whole-system frontend UX
 pass** (`d40ae6f`, branch `ux/system-upgrade`) landed: an offline/sync strip on the caregiver
 surfaces, clinical status colours moved onto the token palette, and `frontend/src/lib/

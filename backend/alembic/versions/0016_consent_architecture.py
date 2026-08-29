@@ -103,7 +103,18 @@ def upgrade() -> None:
         sa.column("consent_type", sa.String()),
         sa.column("version", sa.String()),
         sa.column("granted", sa.Boolean()),
-        sa.column("granted_at", sa.DateTime()),
+        # MUST carry timezone=True, matching the CREATE TABLE above. `linked_at` is read
+        # out of `patient_clinician_links.linked_at`, a timestamptz, so it arrives
+        # tz-AWARE. A naive annotation here makes SQLAlchemy bind the parameter as
+        # `$6::TIMESTAMP WITHOUT TIME ZONE`, and asyncpg then refuses the aware value with
+        # "can't subtract offset-naive and offset-aware datetimes" — at the first real
+        # Postgres backfill, i.e. on deploy.
+        #
+        # Neither of this repo's two guards could see it: SQLite is permissive about
+        # datetime binding, and `alembic upgrade --sql` SKIPS this backfill entirely (it
+        # reads existing rows), so the rendered SQL never contains the statement. Only
+        # running the chain against real Postgres rows surfaced it. D-014, again.
+        sa.column("granted_at", sa.DateTime(timezone=True)),
         sa.column("granted_by", sa.Uuid()),
     )
     links_table = sa.table(

@@ -4,6 +4,57 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-30 — main reconciled and merged; the chain validated on a Neon branch, and it failed
+
+### Merged to main
+`feat/caretaker-onboarding` merged `--no-ff`. Reconciling `main` first hit a README conflict:
+Deepesh's rewrite (742 insertions) replaced the engineering README with a fuller product
+document. Taken as the base after checking it against the invariants — no accuracy claims,
+`synthetic` labelled in five places, and both `medical device` / `clinically validated` hits
+sit inside a "must not be presented as" negation list.
+
+**It reintroduced the "90-second" Daily Pulse figure in four places** — the D-045 drift this
+repo has already corrected once. Git flagged only one as a conflict; the other three merged
+silently. All four corrected against `app/models.py:92` (~195s of capture, 3-4 min
+wall-clock).
+
+`.gitignore` gained an unconditional video rule: three recordings were sitting untracked in
+the repo root, one named after a person, and `git add -A` would have staged all three.
+Preflight's media checks look only for image extensions. **Verified:** all three now match
+`check-ignore`, and `git add -An` stages zero video files.
+
+### The branch run, which is the point of this entry
+Production sits at **0011**, not 0013 as previously assumed — the undeployed chain is
+0012 → 0020, nine migrations.
+
+A Neon branch was cut from production (`predeploy-chain-*`, real rows) and `alembic upgrade
+head` run against it. **The first run failed at 0016** with an asyncpg `DataError`: the
+consent backfill bound a tz-aware datetime to a column its own insert literal declared naive.
+See **D-056** — neither SQLite nor `--sql` rendering can see this class of bug, because the
+render skips row-reading backfills entirely.
+
+Fixed (one annotation, `sa.DateTime(timezone=True)`), and the branch re-cut and re-run.
+
+**Verified on a fresh branch of production, `alembic upgrade head` exit 0:**
+
+| check | result |
+|---|---|
+| 0015 patient count identical | 1 → 1, `baseline_state` `locked` → `LOCKED` |
+| 0014 links cover every legacy `clinician_id` | table absent → 1 link, 1 patient with `clinician_id` |
+| 0016 NULL `consent_ref` | 0 |
+| users / scores / alerts preserved (INV-7) | 5 → 5, 21 → 21, 1 → 1 |
+| all 5 roles insertable | real INSERT, rolled back — all pass |
+| `PATTERN_ATYPICAL` in scores+alerts CHECK | present in both |
+| doubled `ck_x_ck_x_` names | none |
+
+Local `test_migration.py` + `test_migration_portability.py` after the fix: 50 passed, exit 0.
+
+### Not deployed
+Neon `main` is still at 0011 and was not touched. The chain that now passes contains a fix
+made during this run; the owner reviews before production. Production is currently
+self-consistent — Railway has not picked up the pushed code, so old code is running against
+the old schema, and `/health` reports `database: up`.
+
 ## 2026-08-29 — Caretaker onboarding: family access, scoped and pinned (backend)
 
 Branch `feat/caretaker-onboarding`, off the merged `main`. **Backend only — frontend not
