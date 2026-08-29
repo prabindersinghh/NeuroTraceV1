@@ -75,6 +75,11 @@ import {
 } from "@/lib/awaazTrainingExport";
 import { listenerSharePath, normaliseListenerLanguage } from "@/lib/awaazListener";
 import {
+  getCachedAwaazBoard,
+  mayUseOfflineBoard,
+  saveCachedAwaazBoard,
+} from "@/lib/awaazOfflineBoard";
+import {
   deleteLocalEmergencyAudio,
   getLocalEmergencyAudio,
   isEmergencyAudioCurrent,
@@ -99,6 +104,7 @@ import {
   type EndpointState,
 } from "@/lib/awaazCapture";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 import {
   startAudioRecording,
   wavDurationSeconds,
@@ -167,8 +173,10 @@ function voice(text: string, lang: string) {
 export default function Awaaz() {
   const { patientId = "" } = useParams();
   const { t, lang } = useI18n();
+  const { user } = useAuth();
   const [board, setBoard] = useState<AwaazBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usingOfflineBoard, setUsingOfflineBoard] = useState(false);
   const [freeText, setFreeText] = useState("");
   const [candidates, setCandidates] = useState<string[]>([]);
   const [lastSpoken, setLastSpoken] = useState<string | null>(null);
@@ -228,15 +236,58 @@ export default function Awaaz() {
 
   useEffect(() => {
     let live = true;
-    api.awaazBoard(patientId)
-      .then((b) => {
+    const loadBoard = async () => {
+      try {
+        const fresh = await api.awaazBoard(patientId);
         if (!live) return;
-        setBoard(b);
-        setEndpointDraft(b.profile.endpoint_silence_seconds);
-      })
-      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
-    return () => { live = false; };
-  }, [patientId]);
+        setBoard(fresh);
+        setEndpointDraft(fresh.profile.endpoint_silence_seconds);
+        setUsingOfflineBoard(false);
+        setError(null);
+      } catch (loadError) {
+        if (!live) return;
+        if (user?.id && mayUseOfflineBoard(loadError)) {
+          const cached = await getCachedAwaazBoard(user.id, patientId)
+            .catch(() => null);
+          if (!live) return;
+          if (cached) {
+            setBoard(cached);
+            setEndpointDraft(cached.profile.endpoint_silence_seconds);
+            setCandidates([]);
+            setUsingOfflineBoard(true);
+            setError(null);
+            return;
+          }
+        }
+        // An authorization rejection is authoritative. Never keep rendering a board that
+        // this identity may no longer access merely because an older snapshot exists.
+        setBoard(null);
+        setUsingOfflineBoard(false);
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    };
+
+    setError(null);
+    void loadBoard();
+    window.addEventListener("online", loadBoard);
+    return () => {
+      live = false;
+      window.removeEventListener("online", loadBoard);
+    };
+  }, [patientId, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !currentBoard || usingOfflineBoard) return;
+    // Best effort only: a storage failure must not block the live communication board.
+    void saveCachedAwaazBoard(user.id, currentBoard).catch(() => undefined);
+  }, [currentBoard, user?.id, usingOfflineBoard]);
+
+  useEffect(() => {
+    if (!currentBoard) return;
+    const markOffline = () => setUsingOfflineBoard(true);
+    window.addEventListener("offline", markOffline);
+    return () => window.removeEventListener("offline", markOffline);
+  }, [currentBoard]);
 
   useEffect(() => {
     setShareEmergencyLocation(readEmergencyLocationConsent(patientId));
@@ -412,13 +463,22 @@ export default function Awaaz() {
       }
       return;
     }
+    if (usingOfflineBoard) {
+      setActionError(t("awaazOfflineActivityNotSaved"));
+      return;
+    }
     try {
       await api.awaazSpeak(patientId, { card_id: cardId, lang: cardLang });
-    } catch {
+    } catch (saveError) {
       // Communication still works locally, but never claim its audit record was saved.
-      setActionError(t("awaazNotSaved"));
+      if (mayUseOfflineBoard(saveError)) {
+        setUsingOfflineBoard(true);
+        setActionError(t("awaazOfflineActivityNotSaved"));
+      } else {
+        setActionError(t("awaazNotSaved"));
+      }
     }
-  }, [patientId, pendingCapture, t]);
+  }, [patientId, pendingCapture, t, usingOfflineBoard]);
 
   const saveEndpoint = useCallback(async () => {
     setActionError(null);
@@ -926,6 +986,15 @@ export default function Awaaz() {
           </p>
         )}
 
+        {usingOfflineBoard && (
+          <p
+            role="status"
+            className="rounded-xl border border-watch/40 bg-watch-soft p-4 text-sm leading-relaxed"
+          >
+            {t("awaazBoardOfflineReady")}
+          </p>
+        )}
+
         {actionError && (
           <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-4 text-base text-alert">
             {actionError}
@@ -951,7 +1020,7 @@ export default function Awaaz() {
             <input
               type="checkbox"
               checked={captureConsent}
-              disabled={isRecording || Boolean(pendingCapture)}
+              disabled={usingOfflineBoard || isRecording || Boolean(pendingCapture)}
               onChange={(event) => setCaptureConsent(event.target.checked)}
               className="mt-1 h-5 w-5 accent-accent"
             />
@@ -972,7 +1041,7 @@ export default function Awaaz() {
               max="4"
               step="0.5"
               value={endpointDraft}
-              disabled={isRecording}
+              disabled={usingOfflineBoard || isRecording}
               aria-label={t("awaazPauseLabel")}
               onChange={(event) => setEndpointDraft(Number(event.target.value))}
               className="mt-3 w-full accent-accent"
@@ -982,7 +1051,7 @@ export default function Awaaz() {
                 <input
                   type="checkbox"
                   checked={autoStop}
-                  disabled={isRecording}
+                  disabled={usingOfflineBoard || isRecording}
                   onChange={(event) => setAutoStop(event.target.checked)}
                   className="h-5 w-5 accent-accent"
                 />
@@ -990,7 +1059,10 @@ export default function Awaaz() {
               </label>
               <button
                 type="button"
-                disabled={isRecording || endpointDraft === currentBoard.profile.endpoint_silence_seconds}
+                disabled={
+                  usingOfflineBoard || isRecording
+                  || endpointDraft === currentBoard.profile.endpoint_silence_seconds
+                }
                 onClick={() => void saveEndpoint()}
                 className="min-h-11 rounded-lg border border-line px-3 text-sm disabled:opacity-50"
               >
@@ -1022,7 +1094,8 @@ export default function Awaaz() {
             size="touch"
             variant={isRecording ? "destructive" : "accent"}
             disabled={!isRecording && (
-              !captureConsent || Boolean(pendingCapture) || busy || isEmergencyRecording
+              usingOfflineBoard || !captureConsent || Boolean(pendingCapture)
+              || busy || isEmergencyRecording
             )}
             onClick={() => void (isRecording ? stopCapture() : startCapture())}
             className="mt-4"
@@ -1128,10 +1201,13 @@ export default function Awaaz() {
           <div className="mt-2 flex gap-2">
             <input
               value={freeText}
+              disabled={usingOfflineBoard}
               onChange={(e) => setFreeText(e.target.value)}
-              className="min-h-14 flex-1 rounded-xl border border-line px-4 text-xl"
+              className="min-h-14 flex-1 rounded-xl border border-line px-4 text-xl disabled:opacity-50"
             />
-            <Button className="min-h-14 px-5" disabled={busy || !freeText.trim()}
+            <Button className="min-h-14 px-5" disabled={
+              usingOfflineBoard || busy || !freeText.trim()
+            }
               onClick={() => void submitFree()}>
               {isAphasia ? t("awaazOffer") : t("awaazSay")}
             </Button>
@@ -1186,13 +1262,14 @@ export default function Awaaz() {
                 value={personalPhrase}
                 onChange={(event) => setPersonalPhrase(event.target.value)}
                 maxLength={200}
+                disabled={usingOfflineBoard}
                 placeholder={t("awaazPhrasePlaceholder")}
                 className="min-h-12 min-w-0 flex-1 rounded-lg border border-line px-3 text-base"
               />
               <button
                 type="submit"
                 disabled={
-                  phraseBusy || isRecording || Boolean(pendingCapture)
+                  usingOfflineBoard || phraseBusy || isRecording || Boolean(pendingCapture)
                   || !personalPhrase.trim()
                 }
                 className="min-h-12 rounded-lg border border-line px-3 text-sm font-medium disabled:opacity-50"
@@ -1207,7 +1284,9 @@ export default function Awaaz() {
                   <span className="min-w-0 break-words text-sm">{card.text}</span>
                   <button
                     type="button"
-                    disabled={phraseBusy || isRecording || Boolean(pendingCapture)}
+                    disabled={
+                      usingOfflineBoard || phraseBusy || isRecording || Boolean(pendingCapture)
+                    }
                     onClick={() => void removePhrase(card.id)}
                     aria-label={`${t("awaazPhraseRemove")}: ${card.text}`}
                     className="flex min-h-10 shrink-0 items-center gap-1 text-xs text-alert underline disabled:opacity-50"
@@ -1316,7 +1395,7 @@ export default function Awaaz() {
           </details>
           <button
             type="button"
-            disabled={listenerBusy}
+            disabled={usingOfflineBoard || listenerBusy}
             onClick={() => void mintListenerLink()}
             className="min-h-12 rounded-xl border border-line px-4 text-sm disabled:opacity-50"
           >
@@ -1330,7 +1409,7 @@ export default function Awaaz() {
               </p>
               <button
                 type="button"
-                disabled={listenerBusy}
+                disabled={usingOfflineBoard || listenerBusy}
                 onClick={() => void revokeListenerLink()}
                 className="mt-3 flex min-h-10 items-center gap-2 text-xs font-medium text-alert underline disabled:opacity-50"
               >

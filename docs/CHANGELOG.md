@@ -4,6 +4,28 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-29 — Awaaz authenticated offline phrase board
+
+After an authorized online load, Awaaz now keeps a metadata-only phrase-board snapshot in
+an origin-scoped IndexedDB store bound to both the current user and patient. If the API is
+unreachable, a reload recovers the saved Punjabi/Hindi/English phrase tiles instead of
+collapsing the product to emergency-only mode. A 401, 403, or 404 never uses that snapshot,
+so cache availability cannot revive revoked or unrelated access.
+
+The offline screen clearly says that taps use the phone's installed browser voice and that
+activity is not saved. Phrase tiles remain tappable; free text, practice capture, endpoint
+settings, phrase management, and listener-link actions are disabled until reconnection.
+Emergency recording, self-test, deletion, and playback retain their separate local-only
+contract, and browser speech is not claimed as verified offline audio.
+
+Verified: frontend **51 tests passed**; the new boundary tests pin transport-only fallback,
+401/403/404 refusal, exact user/patient binding, and corrupt/cross-patient snapshot refusal.
+TypeScript and the production Vite/PWA bundle passed; oxlint reported only the repository's
+known warnings. In an isolated migrated SQLite demo, the board was loaded online, the
+backend was stopped, and a full reload recovered all Punjabi tiles with Hindi offline copy.
+Tapping `ਪਾਣੀ` immediately showed the selected phrase and the explicit unsaved-tap warning;
+free-text and listener-link controls were disabled.
+
 ## 2026-08-28 — Awaaz leakage-safe cohort readiness
 
 Multiple verified single-patient Awaaz archives can now be checked together without

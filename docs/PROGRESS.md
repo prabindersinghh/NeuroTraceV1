@@ -2,7 +2,13 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-28 · Awaaz now captures explicitly-consented 16 kHz practice WAVs
+**Last updated:** 2026-08-29 · An authenticated online Awaaz load now saves a user-and-
+patient-bound phrase-board snapshot. On a genuine network failure the saved tiles remain
+visible and tappable with an explicit unsaved/browser-voice disclosure; authorization
+responses never use the cache, and network-dependent actions remain disabled. Awaaz also
+has single-patient phrase-disjoint and multi-patient speaker/phrase-disjoint readiness
+planners, both planning-only with all model/evaluation claims false. Awaaz captures
+explicitly-consented 16 kHz practice WAVs
 into a browser-only IndexedDB vault and pairs them with the exact phrase card the patient
 taps. The API receives metadata receipts only, retries are idempotent, deletion is recorded,
 and optional silence auto-stop honours a patient-set 0.5–4.0 s pause. The fixed emergency
@@ -211,7 +217,9 @@ so in the source. D-015, D-017.
   movement cancels it, and exact location is opt-in. A configured SMTP adapter reports true
   only after acceptance; the deployed provider still needs credentials and a field test.
   A localized, collapsed board manager now adds duplicate-safe personal phrases and removes
-  non-emergency tiles while keeping the patient-facing speaking surface uncluttered.
+  non-emergency tiles while keeping the patient-facing speaking surface uncluttered. A
+  successfully authorized board is cached against that exact user/patient pair so its
+  phrase tiles survive an offline reload; stale authorization cannot be recovered from it.
 - **D2** expiring listener capability and localized public screen exist. A link sees only
   confirmed utterances created after it was minted, and the sharing UI can revoke it through
   a patient-authorized, retry-idempotent endpoint. The active capability recovers after

@@ -209,6 +209,16 @@ const STRINGS = {
     hi: "बाकी संवाद बोर्ड को अभी कनेक्शन चाहिए। ऊपर आपातकालीन आवाज़ उपलब्ध है।",
     pa: "ਬਾਕੀ ਸੰਚਾਰ ਬੋਰਡ ਨੂੰ ਹੁਣ ਕਨੈਕਸ਼ਨ ਚਾਹੀਦਾ ਹੈ। ਉੱਪਰ ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼ ਉਪਲਬਧ ਹੈ।",
   },
+  awaazBoardOfflineReady: {
+    en: "Offline: saved phrase tiles are available. Taps use this phone's installed browser voice; activity and changes are not saved until the connection returns.",
+    hi: "ऑफ़लाइन: सहेजे हुए वाक्य उपलब्ध हैं। टैप इस फ़ोन की ब्राउज़र आवाज़ का उपयोग करते हैं; कनेक्शन लौटने तक गतिविधि और बदलाव सहेजे नहीं जाएँगे।",
+    pa: "ਆਫ਼ਲਾਈਨ: ਸੰਭਾਲੇ ਹੋਏ ਵਾਕ ਉਪਲਬਧ ਹਨ। ਟੈਪ ਇਸ ਫ਼ੋਨ ਦੀ ਬਰਾਊਜ਼ਰ ਆਵਾਜ਼ ਵਰਤਦੇ ਹਨ; ਕਨੈਕਸ਼ਨ ਵਾਪਸ ਆਉਣ ਤੱਕ ਸਰਗਰਮੀ ਅਤੇ ਬਦਲਾਅ ਸੰਭਾਲੇ ਨਹੀਂ ਜਾਣਗੇ।",
+  },
+  awaazOfflineActivityNotSaved: {
+    en: "The phrase was shown and browser speech was attempted, but this offline tap was not saved.",
+    hi: "वाक्य दिखाया गया और ब्राउज़र से बोलने की कोशिश हुई, लेकिन यह ऑफ़लाइन टैप सहेजा नहीं गया।",
+    pa: "ਵਾਕ ਦਿਖਾਇਆ ਗਿਆ ਅਤੇ ਬਰਾਊਜ਼ਰ ਰਾਹੀਂ ਬੋਲਣ ਦੀ ਕੋਸ਼ਿਸ਼ ਹੋਈ, ਪਰ ਇਹ ਆਫ਼ਲਾਈਨ ਟੈਪ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ।",
+  },
   awaazEmergencySetupTitle: {
     en: "Offline emergency voice",
     hi: "ऑफ़लाइन आपातकालीन आवाज़",

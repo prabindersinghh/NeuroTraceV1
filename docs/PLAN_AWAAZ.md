@@ -6,9 +6,10 @@ repeat pairs exist. Those pairs can be integrity-verified into an explicitly ack
 local training archive; the app never uploads it. A caregiver can also record and self-test
 the fixed emergency phrase as a local WAV that starts before any network request, and the
 emergency surface can open the phone dialer with India's 108 number prefilled. The board is
-now locally manageable in English, Hindi, and Punjabi. Patient-speech ASR, original
-conversational-audio capture, adapter training/deployment, live provider field testing, and
-caregiver-number calling remain incomplete.**
+now locally manageable in English, Hindi, and Punjabi, and a user-bound snapshot keeps its
+previously loaded phrase tiles available when the API cannot be reached. Patient-speech
+ASR, original conversational-audio capture, adapter training/deployment, live provider
+field testing, and caregiver-number calling remain incomplete.**
 
 ---
 
@@ -91,6 +92,15 @@ inherits a supported patient language, appends new tiles, and caps the whole boa
 Customization is audited without phrase text. It changes the phrase board only; it does not
 claim to train ASR, and deleting a tile does not silently revoke a separately consented
 local learning recording.
+
+After an authenticated online load, the text/profile board snapshot is retained in its own
+origin-scoped IndexedDB store, keyed by both user and patient. A transport failure may use
+that snapshot; 401, 403, and 404 responses are authoritative and clear the rendered board
+instead of reviving stale access. Offline phrase taps keep the visual board useful and
+attempt the phone's installed browser voice, but are explicitly marked unsaved. Network-
+dependent typing, capture, settings, editing, and listener-link actions are disabled until
+reconnection. The patient-specific emergency WAV remains the only audio path verified to
+start fully offline; browser speech is not described as guaranteed offline audio.
 
 ### Voice
 - **XTTS-v2** for the clone; **Sarvam** evaluated for Indic quality (see PLAN_ML).

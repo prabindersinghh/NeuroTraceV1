@@ -532,3 +532,19 @@ or translations, and archive schema v1 cannot check severity or demographic dive
 Those are stated limitations, not inferred away. Verification does not pool media, and the
 local export receipt is not consent for pooled research; governance approval remains a
 separate prerequisite.
+
+**D-054 · 2026-08-29 · Offline board access is a user-bound snapshot, not stale authorization.**
+Emergency speech already survives a dead backend, but normal phrase tiles disappeared and
+left a person with only the red crisis path. A successfully authenticated board load now
+saves its text/profile snapshot in a separate origin-scoped IndexedDB store keyed by both
+the authorized user and patient. Only a transport failure (`status=0`) may recover it. A
+401, 403, or 404 is an authoritative access decision and clears the board even when an
+older snapshot exists; patient ID alone is never treated as possession of the cache.
+
+The snapshot does not make network state changes offline. Phrase taps remain available
+because the person explicitly chose those words, but the UI states that browser speech was
+only attempted and the tap was not saved. Free text, practice capture, settings, phrase
+editing, and listener-capability actions are disabled until reconnection, while local
+emergency setup and deletion remain local. The installed browser voice is not promoted to
+the same guarantee as the caregiver-recorded emergency WAV: only the latter has a playback
+receipt and self-test proving it started on that device.
