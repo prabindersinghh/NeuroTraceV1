@@ -992,3 +992,90 @@ failure.
 `locked` → `LOCKED`; users 5 → 5; scores 21 → 21; alerts 1 → 1; zero NULL `consent_ref`; all
 five roles insertable by real INSERT; `PATTERN_ATYPICAL` present in both band CHECKs; no
 doubled `ck_x_ck_x_` names.
+
+---
+
+### D-057 — the ORM constrained on the enum NAME, the migration on the enum VALUE
+
+**2026-08-30. Found in production, by a 500 on `POST /demo/seed`, after a clean deploy.**
+
+`SessionType` is the only enum in `models.py` whose member name differs from its value:
+
+```python
+daily_pulse = "DAILY_PULSE"
+```
+
+SQLAlchemy's `sa.Enum(PyEnum, ...)` persists and constrains on the member **NAME** unless
+given `values_callable`. Nothing here gave it one. So the three halves of the system each
+picked a different string and all three looked right in isolation:
+
+| | what it used | result |
+|---|---|---|
+| migration 0012 | the **VALUE** | rows and CHECK both `'DAILY_PULSE'` |
+| the ORM | the **NAME** | every INSERT sent `'daily_pulse'` |
+| pydantic | the **VALUE** | the HTTP contract has always been uppercase |
+
+A **migrated** database therefore rejected every session the application tried to create,
+while a **`create_all`** database — built from the NAMES — accepted them happily. The entire
+test suite runs on `create_all`, so 1089 tests passed against a schema that does not exist in
+production.
+
+**Why D-055's guard did not catch it.** `test_the_migrated_schema_matches_create_all` compared
+constraint **names** and presence. `ck_sessions_session_type_enum` is present, and identically
+named, on both schemas — carrying different values. The test is now value-aware, and its
+regex was checked against a real `create_all` schema to confirm it extracts values rather than
+matching nothing and passing vacuously.
+
+**The fix** is one argument on the shared `_enum()` helper — `values_callable` — making
+SQLAlchemy use the value everywhere. The blast radius was measured, not assumed: `SessionType`
+is the **only** enum in the module where name and value differ, so this is a no-op for all
+fourteen others and changes exactly the one that was wrong. No data migration is needed:
+production already holds the uppercase values, which is what the ORM now writes.
+
+**Order of discovery matters here.** Deploying the schema before the code was safe for the
+eight additive migrations and unsafe for the two that rewrite values (0012, 0015): the old
+build could not read `LOCKED`, and `/patients` 500'd until the new build landed. "DB-ahead-of-
+code is harmless" is true only for additive migrations, and both of this chain's
+value-rewriting migrations disprove it.
+
+---
+
+### D-058 — value-rewriting migrations must ship WITH their code; additive ones need not
+
+**2026-08-30. Learned by taking production down for about fifteen minutes.**
+
+Migrations in this repo fall into two classes, and they have opposite deploy requirements.
+Until this deploy the distinction was never written down, and the reasoning that felt obvious
+at the time — "the database being ahead of the code is the safe direction" — is true for one
+class and false for the other.
+
+**ADDITIVE** — new tables, new nullable columns, widened CHECK constraints. `0013`, `0014`,
+`0017`, `0018`, `0019`, `0020`. Old code does not select the new columns and does not write
+the new values, so a database ahead of its code is genuinely harmless. Deploy in either
+order.
+
+**VALUE-REWRITING** — migrations that change the strings already stored in existing rows.
+`0012` (`daily|weekly|monthly` → `DAILY_PULSE|COMPREHENSIVE|MONTHLY|ASHA_VISIT`) and `0015`
+(`locked` → `LOCKED`). **These must deploy together with the code that understands the new
+values.** Either order alone breaks the running application:
+
+- **schema first** — the old build cannot READ its own rows. This is what happened: the
+  deployed `BaselineState` enum knew only `locked`, the migrated rows said `LOCKED`, and
+  `/patients` and `/clinic/patients` returned 500 until the new build landed. `/health` stayed
+  green throughout, because it only pings the connection.
+- **code first** — the new build cannot WRITE. It sends values the old CHECK rejects.
+
+**The rule.** Before deploying, classify every migration in the chain. If any rewrites values,
+the deploy is not "run migrations, then push" — it is a coordinated release, and the window
+between the two halves is an outage. Either take the brief outage deliberately and knowingly,
+or stage the change across two releases (widen the constraint to accept BOTH spellings, deploy
+code that reads both, migrate the data, then narrow) — which is what `0012` and `0015` already
+do internally for the constraint, and what neither does for the application.
+
+`/health` returning `database: up` is not evidence the application works. It proves a
+connection, nothing more. The check that would have caught this in seconds is one authenticated
+read of a patient-scoped route.
+
+See also **D-057**, found immediately afterwards: the same deploy was still broken for session
+CREATION for a completely independent reason, which the recovered `/patients` route did not
+reveal.

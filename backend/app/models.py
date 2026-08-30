@@ -262,8 +262,23 @@ class StrokeSide(str, enum.Enum):
 
 
 def _enum(py_enum, name: str) -> sa.Enum:
+    # `values_callable` makes SQLAlchemy persist and constrain on the member VALUE. Without
+    # it SQLAlchemy uses the member NAME, and for every enum here except one that is the
+    # same string — but `SessionType` is `daily_pulse = "DAILY_PULSE"`, so name and value
+    # differ, and the two halves of the system disagreed about which one is the data:
+    #
+    #   migration 0012 wrote the VALUES  ('DAILY_PULSE', ...) into both the rows and the
+    #                                     CHECK constraint
+    #   the ORM wrote the NAME           ('daily_pulse') on every INSERT
+    #   pydantic parses the VALUE        (the API contract has always been uppercase)
+    #
+    # So a migrated database rejected every session the application tried to create, while
+    # a `create_all` database - built from the NAMES - accepted them and every test passed.
+    # D-057. Verified against production: `sessions` was the only table affected, because
+    # `SessionType` is the only enum in this module whose name differs from its value.
     return sa.Enum(py_enum, name=name, native_enum=False, create_constraint=True,
-                   validate_strings=True, length=24)
+                   validate_strings=True, length=24,
+                   values_callable=lambda e: [m.value for m in e])
 
 
 _UUID_PK = dict(primary_key=True, default=_uuid)

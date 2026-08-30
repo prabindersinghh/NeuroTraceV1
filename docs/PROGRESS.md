@@ -255,8 +255,12 @@ pushed** (`--no-ff`), together with the D-055 repair. The reconcile also caught 
 README rewrite reintroducing the "90-second" Daily Pulse figure in four places — three of
 which git merged silently — corrected against `app/models.py:92` (~195s).
 
-**Deploy status: NOT deployed.** Neon production is at **0011**, so the undeployed chain is
-**0012 → 0020**, nine migrations. The chain has now been run end to end against a **Neon
+**Deploy status: DEPLOYED.** Neon production migrated **0011 → 0020** (nine migrations),
+`ALEMBIC_EXIT=0`, every row-level check green — see the 2026-08-30 CHANGELOG entry. Two
+defects were found by deploying that nothing local could see: **D-056** (0016 bound a
+tz-aware datetime to a naive column — the chain died mid-deploy) and **D-057** (the ORM
+constrained on the enum NAME while the migration used the VALUE, so the deployed API could
+not create a single session). The historical note below predates that. The chain has now been run end to end against a **Neon
 branch of production with real rows**: the first attempt FAILED at 0016 (D-056 — a tz-aware
 datetime bound to a naive column, invisible to both SQLite and `--sql` rendering); after the
 one-line fix, the branch run passes all nine checks with `alembic upgrade head` exit 0,

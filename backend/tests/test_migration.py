@@ -204,6 +204,14 @@ def test_the_migrated_schema_matches_create_all(migrated_db: Path):
     Compares NAMES as well as presence. A constraint that is right in substance but differs
     in name is exactly what enabled the bug: `drop_constraint("band_enum")` under batch mode
     prefixes the name, so it hits on one schema and misses on the other.
+
+    And compares the VALUE SET inside each CHECK, which the first version of this test did
+    not. That omission cost a production outage: `sessions.session_type` carried a
+    correctly-NAMED constraint on both schemas holding DIFFERENT values — migration 0012
+    wrote `'DAILY_PULSE'` while `create_all` wrote `'daily_pulse'`, because `SessionType` is
+    the one enum whose member name differs from its value and SQLAlchemy constrains on the
+    name unless told otherwise. Every test passed and the deployed API could not create a
+    single session. D-057.
     """
     import asyncio
     import re
@@ -223,7 +231,12 @@ def test_the_migrated_schema_matches_create_all(migrated_db: Path):
 
     asyncio.run(build())
 
-    def checks(db: Path) -> dict[str, set[str]]:
+    def checks(db: Path) -> dict[str, set[tuple[str, tuple[str, ...]]]]:
+        """{table: {(constraint_name, sorted allowed values)}}.
+
+        The value set is half the point: a name-only comparison passes a constraint that is
+        correctly named and enforces the wrong strings, which is exactly D-057.
+        """
         con = sqlite3.connect(db)
         try:
             out = {}
@@ -232,7 +245,12 @@ def test_the_migrated_schema_matches_create_all(migrated_db: Path):
             ):
                 if name.startswith("sqlite_") or name == "alembic_version":
                     continue
-                out[name] = set(re.findall(r"CONSTRAINT\s+(\w+)\s+CHECK", sql or ""))
+                out[name] = {
+                    (cname, tuple(sorted(re.findall(r"'([^']*)'", body))))
+                    for cname, body in re.findall(
+                        r"CONSTRAINT\s+(\w+)\s+CHECK\s*\((.*?)\)\s*(?=,\s*CONSTRAINT|\)\s*$|$)",
+                        sql or "", re.S)
+                }
             return out
         finally:
             con.close()

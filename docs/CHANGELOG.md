@@ -49,11 +49,43 @@ Fixed (one annotation, `sa.DateTime(timezone=True)`), and the branch re-cut and 
 
 Local `test_migration.py` + `test_migration_portability.py` after the fix: 50 passed, exit 0.
 
-### Not deployed
-Neon `main` is still at 0011 and was not touched. The chain that now passes contains a fix
-made during this run; the owner reviews before production. Production is currently
-self-consistent — Railway has not picked up the pushed code, so old code is running against
-the old schema, and `/health` reports `database: up`.
+### Deployed
+Neon `main` migrated **0011 → 0020**, `ALEMBIC_EXIT=0`, all ten row-level checks PASS:
+patients 1 → 1 with `baseline_state` `locked` → `LOCKED`, users 5 → 5, scores 21 → 21,
+sessions 21 → 21, `audit_log` 8 → 8 (INV-8), zero NULL `consent_ref`, all five roles
+insertable, `PATTERN_ATYPICAL` present in both band CHECKs.
+
+**Deploying the schema before the code broke the live API for ~15 minutes.** The old build's
+`BaselineState` enum knows only lowercase `locked` and could not read its own migrated rows:
+`/patients` and `/clinic/patients` went 200 → 500 while Railway was still building. They
+recovered when the new build landed. "DB-ahead-of-code is harmless" holds for the eight
+additive migrations in this chain and is false for the two that rewrite values (0012, 0015).
+
+### D-057 — found in production, after a clean deploy
+`verify_deploy.sh` still failed on `POST /demo/seed`. The Railway logs gave a
+`CheckViolationError` on `ck_sessions_session_type_enum`: `SessionType` is the only enum in
+`models.py` whose member NAME differs from its VALUE (`daily_pulse = "DAILY_PULSE"`), and
+SQLAlchemy constrains on the name unless given `values_callable`. Migration 0012 wrote the
+VALUES; the ORM sent the NAME; **the deployed API could not create a single session**, while
+every test passed because the suite builds its schema from `create_all`.
+
+Fixed with `values_callable` on the shared `_enum()` helper — measured, not assumed, to be a
+no-op for all fourteen other enums.
+
+### INV-13's scanner was blind to bulleted disclaimers
+The merged README also failed `test_regulatory_claims.py` on **seven** lines — every one of
+them the README stating what it does NOT claim. A bulleted disclaimer carries its negation
+once, on the lead-in ("It must not be presented as:"), three or four lines above the bullet;
+the scanner's negation window was one line. Widened to include the list lead-in rather than
+exempting the file, which would have blinded INV-13 on the most claim-dense document in the
+repo. Pinned both ways: `test_the_list_lead_in_window_still_catches_a_claim_in_a_list` builds
+the same bullet shape under an ASSERTING lead-in and requires it to still fail.
+
+Three guards this session turned out to be structurally blind to what they existed to catch —
+`--sql` skipping row-reading backfills (D-056), a name-level constraint diff (D-057), and a
+one-line window against a multi-line list. Each was narrowed, never exempted. `test_the_migrated_schema_matches_create_all` now
+compares constraint VALUE SETS, not just names; the new regex was checked against a real
+`create_all` schema to confirm it extracts values rather than matching nothing.
 
 ## 2026-08-29 — Caretaker onboarding: family access, scoped and pinned (backend)
 

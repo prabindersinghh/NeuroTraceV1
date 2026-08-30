@@ -277,6 +277,29 @@ MODEL_CONTEXT = re.compile(
 )
 
 
+#: A markdown list item. Only these get the widened lead-in window, so ordinary prose keeps
+#: the strict one-line lookback.
+_LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+
+
+def _list_lead_in(lines: list[str], number: int) -> str:
+    """The sentence introducing the list that `lines[number - 1]` belongs to.
+
+    Walks back over sibling bullets and blank lines to the nearest prose line. Bounded to a
+    short distance: a bullet far from any lead-in gets no free pass, so a claim dropped into
+    a long list still has to stand on its own.
+    """
+    index = number - 2                      # 0-based index of the preceding line
+    for _ in range(12):
+        if index < 0:
+            break
+        candidate = lines[index]
+        if candidate.strip() and not _LIST_ITEM.match(candidate):
+            return candidate
+        index -= 1
+    return ""
+
+
 def _overclaims(text: str) -> list[tuple[int, str]]:
     """Matches that are ASSERTIONS, with negated disclaimers filtered out.
 
@@ -285,6 +308,19 @@ def _overclaims(text: str) -> list[tuple[int, str]]:
     negation and the claim phrase land on different lines, and a line-scoped check flagged
     it as an overclaim. That is the D-030 failure mode arriving in a new costume: a scanner
     that flags a correct disclaimer pressures someone into weakening it.
+
+    It also includes the LIST LEAD-IN, for the same reason one line was not enough. A
+    bulleted disclaimer carries its negation once, on the sentence that introduces the list:
+
+        It must not be presented as:
+
+        - a certified medical device,
+        - clinically validated craniocorpography,
+
+    Every bullet is a correct disclaimer and every bullet reads as a claim on its own, with
+    the negation three or four lines above — out of reach of a one-line window. This flagged
+    seven such lines in the README and none of them was an overclaim. Widening the window for
+    list items is what keeps the scanner honest; exempting the file would have blinded it.
     """
     hits: list[tuple[int, str]] = []
     lines = text.splitlines()
@@ -293,6 +329,8 @@ def _overclaims(text: str) -> list[tuple[int, str]]:
             for match in pattern.finditer(line):
                 previous = lines[i - 2] if i >= 2 else ""
                 window = f"{previous} {line[:match.start()]}"
+                if _LIST_ITEM.match(line):
+                    window = f"{_list_lead_in(lines, i)} {window}"
                 if NEGATIONS.search(window):
                     continue
                 hits.append((i, line.strip()[:140]))
@@ -541,6 +579,46 @@ def test_the_overclaim_scanner_handles_a_negation_that_wrapped_to_the_previous_l
     assert not _overclaims(text), (
         "flagged a wrapped disclaimer — the negation window must span the previous line"
     )
+
+
+def test_the_overclaim_scanner_handles_a_negation_on_the_list_lead_in():
+    """The second false positive, from the merged README: a bulleted disclaimer carries its
+    negation once, on the line introducing the list."""
+    text = (
+        "The belt is a prototype.\n"
+        "\n"
+        "It must not be presented as:\n"
+        "\n"
+        "- a certified medical device,\n"
+        "- clinically validated craniocorpography,\n"
+        "- or a device that diagnoses neurological disease.\n"
+    )
+    assert not _overclaims(text), (
+        "flagged a bulleted disclaimer — the negation is on the lead-in, not the bullet"
+    )
+
+
+def test_the_list_lead_in_window_still_catches_a_claim_in_a_list():
+    """THE PIN. The lead-in window must not become a blanket exemption for bullets.
+
+    Same shape as the test above, with a lead-in that asserts instead of denying. If this
+    ever stops failing, the widened window has turned into a hole and the scanner is no
+    longer enforcing INV-13 on any bulleted text.
+    """
+    text = (
+        "NeuroTrace is a clinical tool.\n"
+        "\n"
+        "It is designed to:\n"
+        "\n"
+        "- diagnose stroke,\n"
+        "- replace a neurologist.\n"
+    )
+    hits = _overclaims(text)
+    assert hits, (
+        "a genuine overclaim inside a list went unflagged — the lead-in window is now a "
+        "blanket exemption for bullets, which is exactly what it must not be"
+    )
+    assert any("diagnose stroke" in line for _, line in hits), hits
 
 
 def test_the_accuracy_scanner_catches_a_bare_metric():
