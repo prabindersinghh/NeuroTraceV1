@@ -12,6 +12,19 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+# Reviewed non-clinical images, pinned by CONTENT hash so a rename cannot smuggle anything
+# through. Keep in lockstep with REVIEWED_NON_CLINICAL_IMAGES in backend/tests/test_privacy.py,
+# which carries the full rationale and the review note. One entry today:
+# frontend/public/og.png, the Open Graph card -- wordmark, "Talk. Watch. Warn.", phone
+# mockup. Looked at before listing. No person, no record, nothing clinical.
+REVIEWED_IMAGE_SHA256="0fe0b85e055622657387835d1f816110f6dd44621d425e416a34e8715e3579e6"
+REVIEWED_IMAGE_PATH="frontend/public/og.png"
+
+sha256_of_stdin() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 | awk '{print $1}'
+  else sha256sum | awk '{print $1}'; fi
+}
+
 pass=0; fail=0
 ok()  { echo "  PASS  $*"; pass=$((pass+1)); }
 bad() { echo "  FAIL  $*"; fail=$((fail+1)); }
@@ -42,13 +55,24 @@ imgs=0
 while read -r sha size; do
   [ "${size:-0}" -gt 20000 ] || continue
   magic=$(git cat-file blob "$sha" 2>/dev/null | head -c 4 | od -An -tx1 | tr -d ' \n')
-  case "$magic" in ffd8ff*|89504e47) imgs=$((imgs+1)) ;; esac
+  case "$magic" in
+    ffd8ff*|89504e47)
+      # Hash the bytes before counting it: the allow-list is keyed on content, so a
+      # re-exported or renamed image still lands in the offender count.
+      if [ "$(git cat-file blob "$sha" 2>/dev/null | sha256_of_stdin)" = "$REVIEWED_IMAGE_SHA256" ]; then
+        continue
+      fi
+      imgs=$((imgs+1))
+      ;;
+  esac
 done < <(git cat-file --batch-all-objects --batch-check='%(objecttype) %(objectname) %(objectsize)' 2>/dev/null | awk '$1=="blob"{print $2, $3}')
 [ "$imgs" -eq 0 ] && ok "no image blob in the object store" \
   || bad "$imgs image blob(s) recoverable — run: git reflog expire --expire-unreachable=now --all && git gc --prune=now"
 
 step "4 · no image in any reachable commit, ever"
-hist=$(git rev-list --objects --all 2>/dev/null | awk '{print $2}' | grep -icE '\.(jpe?g|png)$|stroke.?report' || true)
+hist=$(git rev-list --objects --all 2>/dev/null | awk '{print $2}' \
+  | grep -ivF "$REVIEWED_IMAGE_PATH" \
+  | grep -icE '\.(jpe?g|png)$|stroke.?report' || true)
 [ "$hist" -eq 0 ] && ok "no image path in any reachable commit" \
   || bad "images exist in history — rewrite required, not just a delete"
 

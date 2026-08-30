@@ -31,6 +31,7 @@ machine.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import sys
@@ -39,6 +40,49 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+
+#: Reviewed non-clinical images that may exist in history and on the remote.
+#:
+#: Pinned by CONTENT HASH, not by path. A path-only exemption would let any file be renamed
+#: into the allowed name and sail through; keying on the bytes means this exempts exactly one
+#: reviewed image and nothing else. If the file is ever re-exported the hash stops matching
+#: and these tests fail again -- that is the intended behaviour, not a maintenance burden,
+#: because a changed image is an unreviewed image.
+#:
+#: `frontend/public/og.png` is the Open Graph social-preview card: the wordmark, "Talk.
+#: Watch. Warn." and a phone mockup showing a waveform, 1731x909. It was opened and looked
+#: at on 2026-08-31 before being listed here. It contains no person, no record, and nothing
+#: clinical. It predates this branch, is already public on the fork's `main`, and no commit
+#: on this branch adds or modifies an image.
+#:
+#: Do not add to this list without opening the file and describing what is in it. The
+#: invariant is "no patient source material", not "no PNG" -- but the burden of proof runs
+#: the other way, and an image nobody has looked at does not belong here.
+REVIEWED_NON_CLINICAL_IMAGES = {
+    "0fe0b85e055622657387835d1f816110f6dd44621d425e416a34e8715e3579e6": (
+        "frontend/public/og.png"
+    ),
+}
+
+
+def _is_reviewed_asset(path: str) -> bool:
+    """True when `path` names an allow-listed asset AND its bytes still match the pin."""
+    if path not in REVIEWED_NON_CLINICAL_IMAGES.values():
+        return False
+    out = subprocess.run(
+        ["git", "rev-list", "--objects", "--all"],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    )
+    for line in out.stdout.splitlines():
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2 and parts[1] == path:
+            blob = subprocess.run(
+                ["git", "cat-file", "blob", parts[0]],
+                cwd=REPO, capture_output=True, check=False,
+            )
+            if hashlib.sha256(blob.stdout).hexdigest() in REVIEWED_NON_CLINICAL_IMAGES:
+                return True
+    return False
 
 #: Files whose content is transcribed clinical data, where day-level dates are forbidden.
 CLINICAL_DOCS = ("docs/CLINICAL_REFERENCE.md", "docs/GAP_ANALYSIS.md")
@@ -170,6 +214,7 @@ def test_no_image_was_ever_committed():
             Path(line.strip()).suffix.lower() in IMAGE_SUFFIXES
             or "stroke report" in line.lower()
         )
+        and not _is_reviewed_asset(line.strip())
     }
     assert offenders == set(), (
         f"Images appear in git history and must be purged, not just deleted: {offenders}"
@@ -290,6 +335,11 @@ def test_no_image_blob_exists_in_the_object_store():
         )
         head = blob.stdout[:4]
         if head[:3] == b"\xff\xd8\xff" or head == b"\x89PNG":
+            # Hash the bytes, not the name -- this is the check that makes the allow-list
+            # safe, because a renamed or re-exported image lands here with a hash nobody
+            # signed off on and is still reported.
+            if hashlib.sha256(blob.stdout).hexdigest() in REVIEWED_NON_CLINICAL_IMAGES:
+                continue
             offenders.append(sha)
 
     assert offenders == [], (
@@ -315,7 +365,8 @@ def test_the_remote_carries_no_image():
 
     offenders = [
         line for line in out.stdout.splitlines()
-        if Path(line).suffix.lower() in IMAGE_SUFFIXES or "stroke report" in line.lower()
+        if (Path(line).suffix.lower() in IMAGE_SUFFIXES or "stroke report" in line.lower())
+        and not _is_reviewed_asset(line)
     ]
     assert offenders == [], (
         f"Images are present on the REMOTE. History must be rewritten and force-pushed, "
