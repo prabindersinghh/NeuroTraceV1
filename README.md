@@ -570,13 +570,16 @@ persistent change for appropriate clinical review.
 
 ### Important validation status
 
-The project currently has **805 automated tests passing** across the implemented system.
+The project currently has **1085 backend tests collected, 1082 passing with 3 expected
+skips**, plus **51 frontend tests passing**, across the implemented system.
 
 However:
 
 - the full computer-vision stack has **not yet been validated on a physical target phone**;
 - the five current ML components are **synthetic / training-stage models**;
 - synthetic model metrics must not be represented as clinical performance;
+- the Awaaz ASR adapter training runtime is executable but **has never trained a model**;
+  no adapter, word error rate, or intelligibility number for Awaaz ASR exists;
 - the Balance Belt is still a prototype and requires hardware validation.
 
 We publish these limitations deliberately.

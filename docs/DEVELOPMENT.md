@@ -87,6 +87,14 @@ cd frontend && npm test      # JS <-> Python parity
 | `test_train.py` | the metrics contract (refuses to write without limitations), grouped CV, and the asymmetry claim as a regression test |
 | `test_migration.py` | `alembic upgrade head` produces exactly the models' schema, and downgrades cleanly |
 | `parity.test.ts` | the on-device extractors match Python feature-for-feature to 1e-9 relative |
+| `test_asr_runtime.py` + `test_asr_runtime_gates.py` | the Awaaz ASR training runtime's governance, path, privacy and split gates. The gates file is mutation-tested: 28 single-line deletions of safety checks in a scratch copy each turn the suite red |
+| `test_awaaz_offline_rl.py` | the offline policy comparison — deterministic-logger refusal, absolute config floors, and that the deployment/experiment/claim flags cannot be set |
+
+The backend suite currently reports 1085 collected, 1082 passed, 3 expected skips and 0
+failed; the frontend reports 51 tests across 8 files. **Judge success by exit code**, and run
+the backend suite in the background — it takes longer than a ten-minute foreground timeout,
+and two concurrent pytest processes starve each other in a way that looks exactly like a
+hang.
 
 ### Regenerating the parity fixture
 
@@ -121,18 +129,75 @@ deterministic engine as one additional *feature*.
 
 ```bash
 cd backend
-python -m app.ml.train.asymmetry_discriminator                        # needs no data
-python -m app.ml.train.voice_dysarthria_clf --data data/torgo --controls data/librispeech
-python -m app.ml.train.rhythm_irregularity_clf --data data/physionet_af
+python -m app.ml.train.asymmetry_discriminator                       # synthetic only
+python -m app.ml.train.voice_dysarthria_clf \
+  --data ../data/raw/torgo \
+  --controls ../data/raw/librispeech/LibriSpeech/train-clean-100
+python -m app.ml.train.rhythm_irregularity_clf \
+  --data ../data/raw/physionet_af2017/training2017
 ```
 
-Place downloaded corpora under `backend/data/`. Access notes are in [DATASETS.md](DATASETS.md);
-TORGO needs registration and mPower needs a Synapse account.
+Place downloaded corpora under the repository-level, gitignored `data/raw/` directory.
+Access notes are in [DATASETS.md](DATASETS.md); TORGO needs registration and mPower needs a
+Synapse account.
 
 Each run writes `app/ml/train/artifacts/<model>.metrics.json` with ROC-AUC, sensitivity,
 specificity, confusion matrix, split method and a limitations note. `Metrics.save` refuses
 to write a file without limitations — an unqualified number is the thing this project exists
-not to produce.
+not to produce. Every tracked metrics artifact also carries a machine-readable `synthetic`
+boolean, so no artefact can be mistaken for evidence by a reader who skipped the prose.
+
+The model cards in `docs/models/` are rendered from those artifacts:
+
+```bash
+python -m app.ml.train.render_model_cards            # rewrite all five cards
+python -m app.ml.train.render_model_cards --check    # exit 1 if any card is stale
+```
+
+Only the `## Purpose` section is hand-written. It lives between
+`<!-- hand-written: purpose -->` markers and is carried through untouched; a card missing
+those markers fails closed rather than being regenerated without its prose.
+
+## The Awaaz ASR training runtime
+
+`app/ml/train/asr_runtime/` is a fail-closed LoRA/PEFT training runtime for MMS / Wav2Vec2
+CTC. **It has never trained anything.** No adapter exists and no WER or intelligibility
+number exists for Awaaz ASR anywhere in this repository; do not create one from the fact
+that the code runs. The synthetic dry-run writes a private manifest and no model and no
+clinical metric — the output directory contains exactly `manifest.json`.
+
+Real training additionally requires a consented archive, local base-model weights, a signed
+purpose-specific governance receipt, a GPU host, and a held-out human intelligibility
+evaluation. None of those exist here. Seven audit findings against this module are open and
+listed in `COMPLETION_CHECKLIST.md`; the first of them is that the receipt scheme proves
+possession of a key rather than approval by a reviewer (D-057).
+
+Its dependencies are optional and separate:
+
+```bash
+pip install -r requirements-train.txt      # a training host only, never the API
+```
+
+That file has **never been installed or verified in this repository** and is deliberately
+not part of `requirements.lock.txt`. torch, transformers and peft are lazily imported
+through `importlib` inside one function, so importing the runtime and booting the app both
+load zero heavy modules. Do not add numpy to it: numpy is pinned at 1.26.4 for the mediapipe
+numpy-1.x ABI, and a resolver that upgrades it to satisfy a torch build breaks FaceMesh with
+a segfault that looks like nothing to do with training. D-056.
+
+## Offline policy evaluation
+
+`app/ml/rl/` compares a candidate Awaaz ranker against a logged behaviour policy, offline
+and on synthetic logs only:
+
+```bash
+.venv/bin/python -m app.ml.rl.simulate --events 60 --seed 42
+```
+
+It is ranking-only and cannot generate words, alter confirmation, trigger speech, touch an
+emergency flow, or explore on a patient. The production Awaaz schema records no slate,
+policy version, logged propensity or outcome, so no current product event is eligible input.
+Read `PLAN_RL.md` before touching it, and D-055 before relaxing a gate.
 
 ---
 

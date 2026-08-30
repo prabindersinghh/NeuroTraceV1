@@ -4,6 +4,77 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-31 — Governance-gated ASR training runtime and offline policy evaluation
+
+Awaaz personalised ASR now has a real training runtime and still has no trained model.
+`backend/app/ml/train/asr_runtime/` implements fail-closed LoRA/PEFT fine-tuning of an
+MMS / Wav2Vec2 CTC base and refuses to start without a consented archive, local base-model
+weights, a signed purpose-specific governance receipt and a GPU host — none of which exist
+here. No adapter, WER, or intelligibility number exists for Awaaz anywhere in this
+repository, and none should be written until a governed run has happened and been reviewed.
+Torch, transformers and peft are lazily imported through `importlib` inside one function, so
+the API never needs the GPU stack; the optional pins live in `backend/requirements-train.txt`,
+which has never been installed or verified here and is deliberately outside
+`requirements.lock.txt`. The runtime briefly carried a second, co-located requirements file
+listing `accelerate`; it was removed in favour of the one at `backend/`, because two optional
+dependency files is one ambiguity too many and `accelerate` has no reference in the runtime,
+which runs its own optimisation loop rather than a `Trainer`. D-056, D-057.
+
+`backend/app/ml/rl/` adds an offline-only, ranking-only policy-evaluation package. A logging
+policy that did not randomise is now refused rather than estimated: more than 10% of events
+at a logged probability of 0.999 or above returns the blocker
+`logging_policy_is_deterministic` and no estimate. Before that gate the same log returned
+`candidate_better_offline` with a tight interval, which is an unidentifiable comparison
+presented as a strong positive. Every evaluation gate now has an absolute floor so a config
+can only be made stricter, and `deployment_allowed`, `online_experiment_allowed` and
+`clinical_claim_allowed` became read-only properties that always return false. The production
+Awaaz schema records no slate, policy version, propensity or outcome, so no current product
+event is eligible. D-055, `docs/PLAN_RL.md`.
+
+Privacy and truthfulness work landed alongside. `.gitignore` inverted from a deny-list to an
+allow-list for `data/*` and `artifacts/**` — `data/mpower/` had been stageable despite the
+asymmetry trainer's own docstring pointing real records there, and a patient `.wav`,
+`.gguf`, `tokenizer.json` or `notes.txt` had been stageable under `artifacts/**`. Only
+`data/README.md` and the five reviewed `*.metrics.json` are named back in. `--patient` no
+longer reaches a tracked artifact or the console, which mattered because the privacy guard's
+label pattern was `patient\s+id` and `\s` does not match the underscore in `patient_id`, so
+it was blind to the exact key the code writes. An INV-1 leak in the archive verifier was
+fixed: its snapshot used `tempfile.mkstemp` with no `dir=`, copying every consented WAV into
+the shared system temp directory, contradicting `awaaz_archive.py`'s own promise never to
+write patient audio to disk; it now snapshots beside the archive. The five model cards are
+genuinely generated from `artifacts/*.metrics.json` by `render_model_cards.py`, with only
+the hand-written `## Purpose` section carried through between markers. D-058, D-059.
+
+Seven findings from an adversarial audit of `asr_runtime` are recorded and not fixed:
+symmetric-HMAC receipts an operator can mint for themselves, a synthetic-smoke path that
+escapes the output-path guard, a split with no size floor or ceiling, an `epochs_completed`
+counter that can overstate a truncated epoch, an orphan-adapter window between publishing
+weights and publishing the manifest, a metadata sanitizer blind to `target_text`, and a
+base-model snapshot written to shared temp. They are stated in full in
+`COMPLETION_CHECKLIST.md` and `PLAN_AWAAZ.md`.
+
+Verified: backend **1085 collected / 1082 passed / 3 expected skips / 0 failed**, exit code
+0; frontend **51 tests passed** across 8 test files, with `tsc -b` and `npm run build` both
+exiting 0. The previous committed baseline was 912 collected / 909 passed / 3 skips. New
+coverage is `test_awaaz_offline_rl.py` (46 tests), `test_asr_runtime.py` (27 tests) and
+`test_asr_runtime_gates.py` (45 test functions / 87 parametrised cases). Coverage was
+measured by mutation rather than asserted: every `if` guard in `runtime.py` whose body raises
+a refusal was neutered one at a time in a scratch copy, and the two ASR suites were re-run
+against each. **35 of 78 guard sites are deletion-sensitive**, including every gate the
+adversarial audit flagged as high-risk -- consent, corpus variety, the audio contract,
+conflicting labels, receipt time-window integrity, subject binding, the dependency floor,
+artifact privacy, and input re-verification. The 43 survivors are defensive checks on
+malformed input that no fixture produces, plus the optimisation loop itself
+(`non_finite_loss`, `training_step_failed`, `device_unavailable`), which cannot execute here
+at all because torch is not installed. That second group is an environment limit, not a
+test-quality one, and it will stay unmeasured until a real training host exists.
+`.venv/bin/python -m app.ml.rl.simulate --events 60 --seed 42` returns
+`candidate_better_offline`, delta 0.778, 95% interval [0.636, 0.883] on a made-up log; a
+π₀=1.0 log returns `status=blocked`; `min_events=2` is refused and `min_events=500` accepted.
+Importing `asr_runtime` and booting the FastAPI app were each checked to load zero heavy
+modules, and the synthetic dry-run output directory was confirmed to contain exactly
+`manifest.json`. Zero tracked files regressed under the new `.gitignore` rules.
+
 ## 2026-08-29 — Awaaz authenticated offline phrase board
 
 After an authorized online load, Awaaz now keeps a metadata-only phrase-board snapshot in

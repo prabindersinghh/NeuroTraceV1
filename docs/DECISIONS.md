@@ -548,3 +548,93 @@ editing, and listener-capability actions are disabled until reconnection, while 
 emergency setup and deletion remain local. The installed browser voice is not promoted to
 the same guarantee as the caregiver-recorded emergency WAV: only the latter has a playback
 receipt and self-test proving it started on that device.
+
+**D-055 · 2026-08-31 · A logging policy that did not randomise is refused, not estimated.**
+The offline comparison in `app/ml/rl/` previously accepted a log in which the behaviour
+policy assigned probability 1.0 to the action it took, and returned
+`candidate_better_offline` with a tight confidence interval. That answer was not merely
+optimistic, it was unidentifiable: under π₀(a|x)=1 no alternative action was ever
+observable, positivity fails, the importance weight collapses to π(a|x), and
+self-normalised inverse propensity scoring reduces to a re-weighted average of the same
+logged actions, so the bootstrap interval measures reward noise and nothing
+counterfactual. An unidentifiable comparison presented as a strong positive is the worst
+failure this module can have, because it looks like evidence.
+
+The gate is a rate rather than an any-1.0 test. A genuinely randomising logger can
+legitimately emit a certainty — a slate that screening left with one option, a hard
+tie-break — and an occasional certain event carries no information without invalidating the
+log. More than `max_deterministic_event_rate` (default 10%) of events at or above
+`deterministic_probability_threshold` (default 0.999) now returns the blocker
+`logging_policy_is_deterministic` and no estimate at all.
+
+The same reasoning made two other things non-negotiable. `EvaluationConfig` remains tunable
+but only toward strictness: absolute floors in `__post_init__` mean a reviewer can demand
+more events or a larger minimum effect, and nobody can construct a config that accepts a
+two-event comparison. And `deployment_allowed`, `online_experiment_allowed` and
+`clinical_claim_allowed` became read-only properties that always return false rather than
+fields, so no caller and no `dataclasses.replace` can produce a result object that appears to
+grant deployment.
+
+**D-056 · 2026-08-31 · The ASR training stack is optional and never an API dependency.**
+`app/ml/train/asr_runtime/` needs torch, transformers and peft. Putting those in
+`requirements.txt` would make roughly 2.5 GB of wheels a dependency of a web server that
+never calls them and would couple every Railway deploy to a stack only an offline training
+host uses. They live in `requirements-train.txt`, which is deliberately not part of
+`requirements.lock.txt` and has never been installed or verified in this repository — the
+pins there satisfy the minimums the runtime enforces, and are a starting point to be checked
+on the first real training host rather than a tested lock.
+
+The separation is enforced in code, not by convention. The heavy packages are pulled in
+through `importlib` inside `_load_ml_runtime()`, which runs only after every governance and
+data gate has passed, so importing `app.ml.train.asr_runtime` and booting the FastAPI app
+both load zero heavy modules. numpy is deliberately absent from the training requirements: it
+is pinned at 1.26.4 for the mediapipe 0.10.14 wheels on the numpy 1.x ABI, and a resolver
+that upgraded it to satisfy a torch build would break FaceMesh in a way that surfaces as a
+segfault in the face pipeline rather than as anything about training.
+
+**D-057 · 2026-08-31 · Training is gated on a receipt that does not yet prove governance.**
+Real adapter training refuses to start without a signed, purpose-specific receipt naming the
+patient, the archive hash and the base-model hash, and every one of those is compared with a
+constant-time check before any media is read. This is the right shape: the expensive mistake
+is training on a corpus nobody approved, and the cheap one is a job that will not start.
+
+The receipt is a symmetric HMAC, `governance_receipt_signature` is exported public API, and
+the pinned trust root comes from environment variables the same operator sets. So an
+operator can mint their own approval, and what the signature actually proves is possession
+of a key the training host already holds — not that a reviewer looked at anything. This is
+recorded here rather than quietly relied upon, because the entire fail-closed design leans
+on that one artifact. The fix is an asymmetric scheme, Ed25519 with the public key pinned in
+tracked config, so signing authority and running authority are different capabilities. Until
+then no receipt should be described anywhere as evidence of approval.
+
+**D-058 · 2026-08-31 · Private corpora and model artifacts are gitignored by allow-list.**
+The rules for `data/` and `artifacts/` were deny-lists, and a deny-list of a category this
+open fails the moment someone adds a filename nobody thought of. It already had:
+`data/raw/` and `data/exports/` were ignored while `data/mpower/` was not, even though the
+asymmetry trainer's own docstring tells you to put real mPower records there; and under
+`artifacts/**` a rule that enumerated weight extensions left a patient `.wav`, a `.gguf`, a
+`tokenizer.json` and any README stageable inside a per-patient adapter directory. A patient
+WAV under `artifacts/` is precisely the INV-1 failure this repository exists to prevent.
+
+Both directories are now ignored wholesale and the reviewed files are named back in:
+`data/README.md`, and the five `*.metrics.json` fixtures. Subdirectories stay ignored
+entirely, because git does not descend into an excluded directory, so a per-patient adapter
+directory cannot be re-admitted by accident. Awaaz export matching was widened at the same
+time, since a rule that knew only about `.tar` let `.tar.gz`, `.tgz` and `.zip` through. The
+inversion was checked against the tracked file list so that no file already under version
+control was dropped.
+
+**D-059 · 2026-08-31 · Model cards are generated except one hand-written section.**
+The claim that the model cards could not drift was written in this repository before any
+generator existed, which is exactly the kind of unsupported statement the documents are
+supposed to catch. `python -m app.ml.train.render_model_cards` now renders each card from
+its `artifacts/<model>.metrics.json`, `--check` exits 1 on a stale card, and a test
+re-renders all five and compares byte-for-byte, so every number, split description and
+limitation in a card comes from the artifact rather than from someone's memory of it.
+
+Purpose could not be generated, because it is the one part of a card that explains what the
+model is for and why it is allowed to exist, and a metrics file does not contain that. It is
+hand-written between `<!-- hand-written: purpose -->` markers and carried through untouched;
+a card missing the markers fails closed rather than being regenerated without its prose. The
+honest statement is therefore narrower than the one it replaces: the generated body cannot
+drift, and the Purpose section still can, because nothing generates it.

@@ -56,6 +56,13 @@ per-request cost to users with intermittent data.
 | Frontend | React + Vite + TypeScript, PWA | — |
 | On-device vision | MediaPipe Tasks Vision 1.0.1, wasm from `node_modules` | D-010 |
 | ML training | Batch GPU by the hour, nightly/weekly | D-004 |
+| ASR adapter training | LoRA/PEFT over MMS / Wav2Vec2 CTC, offline host only, never run | D-056, D-057 |
+| Offline policy evaluation | SNIPS over synthetic logs, ranking only, no deployment path | D-055 |
+
+The last two rows describe code that exists and has produced nothing. No ASR adapter has
+been trained and no policy is authorised for any deployment path. Their dependencies are
+optional by design: `requirements-train.txt` is separate from `requirements.txt` and the
+heavy packages are lazily imported, so the API process never needs the GPU stack.
 
 ---
 
@@ -161,7 +168,10 @@ Explicitly-consented Awaaz practice WAVs are the narrow local-retention case: th
 origin-scoped IndexedDB and the server receives only a receipt that can be marked deleted.
 They leave protected app storage only when a person explicitly downloads an
 integrity-checked local archive after a sensitive-data warning; the app never sends that
-archive over a network. Deleting the IndexedDB copy cannot revoke an already downloaded
+archive over a network. Server-side tooling that reads such an archive must keep it where it
+was: the verifier's snapshot used `tempfile.mkstemp` with no `dir=` and copied every
+consented WAV into the shared system temp directory, so it now snapshots beside the archive
+instead. Deleting the IndexedDB copy cannot revoke an already downloaded
 file, and the UI says so before export.
 *This is the product's central privacy claim.*
 

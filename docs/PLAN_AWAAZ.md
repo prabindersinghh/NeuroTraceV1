@@ -150,8 +150,10 @@ Possessing the public read capability does not grant revoke authority.
 Every conversation puts the product in a stranger's browser. That is also the distribution
 mechanism.
 
-## D3 — personalised ASR (PARTIAL — capture endpointing exists; ASR/adapter do not)
-- Base: distil-Whisper or IndicWav2Vec2 + CTC head.
+## D3 — personalised ASR (PARTIAL — endpointing and an untrained training runtime exist; recognition and a trained adapter do not)
+- Base: an MMS / Wav2Vec2 CTC model. The runtime pins this rather than leaving it open:
+  `SUPPORTED_MODEL_TYPES = {"wav2vec2"}`, so a checkpoint of any other architecture is
+  refused at preflight instead of being adapted on a guess.
 - **Reduce language-model weight during decoding.** General ASR fails on dysarthric speech
   by producing fluent, confident, *wrong* output — it leans on its language prior. We want
   acoustic faithfulness, so prefer phoneme/CTC-level output downstream stages can reason
@@ -162,9 +164,16 @@ mechanism.
 - Per-patient LoRA adapters, trained nightly server-side, shipped back for local inference.
 - A versioned local tar now provides a human-controlled, integrity-checked handoff of
   consented pairs. A strict non-extracting verifier now checks the schema, paths, UUID
-  associations, bounds, WAV headers and hashes. It then refuses training because the LoRA
-  implementation, evaluation, model registry, and adapter shipment are not connected. This
-  is verified training input—not a deployed personalised ASR system.
+  associations, bounds, WAV headers and hashes.
+- A LoRA/PEFT training runtime now exists at `backend/app/ml/train/asr_runtime/`. It is
+  executable and has trained nothing. Training is refused not because the implementation is
+  missing but because it is unreachable: it demands a signed purpose-specific governance
+  receipt, local base-model weights, a GPU host, and a consented archive, and none of those
+  exist here. Its synthetic dry-run writes a private manifest and no model and no clinical
+  metric. Torch, transformers and peft are lazily imported through `importlib` inside a
+  single function, so importing the runtime and booting the FastAPI app both load zero heavy
+  modules and the API never needs the GPU stack. This is verified training input—not a
+  deployed personalised ASR system.
 - **Latency target: < 1 s.** Above ~2 s the conversation dies regardless of accuracy.
 
 ## D4 — passive learning loop (PARTIAL — local card + reviewed-repeat pairs)
@@ -202,3 +211,39 @@ D-013, applied to a different model.
    never auto-speak.
 3. **Emergency mode failing silently is worse than not having it.** Needs a visible
    self-test the caregiver can run.
+4. **The governance receipt does not prove governance.** `asr_runtime` signs receipts with a
+   symmetric HMAC, `governance_receipt_signature` is exported public API, and the "pinned
+   trust root" is read from environment variables that the same operator sets. An operator
+   can therefore mint their own approval: the signature proves possession of a key the
+   training host already holds, not that any reviewer approved anything. This has to become
+   an asymmetric scheme — Ed25519, with the public key pinned in tracked config — before a
+   receipt can be treated as evidence of approval by anyone other than the person running
+   the job. Found by audit, not fixed.
+5. **`run_synthetic_smoke` bypasses the output-path guards.** The module's own rule is that
+   runtime output lives only under `data/`, and the smoke path does not enforce it, so
+   `--output-dir` can write a manifest inside the tracked source tree. Found by audit, not
+   fixed.
+6. **The split has no floor or ceiling.** `build_group_phrase_disjoint_split` seeds the three
+   largest components into train, validation and test before load-balancing the rest, with no
+   minimum or maximum size on any split. A fifty-pair corpus can legally produce a
+   one-sample test split while the manifest advertises target fractions of 70/15/15. An
+   evaluation on one utterance is not an evaluation, and nothing currently says so.
+   Found by audit, not fixed.
+7. **`epochs_completed` can overstate what ran.** The counter is incremented after the inner
+   loop even when the optimiser-step cap broke out mid-epoch, so a manifest can read
+   `"status": "completed", "epochs_completed": 1` when one batch of twenty was optimised.
+   Found by audit, not fixed.
+8. **A crash between two publish steps leaves orphaned patient-derived weights.** The adapter
+   directory is published before the manifest. A process killed in between leaves LoRA
+   weights derived from a patient's speech on disk with no manifest, no limitations, and no
+   `deployment_ready: false` beside them — precisely the artifact this design exists to make
+   impossible to mistake for a shippable model. Found by audit, not fixed.
+9. **The adapter metadata sanitizer does not screen `target_text`.** It screens patient and
+   capture UUIDs and audio hashes. This is harmless today only because PEFT writes exactly
+   two files, neither containing transcripts; one dependency upgrade that starts recording
+   dataset metadata would publish the patient's own phrases into an exported artifact.
+   Found by audit, not fixed.
+10. **The base-model snapshot writes to shared temp.** It still uses `tempfile.mkdtemp` with
+    no `dir=`, copying a multi-gigabyte checkpoint into the system temp directory. This is
+    not patient data, but it is left behind on SIGKILL and it is the same shape of mistake as
+    the archive-snapshot bug that was fixed (INV-1). Found by audit, not fixed.

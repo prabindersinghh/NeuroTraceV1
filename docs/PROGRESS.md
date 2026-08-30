@@ -2,7 +2,37 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-29 · An authenticated online Awaaz load now saves a user-and-
+**Last updated:** 2026-08-31 · Awaaz personalised ASR now has a real training runtime that
+has trained nothing. `backend/app/ml/train/asr_runtime/` implements fail-closed,
+governance-gated LoRA/PEFT fine-tuning of an MMS / Wav2Vec2 CTC base
+(`SUPPORTED_MODEL_TYPES = {"wav2vec2"}`), and no adapter, WER, or intelligibility number
+exists for Awaaz anywhere in this repository. Its synthetic dry-run writes exactly one file,
+a private `manifest.json`, and no clinical metric. Reaching real training additionally
+requires a consented archive, local base-model weights, a signed purpose-specific governance
+receipt, a GPU host, and held-out human intelligibility evaluation, none of which exist
+here — so the blocker moved from missing code to missing governance and evidence, which is a
+smaller change than it sounds. Torch, transformers and peft are lazily imported through
+`importlib` inside one function; importing the runtime and booting the FastAPI app both load
+zero heavy modules, and the optional GPU pins live in `backend/requirements-train.txt`,
+which has never been installed or verified here and is deliberately outside
+`requirements.lock.txt`. An adversarial audit of that module left seven findings open —
+symmetric-HMAC receipts an operator can mint for themselves, a smoke path that escapes the
+output-path guard, a split with no size floor, an `epochs_completed` counter that can
+overstate a truncated epoch, an orphan-adapter window between two publish steps, a sanitizer
+blind to `target_text`, and a base-model snapshot in shared temp. They are written down in
+`COMPLETION_CHECKLIST.md` and `PLAN_AWAAZ.md` rather than fixed. `backend/app/ml/rl/` adds
+an offline-only, ranking-only policy-evaluation package with hard floors on every gate and
+read-only `deployment_allowed` / `online_experiment_allowed` / `clinical_claim_allowed`
+properties that always return false; a logging policy that did not randomise is now refused
+outright instead of returning a confident interval, and the production Awaaz schema records
+no slate, policy version, propensity, or outcome, so no current product event is eligible
+(`PLAN_RL.md`). The five model cards are now genuinely generated from
+`artifacts/*.metrics.json` by `render_model_cards.py`, with only the hand-written
+`## Purpose` section carried through between markers. Privacy work inverted `.gitignore`
+from a deny-list to an allow-list for `data/*` and `artifacts/**`, stopped `--patient` from
+reaching a tracked artifact or the console, and fixed an INV-1 leak where the archive
+verifier snapshotted consented WAVs into the shared system temp directory. ·
+2026-08-29 · An authenticated online Awaaz load now saves a user-and-
 patient-bound phrase-board snapshot. On a genuine network failure the saved tiles remain
 visible and tappable with an explicit unsaved/browser-voice disclosure; authorization
 responses never use the cache, and network-dependent actions remain disabled. Awaaz also
@@ -33,9 +63,8 @@ while minting a replacement kills the prior link and preserves one active capabi
 patient. Consented local pairs can now be SHA-256 verified into a versioned tar only after the user acknowledges that the voice archive leaves protected app
 storage; NeuroTrace does not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
 undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
-adapter command then exits without writing a model or non-synthetic metrics: real LoRA
-training is still unimplemented. Previous project
-history follows. ·
+adapter command then exits without writing a model or non-synthetic metrics. Previous
+project history follows. ·
 2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
@@ -225,7 +254,11 @@ so in the source. D-015, D-017.
   a patient-authorized, retry-idempotent endpoint. The active capability recovers after
   reload and a replacement supersedes the previous URL. There is no live patient-speech
   recognition source yet.
-- **D3** adapter pipeline is synthetic scaffolding only; no model runs in the product.
+- **D3** a real LoRA/PEFT training runtime for MMS / Wav2Vec2 CTC exists
+  (`backend/app/ml/train/asr_runtime/`) and has trained nothing; no adapter, WER, or
+  intelligibility number exists and no model runs in the product. It is unreachable without
+  a signed purpose-specific governance receipt, local base weights and a GPU host, and its
+  synthetic dry-run writes only a private manifest.
 - **D4** explicitly-consented card/audio pairs now stay in an on-device IndexedDB vault;
   the server retains only UUID/duration/integrity/consent/deletion receipts. Worst-first text review
   remains retryable, and an explicitly consented fresh repeat can pair the verified label
@@ -245,17 +278,36 @@ so in the source. D-015, D-017.
 - **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
   but does not train a voice.
 - **Awaaz ASR and learning loop** — card-tap audio association and consented local retention
-  now exist, as does caregiver-reviewed fresh-repeat audio association. Patient-speech
-  recognition, original conversational-audio capture, adapter training/deployment, and
-  production inference do not.
+  now exist, as does caregiver-reviewed fresh-repeat audio association, and so does an
+  executable governance-gated LoRA/PEFT training runtime. Patient-speech recognition,
+  original conversational-audio capture, an actually trained adapter, adapter deployment,
+  and production inference do not. Nothing has been trained: there is no adapter file and no
+  WER or intelligibility number for Awaaz ASR anywhere in this repository, and there must
+  not be a model card for one until a governed run has happened and been reviewed. The
+  optional GPU stack (`backend/requirements-train.txt`) has never been installed or verified
+  here.
+- **Seven open findings against `asr_runtime`**, from an adversarial audit and deliberately
+  not fixed in this session: symmetric-HMAC governance receipts an operator can mint for
+  themselves, a synthetic-smoke path that escapes the output-path guard, a split with no
+  size floor or ceiling, an `epochs_completed` counter that can overstate a truncated epoch,
+  an orphan-adapter window between publishing weights and publishing the manifest, a
+  metadata sanitizer blind to `target_text`, and a base-model snapshot written to shared
+  temp. Each is stated in full in `COMPLETION_CHECKLIST.md` and `PLAN_AWAAZ.md`.
+- **Offline policy evaluation has no eligible input.** `backend/app/ml/rl/` runs offline and
+  synthetic only; the production Awaaz schema records no slate, policy version, logged
+  propensity, or outcome, so no current product event can be used. `docs/PLAN_RL.md`.
 - **Awaaz emergency completion** — configure and field-test the SMTP caregiver provider,
   then add a consented caregiver phone/contact contract if direct caregiver dialing is
   required. The explicit 108 dialer action exists. Offline playback and provider delivery
   are reported successful only when the local WAV starts and SMTP accepts the recipient
   respectively; opening a dialer is never reported as a completed call.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
-  per model, and the model cards are generated from the artifact metrics so they cannot
-  quietly claim otherwise. Three datasets need a human to request access.
+  per model, and the model cards are rendered from `artifacts/*.metrics.json` by
+  `python -m app.ml.train.render_model_cards`, so the generated body cannot quietly claim
+  otherwise — `--check` exits 1 on a stale card and a test re-renders each one and compares
+  it byte-for-byte. The hand-written `## Purpose` section, delimited by
+  `<!-- hand-written: purpose -->` markers, is carried through untouched and is the one part
+  that can still drift. Three datasets need a human to request access.
 - **Clinician PDF export** — not built. The data endpoint it would render exists.
 - **CCG baseline side-by-side** — the trace renders; comparison against the patient's own
   earlier trace does not.
@@ -290,7 +342,13 @@ so in the source. D-015, D-017.
    laterality features lives in the deferred walking and stepping tests. M3 oculomotor
    carries laterality for those patients. If M3 capture quality turns out to be poor in the
    field, phone-only patients lose posterior laterality entirely — that is the risk to watch.
-5. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
+5. **A governance receipt currently proves possession of a key, not approval.** The
+   `asr_runtime` receipt is a symmetric HMAC verified against a trust root the operator sets
+   through environment variables, so the operator of a training host can sign their own
+   authorisation. Until that becomes an asymmetric scheme with a public key pinned in
+   tracked config, a valid receipt is evidence that the job was configured, not that anyone
+   reviewed it — and the whole fail-closed design rests on that receipt.
+6. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
    to three frames, so peak velocity is an average that understates the true peak. Recorded
    and flagged (`velocity_confidence` 0.00 at 30 fps) rather than corrected. Latency is
    usable for trending; velocity is not comparable to published normative values.

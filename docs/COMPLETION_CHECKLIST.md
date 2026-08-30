@@ -26,12 +26,12 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 13 | Awaaz D1–D5 complete | **PARTIAL** | Localized personal phrase management, a user-bound cached board for honest offline phrase-tile access, INV-9 confirmation, localized/revocable listener capability, consented local card/audio and caregiver-reviewed repeat pairs, integrity-checked local training export + fail-closed single-patient and leakage-safe cohort readiness planners, 0.5–4.0 s endpointing, offline emergency WAV, long-press, opt-in location, explicit 108 dialer action, and a configured-only SMTP adapter exist. Missing: patient-speech ASR/original conversational audio, real adapter training/deployment, pooled-study consent/data, provider credentials/field test, and a consented caregiver phone/contact contract |
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
 | 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
-| 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards generated **from the artifacts**, so they cannot drift |
+| 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards rendered by `render_model_cards.py` **from `artifacts/*.metrics.json`**; `--check` exits 1 on a stale card and a test re-renders each byte-for-byte, so the generated body cannot drift. The hand-written `## Purpose` section, delimited by `<!-- hand-written: purpose -->`, is carried through untouched and is the one part that can still drift |
 | 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed; `verify_deploy.sh` **7/7** — identical band sequence on the public URL. Neon still to swap in (SQLite bridge until then) |
 | 18 | EN / HI / PA throughout | **PARTIAL** | Awaaz board, review, emergency, and public listener shell are trilingual, including listener loading/error/expired/privacy states and server coaching. Full physical-device language QA across every non-Awaaz route is still pending |
-| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 product invariants plus speaker/phrase split and offline-cache authorization boundaries; backend: 912 collected / 909 passed / 3 skipped / 0 failed; frontend: 51 passed |
+| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 product invariants plus speaker/phrase split, offline-cache authorization, and ASR-runtime governance boundaries; backend: 1085 collected / 1082 passed / 3 expected skips / 0 failed; frontend: 8 files / 51 passed, `tsc -b` and `npm run build` both exit 0 |
 | 20 | Privacy invariant passing; PR open | **TEST** | INV-11 is covered by tests. The portable pre-push hook runs on the Awaaz branch; PR #1 is open against upstream `main` |
-| 21 | Living docs current | **LIVE** | 12 docs + 5 model cards |
+| 21 | Living docs current | **LIVE** | 23 docs + 5 model cards |
 
 ---
 
@@ -45,6 +45,39 @@ baseline locks, by design (D-033).
 
 **Demo videos (item 6).** `TaskShell` accepts and displays `demoSrc`, and the flow is built
 around it, but no clips have been recorded. Recording them needs a person to film.
+
+**No Awaaz ASR model has been trained (item 13).** `backend/app/ml/train/asr_runtime/` is a
+real, executable LoRA/PEFT training runtime for MMS / Wav2Vec2 CTC, and it has produced
+nothing: no adapter, no WER, no intelligibility number, no model card. Its synthetic dry-run
+writes exactly one file, `manifest.json`, and no clinical metric. A real run needs a
+consented archive, local base-model weights, a signed purpose-specific governance receipt, a
+GPU host, and a held-out human intelligibility evaluation — none of which exist here. The
+optional GPU stack in `backend/requirements-train.txt` has never been installed or verified
+in this repository and is deliberately outside `requirements.lock.txt`.
+
+**Seven findings against `asr_runtime` are open, from an adversarial audit of that module.**
+They are recorded rather than fixed, and they are why the runtime must not be treated as
+production-ready even once a receipt exists. (1) Governance receipts use a symmetric HMAC
+and the trust root comes from environment variables the operator sets, so an operator can
+mint their own approval — it needs an asymmetric scheme with a public key pinned in tracked
+config. (2) `run_synthetic_smoke` bypasses the output-path guards, so `--output-dir` can
+write inside the tracked source tree against the module's own `data/`-only rule. (3) The
+split seeds the three largest components into train/validation/test with no floor or
+ceiling, so a fifty-pair corpus can yield a one-sample test split while the manifest
+advertises 70/15/15. (4) `epochs_completed` is incremented even when the optimiser-step cap
+broke out mid-epoch, so a manifest can claim a completed epoch that ran one batch of twenty.
+(5) A crash between publishing the adapter directory and publishing the manifest leaves
+patient-derived LoRA weights on disk with no manifest, no limitations, and no
+`deployment_ready: false`. (6) The adapter metadata sanitizer screens patient and capture
+UUIDs and audio hashes but not `target_text`; harmless only because PEFT currently writes
+two files, and one dependency upgrade from publishing patient phrases. (7) The base-model
+snapshot still uses `tempfile.mkdtemp` with no `dir=`, copying a multi-gigabyte checkpoint
+into shared temp — not patient data, but left behind on SIGKILL.
+
+**Offline policy evaluation is a scaffold with no eligible input.** `backend/app/ml/rl/` can
+compare a candidate ranker against a logged behaviour policy offline, on synthetic logs
+only. The production Awaaz schema records no slate, policy version, logged propensity, or
+outcome, so no current product event is eligible. See `docs/PLAN_RL.md`.
 
 **Nothing has run on a physical phone.** Camera framing, pose scaling at 1.5 m, and the
 handset-tilt path in SVV are all verified in a desktop browser only. This is the largest

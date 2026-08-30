@@ -51,9 +51,16 @@ turns it into a number with a confusion matrix.
 ### 4. `personalised_asr_adapter`
 LoRA fine-tuning per patient from harvested pairs (Awaaz D4). Few million parameters,
 intended to train nightly and ship back for on-device inference. **Current executable status:
-synthetic spec/drift simulation only.** A strict importer verifies the versioned local tar
-without extraction, but the command then refuses to write an adapter or non-synthetic
-metrics until real LoRA fine-tuning, held-out evaluation and model deployment exist.
+an untrained runtime.** `app/ml/train/asr_runtime/` implements real LoRA/PEFT fine-tuning of
+an MMS / Wav2Vec2 CTC base, and it has produced nothing: no adapter, no WER, no
+intelligibility number. A strict importer verifies the versioned local tar without
+extraction, and the legacy `personalised_asr_adapter` command still refuses to write an
+adapter or non-synthetic metrics. The runtime is unreachable without a signed
+purpose-specific governance receipt, local base-model weights, and a GPU host, and its
+synthetic dry-run writes a private manifest and no model and no clinical metric. Held-out
+evaluation, human-listener intelligibility, and deployment approval remain prerequisites,
+and they are now the whole of the blocker — the missing piece is governance and evidence,
+not code.
 
 The verified archive can be checked for experimental readiness without exposing its
 contents:
