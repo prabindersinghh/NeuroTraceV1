@@ -18,7 +18,7 @@ which has never been installed or verified here and is deliberately outside
 `requirements.lock.txt`. The runtime briefly carried a second, co-located requirements file
 listing `accelerate`; it was removed in favour of the one at `backend/`, because two optional
 dependency files is one ambiguity too many and `accelerate` has no reference in the runtime,
-which runs its own optimisation loop rather than a `Trainer`. D-056, D-057.
+which runs its own optimisation loop rather than a `Trainer`. D-058, D-059.
 
 `backend/app/ml/rl/` adds an offline-only, ranking-only policy-evaluation package. A logging
 policy that did not randomise is now refused rather than estimated: more than 10% of events
@@ -29,7 +29,7 @@ presented as a strong positive. Every evaluation gate now has an absolute floor 
 can only be made stricter, and `deployment_allowed`, `online_experiment_allowed` and
 `clinical_claim_allowed` became read-only properties that always return false. The production
 Awaaz schema records no slate, policy version, propensity or outcome, so no current product
-event is eligible. D-055, `docs/PLAN_RL.md`.
+event is eligible. D-057, `docs/PLAN_RL.md`.
 
 Privacy and truthfulness work landed alongside. `.gitignore` inverted from a deny-list to an
 allow-list for `data/*` and `artifacts/**` — `data/mpower/` had been stageable despite the
@@ -43,7 +43,7 @@ fixed: its snapshot used `tempfile.mkstemp` with no `dir=`, copying every consen
 the shared system temp directory, contradicting `awaaz_archive.py`'s own promise never to
 write patient audio to disk; it now snapshots beside the archive. The five model cards are
 genuinely generated from `artifacts/*.metrics.json` by `render_model_cards.py`, with only
-the hand-written `## Purpose` section carried through between markers. D-058, D-059.
+the hand-written `## Purpose` section carried through between markers. D-060, D-061.
 
 Seven findings from an adversarial audit of `asr_runtime` are recorded and not fixed:
 symmetric-HMAC receipts an operator can mint for themselves, a synthetic-smoke path that

@@ -170,7 +170,7 @@ Real training additionally requires a consented archive, local base-model weight
 purpose-specific governance receipt, a GPU host, and a held-out human intelligibility
 evaluation. None of those exist here. Seven audit findings against this module are open and
 listed in `COMPLETION_CHECKLIST.md`; the first of them is that the receipt scheme proves
-possession of a key rather than approval by a reviewer (D-057).
+possession of a key rather than approval by a reviewer (D-059).
 
 Its dependencies are optional and separate:
 
@@ -183,7 +183,7 @@ not part of `requirements.lock.txt`. torch, transformers and peft are lazily imp
 through `importlib` inside one function, so importing the runtime and booting the app both
 load zero heavy modules. Do not add numpy to it: numpy is pinned at 1.26.4 for the mediapipe
 numpy-1.x ABI, and a resolver that upgrades it to satisfy a torch build breaks FaceMesh with
-a segfault that looks like nothing to do with training. D-056.
+a segfault that looks like nothing to do with training. D-058.
 
 ## Offline policy evaluation
 
@@ -197,7 +197,7 @@ and on synthetic logs only:
 It is ranking-only and cannot generate words, alter confirmation, trigger speech, touch an
 emergency flow, or explore on a patient. The production Awaaz schema records no slate,
 policy version, logged propensity or outcome, so no current product event is eligible input.
-Read `PLAN_RL.md` before touching it, and D-055 before relaxing a gate.
+Read `PLAN_RL.md` before touching it, and D-057 before relaxing a gate.
 
 ---
 

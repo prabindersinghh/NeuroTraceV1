@@ -549,7 +549,14 @@ emergency setup and deletion remain local. The installed browser voice is not pr
 the same guarantee as the caregiver-recorded emergency WAV: only the latter has a playback
 receipt and self-test proving it started on that device.
 
-**D-055 · 2026-08-31 · A logging policy that did not randomise is refused, not estimated.**
+*The five entries below were first written as D-055 through D-059 and renumbered to
+D-057 through D-061 once `main` was fetched and found to have already taken D-055 and D-056.
+The commit messages on this branch were already pushed and still cite the original numbers:
+their D-055 is this D-057, their D-056 is D-058, and their D-057 — the governance-receipt
+decision — is D-059. Recorded because a reader following a commit reference would otherwise
+land on somebody else's decision.*
+
+**D-057 · 2026-08-31 · A logging policy that did not randomise is refused, not estimated.**
 The offline comparison in `app/ml/rl/` previously accepted a log in which the behaviour
 policy assigned probability 1.0 to the action it took, and returned
 `candidate_better_offline` with a tight confidence interval. That answer was not merely
@@ -575,7 +582,7 @@ two-event comparison. And `deployment_allowed`, `online_experiment_allowed` and
 fields, so no caller and no `dataclasses.replace` can produce a result object that appears to
 grant deployment.
 
-**D-056 · 2026-08-31 · The ASR training stack is optional and never an API dependency.**
+**D-058 · 2026-08-31 · The ASR training stack is optional and never an API dependency.**
 `app/ml/train/asr_runtime/` needs torch, transformers and peft. Putting those in
 `requirements.txt` would make roughly 2.5 GB of wheels a dependency of a web server that
 never calls them and would couple every Railway deploy to a stack only an offline training
@@ -592,7 +599,7 @@ is pinned at 1.26.4 for the mediapipe 0.10.14 wheels on the numpy 1.x ABI, and a
 that upgraded it to satisfy a torch build would break FaceMesh in a way that surfaces as a
 segfault in the face pipeline rather than as anything about training.
 
-**D-057 · 2026-08-31 · Training is gated on a receipt that does not yet prove governance.**
+**D-059 · 2026-08-31 · Training is gated on a receipt that does not yet prove governance.**
 Real adapter training refuses to start without a signed, purpose-specific receipt naming the
 patient, the archive hash and the base-model hash, and every one of those is compared with a
 constant-time check before any media is read. This is the right shape: the expensive mistake
@@ -607,7 +614,7 @@ on that one artifact. The fix is an asymmetric scheme, Ed25519 with the public k
 tracked config, so signing authority and running authority are different capabilities. Until
 then no receipt should be described anywhere as evidence of approval.
 
-**D-058 · 2026-08-31 · Private corpora and model artifacts are gitignored by allow-list.**
+**D-060 · 2026-08-31 · Private corpora and model artifacts are gitignored by allow-list.**
 The rules for `data/` and `artifacts/` were deny-lists, and a deny-list of a category this
 open fails the moment someone adds a filename nobody thought of. It already had:
 `data/raw/` and `data/exports/` were ignored while `data/mpower/` was not, even though the
@@ -624,7 +631,7 @@ time, since a rule that knew only about `.tar` let `.tar.gz`, `.tgz` and `.zip` 
 inversion was checked against the tracked file list so that no file already under version
 control was dropped.
 
-**D-059 · 2026-08-31 · Model cards are generated except one hand-written section.**
+**D-061 · 2026-08-31 · Model cards are generated except one hand-written section.**
 The claim that the model cards could not drift was written in this repository before any
 generator existed, which is exactly the kind of unsupported statement the documents are
 supposed to catch. `python -m app.ml.train.render_model_cards` now renders each card from

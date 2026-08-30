@@ -56,8 +56,8 @@ per-request cost to users with intermittent data.
 | Frontend | React + Vite + TypeScript, PWA | — |
 | On-device vision | MediaPipe Tasks Vision 1.0.1, wasm from `node_modules` | D-010 |
 | ML training | Batch GPU by the hour, nightly/weekly | D-004 |
-| ASR adapter training | LoRA/PEFT over MMS / Wav2Vec2 CTC, offline host only, never run | D-056, D-057 |
-| Offline policy evaluation | SNIPS over synthetic logs, ranking only, no deployment path | D-055 |
+| ASR adapter training | LoRA/PEFT over MMS / Wav2Vec2 CTC, offline host only, never run | D-058, D-059 |
+| Offline policy evaluation | SNIPS over synthetic logs, ranking only, no deployment path | D-057 |
 
 The last two rows describe code that exists and has produced nothing. No ASR adapter has
 been trained and no policy is authorised for any deployment path. Their dependencies are
