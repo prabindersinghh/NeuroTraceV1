@@ -259,7 +259,9 @@ def main() -> None:
     path = args.out / "personalised_asr_adapter.metrics.json"
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print(f"  patient          {spec.patient_id}")
+    # Patient-derived identifiers are allowed inside the private artifact contract but
+    # never in process output, which is routinely copied into shared CI/host logs.
+    print("  patient          [redacted]")
     print(f"  pairs            {args.pairs}")
     print(f"  WER live         {report.wer_live:.3f}")
     print(f"  WER frozen       {report.wer_frozen:.3f}  (day-{REFERENCE_ADAPTER_DAY} "
