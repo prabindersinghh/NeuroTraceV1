@@ -40,7 +40,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .common import DATA_DIR, MODELS_DIR, SEED
+from .common import DATA_DIR, MODELS_DIR, SEED, redact_patient_label
 
 #: Below this, XTTS-v2 produces a voice that is recognisably wrong — close enough to be
 #: unsettling, not close enough to be theirs. Refusing is kinder than shipping it.
@@ -137,8 +137,16 @@ def main() -> None:
     parser.add_argument("--data", type=Path, default=DATA_DIR / "raw" / "voice_samples")
     args = parser.parse_args()
 
-    synthetic = not args.data.exists()
-    spec = build_spec(args.patient, args.lang, args.seconds, args.provenance)
+    if args.data.exists():
+        raise SystemExit(
+            "Voice-clone training is not implemented. A local sample path was supplied, "
+            "so no planning artifact, clone, or non-synthetic claim was written."
+        )
+    synthetic = True
+    # The artifact is tracked, so it records a redacted label, never what was typed.
+    spec = build_spec(
+        redact_patient_label(args.patient), args.lang, args.seconds, args.provenance
+    )
     backend = BACKENDS[spec.backend]
 
     payload = {

@@ -28,7 +28,30 @@ import numpy as np
 
 SEED = 42
 MODELS_DIR = Path(__file__).resolve().parent / "artifacts"
-DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+# One private data root for download scripts, trainers and documentation. Keeping this at
+# the repository root also means the existing `data/raw/` privacy rule covers every corpus.
+DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+
+#: The only patient label a tracked artifact may carry. `--patient` is convenient for a
+#: local run, but everything under `artifacts/*.metrics.json` is TRACKED, so whatever is
+#: passed on the command line would be committed to a public repository. `test_privacy.py`
+#: cannot catch that: its label pattern is `patient\s+id`, and `\s` does not match the
+#: underscore in the `patient_id` key the value is written under, so the guard is blind to
+#: the exact spelling the code uses. Redaction at the writer is therefore the real fix.
+SYNTHETIC_PATIENT_LABEL = "synthetic-patient"
+REDACTED_PATIENT_LABEL = "redacted-local-label"
+
+
+def redact_patient_label(label: str) -> str:
+    """Return `label` only when it is the known-synthetic default, else a constant.
+
+    The specific label was never part of what these synthetic artifacts demonstrate, so
+    dropping it costs nothing and closes the one path by which a real name reaches a
+    tracked file. Redaction happens at the point the spec is built, so the trainers' own
+    console output shows the redacted label too -- deliberately, because a terminal
+    scrollback is one copy-paste away from an issue comment.
+    """
+    return SYNTHETIC_PATIENT_LABEL if label == SYNTHETIC_PATIENT_LABEL else REDACTED_PATIENT_LABEL
 
 
 @dataclass(slots=True)
@@ -36,6 +59,7 @@ class Metrics:
     """Everything we publish about a trained model."""
 
     model: str
+    synthetic: bool
     dataset: str
     n_total: int
     n_positive: int

@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 
 from .awaaz_archive import verify_awaaz_training_archive
-from .common import MODELS_DIR, SEED
+from .common import MODELS_DIR, SEED, redact_patient_label
 
 #: LoRA rank. Small on purpose: a few million parameters trains on ~200 utterances without
 #: memorising them, and ships to a phone.
@@ -210,7 +210,8 @@ def main() -> None:
     rng = np.random.default_rng(SEED)
     synthetic = True
 
-    spec = build_spec(args.patient, args.pairs)
+    # The artifact is tracked, so it records a redacted label, never what was typed.
+    spec = build_spec(redact_patient_label(args.patient), args.pairs)
 
     # Day-30 reference: the patient's settled post-stroke speech.
     reference_pairs = synthetic_pairs(rng, args.pairs, error_rate=0.20)
@@ -222,7 +223,7 @@ def main() -> None:
     live_view = synthetic_pairs(rng, args.pairs, error_rate=0.21)  # adapter compensating
 
     report = DriftReport(
-        patient_id=args.patient, day=args.day,
+        patient_id=redact_patient_label(args.patient), day=args.day,
         wer_live=evaluate(live_view),
         wer_frozen=evaluate(frozen_view),
         wer_frozen_at_reference=wer_reference,
@@ -258,7 +259,7 @@ def main() -> None:
     path = args.out / "personalised_asr_adapter.metrics.json"
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print(f"  patient          {args.patient}")
+    print(f"  patient          {spec.patient_id}")
     print(f"  pairs            {args.pairs}")
     print(f"  WER live         {report.wer_live:.3f}")
     print(f"  WER frozen       {report.wer_frozen:.3f}  (day-{REFERENCE_ADAPTER_DAY} "

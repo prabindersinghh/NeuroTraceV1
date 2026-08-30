@@ -2,10 +2,12 @@
 
 **Data: SYNTHETIC FIXTURES**
 
+<!-- hand-written: purpose -->
 ## Purpose
 Rebuild the patient's pre-stroke voice from a 2-minute family clip.
 
 **Crucially:** This is impersonation technology. Consent is recorded, source audio is destroyed after training, and a clone is permanently deletable. The product works fully without one.
+<!-- end hand-written -->
 
 ## Training data
 - Dataset: n/a
@@ -21,4 +23,4 @@ Rebuild the patient's pre-stroke voice from a 2-minute family clip.
 - A pre-stroke recording is not always available, and families without one correlate with families with less money. The product must work identically without a clone, and it does - the board falls back to a stock voice.
 - Quality is judged by informal listening, not by a published MOS. We have not run a listening study and should not imply that we have.
 
-*Generated from `voice_clone.metrics.json`. Re-run the training script to update — this card is derived, so it cannot drift from the metrics it describes.*
+*Generated from `voice_clone.metrics.json` by `backend/app/ml/train/render_model_cards.py`; re-run the training script, then the renderer, to update. Only the `## Purpose` section above is hand-written — every other line on this page, including each limitation, is rendered from that artifact, and a test re-renders this file and compares it byte for byte. The rendered part cannot drift from the metrics it describes.*

@@ -1,5 +1,6 @@
 {
   "model": "rhythm_irregularity_clf",
+  "synthetic": true,
   "dataset": "SYNTHETIC FIXTURES (no PhysioNet data present)",
   "n_total": 300,
   "n_positive": 90,
@@ -34,6 +35,6 @@
     "Atrial fibrillation is an ECG diagnosis. This model informs an advisory to obtain an ECG and never asserts the diagnosis."
   ],
   "seed": 42,
-  "trained_at": "2026-08-21T20:48:44+00:00",
-  "python": "3.11.0"
+  "trained_at": "2026-08-30T19:09:22+00:00",
+  "python": "3.11.14"
 }

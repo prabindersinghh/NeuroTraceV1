@@ -48,7 +48,34 @@ Thumbs.db
 
 # ---- private strategy notes, never publish ----
 compass_artifact_*.md
-data/raw/
+
+# ---- private corpora ----
+# An allow-list, not a list of known dataset names. A deny-list was wrong here already:
+# `data/raw/` and `data/exports/` were ignored while `data/mpower/` was not, even though
+# the asymmetry trainer's own docstring tells you to put real mPower records in it. Anything
+# that appears under data/ is real corpus material until a human decides otherwise, so the
+# directory is ignored wholesale and the one reviewed file is re-admitted by name.
+data/*
+!data/README.md
+backend/data/
+
+# ---- model weights and per-patient adapters ----
+# Also an allow-list. The previous rule enumerated weight extensions, which left `.wav`,
+# `.gguf`, `tokenizer.json` and any README stageable inside a per-patient adapter directory
+# -- and a patient WAV under artifacts/ is precisely the INV-1 failure this repo exists to
+# prevent. Everything here is a generated runtime artifact except the five reviewed metric
+# fixtures, which are named back in. Subdirectories stay ignored entirely: git does not
+# descend into an excluded directory, so a per-patient adapter dir cannot be re-admitted
+# by accident.
+backend/app/ml/train/artifacts/**
+!backend/app/ml/train/artifacts/*.metrics.json
+
+# ---- Awaaz local exports ----
+# These contain consented patient audio and must never leave the device. The extension is
+# matched loosely on purpose: `.tar.gz`, `.tgz`, `.zip` and `.tar.enc` all escaped a rule
+# that only knew about `.tar`.
+awaaz-training*
+*awaaz*training*
 
 # --- PRIVACY: real patient source material (never committed) ---
 #

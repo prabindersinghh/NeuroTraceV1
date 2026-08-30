@@ -1,7 +1,7 @@
 """Show that the tap asymmetry ratio separates a lesion from bilateral slowing.
 
     python -m app.ml.train.asymmetry_discriminator                  # synthetic proof
-    python -m app.ml.train.asymmetry_discriminator --mpower data/mpower   # + real PD data
+    python -m app.ml.train.asymmetry_discriminator --mpower data/mpower   # verify only
 
 This is not really a classifier. It is the evidence for a design decision, and it is the
 one the judges are most likely to probe, because it is the difference between a product
@@ -16,8 +16,9 @@ can.
 
 The demonstration runs on a synthetic cohort by default so it is reproducible anywhere with
 no data access, and reports the same metrics for both features so the comparison is direct.
-Point `--mpower` at real mPower tapping records to repeat it against actual PD patients —
-that is the version to put in the deck.
+Point `--mpower` at normalised mPower tapping records to verify that they are readable. The
+command then refuses to publish a real-data metric until a preregistered comparison against
+a separately consented stroke cohort is implemented.
 """
 from __future__ import annotations
 
@@ -128,7 +129,10 @@ def load_mpower(root: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
             continue
         rates.append(feats["tap_rate_mean"])
         asymmetries.append(feats["tap_asymmetry_ratio"])
-        labels.append(0 if record.get("professional_diagnosis") else 0)
+        # Both diagnosed-PD and control mPower records are non-unilateral observations.
+        # Diagnosis is retained in the source record for future stratified analysis, but
+        # it must never be disguised as a stroke-vs-PD outcome label.
+        labels.append(0)
     if len(rates) < 10:
         return None
     return np.asarray(rates), np.asarray(asymmetries), np.asarray(labels, dtype=int)
@@ -156,6 +160,18 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=MODELS_DIR)
     args = parser.parse_args()
 
+    if args.mpower is not None:
+        real = load_mpower(args.mpower)
+        if real is None:
+            raise SystemExit(
+                "mPower data not found or fewer than 10 usable normalised records; "
+                "no metrics artifact was written"
+            )
+        raise SystemExit(
+            f"verified {len(real[2])} local mPower records; real-data comparison is not "
+            "implemented and no metrics artifact was written"
+        )
+
     rng = np.random.default_rng(SEED)
     rates, asymmetries, labels = synthetic_cohort(rng)
 
@@ -174,14 +190,10 @@ def main() -> None:
           f"sens {by_asymmetry['sensitivity']:.2f}  spec {by_asymmetry['specificity']:.2f}")
     print()
 
-    if args.mpower:
-        real = load_mpower(args.mpower)
-        print("mPower records loaded" if real else
-              "mPower data not found or unreadable - synthetic result only")
-
     metrics = Metrics(
         model="asymmetry_discriminator",
-        dataset="synthetic cohort (rate-matched)" + (" + mPower" if args.mpower else ""),
+        synthetic=True,
+        dataset="synthetic cohort (rate-matched)",
         n_total=len(labels), n_positive=int(labels.sum()),
         n_negative=int((1 - labels).sum()), n_groups=len(labels),
         split="held-out threshold sweep on a rate-matched synthetic cohort",
@@ -196,8 +208,9 @@ def main() -> None:
             "simulated lesions overlap that distribution - which is why separation is "
             "strong but not perfect, and why the deployed system compares each patient "
             "against their own baseline asymmetry rather than against zero.",
-            "Validating against mPower (real Parkinson's tapping) is the next step and is "
-            "what should appear in the pitch; pass --mpower once access is granted.",
+            "mPower alone cannot validate a Parkinson's-vs-stroke claim. The --mpower "
+            "path verifies normalised records and then fails closed until a preregistered "
+            "comparison against a separately consented stroke cohort is implemented.",
             "The ratio is unsigned. Which side is weak is a property of the patient's "
             "existing lesion and is already known at enrolment.",
         ],

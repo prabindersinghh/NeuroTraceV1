@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -137,6 +138,23 @@ def test_the_image_folder_is_ignored():
     assert result.returncode == 0, (
         "The source-image folder is NOT gitignored. It is inside the repository working "
         "tree, so a single `git add -A` would publish a real patient's medical records."
+    )
+
+
+@pytest.mark.parametrize("relative_path", [
+    "data/raw/patient.wav",
+    "data/exports/awaaz-training.tar",
+    "backend/data/raw/patient.wav",
+    "backend/app/ml/train/artifacts/patient-123/adapter_model.safetensors",
+    "backend/app/ml/train/artifacts/patient-123/model.onnx",
+])
+def test_training_data_and_model_weights_are_gitignored(relative_path: str):
+    result = subprocess.run(
+        ["git", "check-ignore", "--", relative_path],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, (
+        f"Private training input/output is stageable: {relative_path}"
     )
 
 
@@ -369,3 +387,41 @@ def test_source_material_is_ignored_by_a_privacy_rule_not_a_build_rule():
             f"{path.name} is ignored by {rule!r} — an incidental rule, not the privacy "
             "rule. If that rule is ever narrowed, the photographs become stageable."
         )
+
+
+# --------------------------------------- a caller-supplied label must not reach a tracked file
+def test_a_patient_label_passed_on_the_command_line_never_reaches_a_written_artifact(tmp_path):
+    """`--patient` is an argument; `artifacts/*.metrics.json` is TRACKED. That is a leak path.
+
+    The label pattern above cannot catch this one. It matches `patient\\s+id`, and `\\s` does
+    not match the underscore in `patient_id` — the exact key these trainers write the value
+    under — so a real name committed this way would pass every check in this file. The guard
+    therefore lives at the writer: `redact_patient_label` lets the known-synthetic default
+    through unchanged and collapses everything else to a constant.
+
+    Both trainers are covered because both accept `--patient` and both write a tracked
+    artifact under the same key.
+    """
+    from app.ml.train.common import REDACTED_PATIENT_LABEL, SYNTHETIC_PATIENT_LABEL
+    from app.ml.train.common import redact_patient_label
+
+    assert redact_patient_label(SYNTHETIC_PATIENT_LABEL) == SYNTHETIC_PATIENT_LABEL
+    for identifying in ("Firstname Lastname", "UHID-99213", "ward-3-bed-7", ""):
+        assert redact_patient_label(identifying) == REDACTED_PATIENT_LABEL
+
+    marker = "Zzidentifyinglabelzz"
+    for module, artifact in (
+        ("app.ml.train.voice_clone", "voice_clone.metrics.json"),
+        ("app.ml.train.personalised_asr_adapter", "personalised_asr_adapter.metrics.json"),
+    ):
+        out = tmp_path / module.rsplit(".", 1)[-1]
+        run = subprocess.run(
+            [sys.executable, "-m", module, "--patient", marker, "--out", str(out)],
+            cwd=REPO / "backend", capture_output=True, text=True, check=False,
+        )
+        assert run.returncode == 0, run.stderr
+        written = (out / artifact).read_text(encoding="utf-8")
+        assert marker not in written, f"{artifact} recorded the command-line label"
+        assert REDACTED_PATIENT_LABEL in written
+        # The terminal is one copy-paste from an issue comment, so it is redacted too.
+        assert marker not in run.stdout

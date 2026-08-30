@@ -2,10 +2,12 @@
 
 **Data: SYNTHETIC FIXTURES**
 
+<!-- hand-written: purpose -->
 ## Purpose
 Per-patient LoRA adapter over a frozen base, for Awaaz.
 
 **Crucially:** Decoding deliberately reduces language-model weight. General ASR fails on dysarthric speech by producing fluent, confident, WRONG output; we want acoustic faithfulness.
+<!-- end hand-written -->
 
 ## Training data
 - Dataset: n/a
@@ -21,4 +23,4 @@ Per-patient LoRA adapter over a frozen base, for Awaaz.
 - Decoding uses a deliberately low language-model weight (0.15). Transcripts will read as less fluent than a general ASR system's, which is the intended trade: fluent-and-wrong is the failure mode this exists to avoid.
 - Word error rate on a phrase-board vocabulary is not word error rate on open conversation, and the two must not be compared.
 
-*Generated from `personalised_asr_adapter.metrics.json`. Re-run the training script to update — this card is derived, so it cannot drift from the metrics it describes.*
+*Generated from `personalised_asr_adapter.metrics.json` by `backend/app/ml/train/render_model_cards.py`; re-run the training script, then the renderer, to update. Only the `## Purpose` section above is hand-written — every other line on this page, including each limitation, is rendered from that artifact, and a test re-renders this file and compares it byte for byte. The rendered part cannot drift from the metrics it describes.*
