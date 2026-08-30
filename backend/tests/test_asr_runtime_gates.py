@@ -19,6 +19,7 @@ import io
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -1435,3 +1436,466 @@ def test_the_optional_requirements_file_matches_the_pinned_dependency_contract()
         f"  version disagreements:         "
         f"{ {k: (pinned[k], declared[k]) for k in set(pinned) & set(declared) if pinned[k] != declared[k]} }"
     )
+
+
+# --------------------------------------------------------------------------------------
+# 16. Output containment on every writing path, not just the real one.
+#
+# The repo-root/data/ rule and the base-model-tree rule lived in `_validate_config`, which
+# only the real training path reaches.  `run_synthetic_smoke` went straight to
+# `_create_staging_directory`, whose only check was "does this path already exist".
+# --------------------------------------------------------------------------------------
+
+
+def test_the_synthetic_smoke_cannot_write_a_manifest_into_the_tracked_source_tree():
+    """The smoke obeys the same containment rule as a real run, or it does not obey one.
+
+    ``--output-dir backend/app/awaaz/adapter`` used to create that directory and a
+    manifest inside tracked source, contradicting the module's own rule that patient-derived
+    artifacts live only under ``data/``.  Nothing about the smoke path made that safe: the
+    same function publishes real adapters.
+    """
+    unsafe = Path(__file__).resolve().parents[1] / "app" / "unsafe-smoke-output"
+    assert not unsafe.exists(), "a previous run leaked an artifact into the source tree"
+    try:
+        with pytest.raises(PreflightError, match="unsafe_output_location") as caught:
+            run_synthetic_smoke(unsafe)
+        assert str(unsafe) not in str(caught.value)
+        assert not os.path.lexists(unsafe)
+    finally:
+        # If this gate is ever broken again, the failing run must not leave the artifact it
+        # created behind to poison every later run of this test.
+        shutil.rmtree(unsafe, ignore_errors=True)
+
+
+def test_no_writing_path_creates_missing_parent_directories(tmp_path, monkeypatch):
+    """A mistyped path must not silently mkdir a tree of private artifact directories.
+
+    ``mkdir(parents=True)`` made ``--output-dir /a/b/c/d/e`` create four levels no operator
+    asked for; there is no way to tell that apart from an intended run root.  The runtime
+    now adds only the final component, so a failed publish can also leave behind no
+    directory that the runtime itself created.
+    """
+    nested = tmp_path / "unprovisioned" / "run" / "adapter"
+    with pytest.raises(PreflightError, match="output_parent_missing"):
+        run_synthetic_smoke(nested)
+    assert not (tmp_path / "unprovisioned").exists()
+
+    # The real path shares the guard rather than carrying a second copy of it.
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    nested_config = replace(fixture.config, output_dir=tmp_path / "also-missing" / "adapter")
+    with pytest.raises(PreflightError, match="output_parent_missing"):
+        run_preflight(nested_config, KEY, now=NOW)
+    assert not (tmp_path / "also-missing").exists()
+
+
+# --------------------------------------------------------------------------------------
+# 17. Split size and adequacy.
+#
+# Disjointness was checked; size was not.  A legal split could hand the test partition a
+# single sample while the manifest advertised a 15% target beside it.
+# --------------------------------------------------------------------------------------
+
+
+def test_a_corpus_whose_held_out_partitions_would_be_tiny_is_refused(tmp_path, monkeypatch):
+    """Fifty pairs, ten components, and a test partition of four is not an evaluable corpus.
+
+    One dominant phrase group plus nine singletons clears every existing gate: fifty pairs,
+    ten independent components, perfect group and phrase disjointness.  The allocation then
+    leaves the held-out partitions with a handful of rows each, and the manifest would still
+    print ``test: 0.15``.  Nothing computed on that is meaningful, so the run is refused
+    rather than published with a footnote.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    specs = _pair_specs(count=50, phrase_groups=10)
+    for index in range(41):
+        specs[index]["phrase"] = "One dominant practised phrase"
+    fixture = _fixture(tmp_path, specs=specs)
+    with pytest.raises(PreflightError, match="split_too_small") as caught:
+        preflight_real_training(fixture.config, KEY, now=NOW)
+    assert "dominant" not in str(caught.value)
+    _assert_nothing_was_written(fixture)
+
+
+def test_the_split_floor_is_relative_to_the_corpus_and_bounded_both_ways():
+    """The floor scales with the corpus and the ceiling stops one partition swallowing it.
+
+    A flat floor would be wrong in both directions: five rows is a plausible test partition
+    at fifty pairs and an absurd one at five thousand.  The ceiling is what keeps validation
+    from taking a third of a corpus whose target share is a seventh.
+    """
+    bounds = runtime._split_size_bounds(50)
+    assert bounds["validation"][0] >= runtime.MINIMUM_SPLIT_SAMPLES
+    assert bounds["validation"][1] < 0.34 * 50
+    assert runtime._split_size_bounds(5_000)["test"][0] > runtime._split_size_bounds(50)["test"][0]
+
+    starved = SimpleNamespace(sample_counts={"train": 33, "validation": 15, "test": 2})
+    with pytest.raises(PreflightError, match="split_too_small"):
+        runtime._assert_split_adequate(starved)
+    swollen = SimpleNamespace(sample_counts={"train": 29, "validation": 16, "test": 5})
+    with pytest.raises(PreflightError, match="split_unbalanced"):
+        runtime._assert_split_adequate(swollen)
+
+
+def test_the_manifest_states_the_achieved_split_fractions_beside_the_target(
+    tmp_path, monkeypatch,
+):
+    """A target the run did not achieve, printed alone, misleads whoever reads the artifact.
+
+    Connected components are indivisible, so the achieved split is coarser than 70/15/15 on
+    any real corpus.  The manifest must therefore say what the split actually was; the
+    fractions below are the real ones for the fifty-pair fixture, not the advertised ones.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    payload = json.loads(run_preflight(fixture.config, KEY, now=NOW).read_text())
+    split = payload["split"]
+
+    assert split["target_sample_fractions"] == {"train": 0.7, "validation": 0.15, "test": 0.15}
+    assert split["actual_sample_fractions"] == {"train": 0.6, "validation": 0.2, "test": 0.2}
+    assert split["actual_sample_fractions"] != split["target_sample_fractions"]
+    assert sum(split["sample_counts"].values()) == 50
+    for name, count in split["sample_counts"].items():
+        bound = split["required_sample_count_bounds"][name]
+        assert bound["minimum"] <= count <= bound["maximum"]
+    # The size floor may not be bought with a disjointness regression.
+    assert split["invariants"]["group_disjoint"] is True
+    assert split["invariants"]["exact_normalised_phrase_within_language_disjoint"] is True
+
+
+def test_the_disjointness_guarantees_survive_the_floor_first_allocation(tmp_path, monkeypatch):
+    """Filling the floor first changes which partition a component lands in, nothing else."""
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    specs = _pair_specs(count=50, phrase_groups=10)
+    specs[1]["audio"] = specs[0]["audio"]
+    specs[1]["phrase"] = specs[0]["phrase"]
+    fixture = _fixture(tmp_path, specs=specs)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+
+    partitions = {
+        name: set(getattr(prepared.split, name)) for name in ("train", "validation", "test")
+    }
+    assert sum(len(values) for values in partitions.values()) == 50
+    assert not partitions["train"] & partitions["validation"]
+    assert not partitions["train"] & partitions["test"]
+    assert not partitions["validation"] & partitions["test"]
+    phrase_home: dict[str, str] = {}
+    for name, indexes in partitions.items():
+        for index in indexes:
+            phrase = runtime.normalise_phrase(prepared.selected_pairs[index].target_text)
+            assert phrase_home.setdefault(phrase, name) == name
+
+
+# --------------------------------------------------------------------------------------
+# 18. `epochs_completed` may not describe an epoch that did not happen.
+# --------------------------------------------------------------------------------------
+
+
+class _FakeLoss:
+    """Supports exactly the two operations the optimisation loop performs on a loss."""
+
+    def __truediv__(self, _divisor):
+        return self
+
+    def backward(self):
+        return None
+
+
+class _CountingModel:
+    def __init__(self):
+        self.forward_calls = 0
+
+    def parameters(self):
+        return iter(())
+
+    def to(self, _device):
+        return self
+
+    def train(self):
+        return self
+
+    def __call__(self, **_batch):
+        self.forward_calls += 1
+        return SimpleNamespace(loss=_FakeLoss())
+
+
+def _fake_torch() -> SimpleNamespace:
+    optimizer = SimpleNamespace(zero_grad=lambda **_k: None, step=lambda: None)
+    return SimpleNamespace(
+        optim=SimpleNamespace(AdamW=lambda _parameters, lr: optimizer),
+        isfinite=lambda _loss: SimpleNamespace(item=lambda: True),
+        nn=SimpleNamespace(utils=SimpleNamespace(clip_grad_norm_=lambda *_a, **_k: None)),
+    )
+
+
+def _prepared_for_loop(tmp_path, monkeypatch, **overrides):
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    monkeypatch.setattr(runtime, "_collate_batch", lambda *_a, **_k: {})
+    return replace(prepared, config=replace(prepared.config, **overrides))
+
+
+def test_an_epoch_the_step_limit_cut_short_is_not_reported_as_an_epoch(tmp_path, monkeypatch):
+    """One batch of twenty is not an epoch, and the manifest may not call the run completed.
+
+    ``--epochs 1 --max-optimizer-steps 1`` breaks out of the batch loop after a single
+    optimiser step; the counter was then incremented anyway and the manifest hard-coded
+    ``"status": "completed"``.  The resulting document claimed a full pass over the training
+    split on the strength of one batch — in the artifact whose entire purpose is to not
+    overstate what was done.
+    """
+    prepared = _prepared_for_loop(
+        tmp_path, monkeypatch, epochs=2, batch_size=2, max_optimizer_steps=1
+    )
+    model = _CountingModel()
+    facts = runtime._optimise_lora(
+        prepared, object(), model, object(), _fake_torch(), "cpu"
+    )
+    assert model.forward_calls == 1
+    assert facts["optimizer_steps"] == 1
+    assert facts["examples_seen"] == 2
+    assert facts["epochs_completed"] == 0
+    assert facts["epochs_requested"] == 2
+    assert facts["stopped_at_step_limit"] is True
+
+    manifest = runtime._training_manifest(
+        prepared,
+        device_type="cpu",
+        trainable_parameters=128,
+        run_facts=facts,
+        artifacts=[{"path": "adapter/adapter_model.safetensors", "size_bytes": 1, "sha256": "0" * 64}],
+    )
+    assert manifest["training"]["status"] == "truncated_before_completion"
+    assert manifest["training"]["epochs_completed"] == 0
+    assert manifest["training"]["epochs_requested"] == 2
+    assert any("stopped before every requested epoch" in line for line in manifest["limitations"])
+    assert manifest["claims"]["deployment_ready"] is False
+
+
+def test_a_run_that_finishes_every_requested_epoch_is_reported_as_completed(
+    tmp_path, monkeypatch,
+):
+    """The honest counter must still count: understating a finished run is also a lie."""
+    prepared = _prepared_for_loop(
+        tmp_path, monkeypatch, epochs=2, batch_size=5, max_optimizer_steps=1_000
+    )
+    train_size = len(prepared.split.train)
+    facts = runtime._optimise_lora(
+        prepared, object(), _CountingModel(), object(), _fake_torch(), "cpu"
+    )
+    assert facts["epochs_completed"] == 2
+    assert facts["stopped_at_step_limit"] is False
+    assert facts["examples_seen"] == 2 * train_size
+
+    manifest = runtime._training_manifest(
+        prepared,
+        device_type="cpu",
+        trainable_parameters=128,
+        run_facts=facts,
+        artifacts=[{"path": "adapter/adapter_model.safetensors", "size_bytes": 1, "sha256": "0" * 64}],
+    )
+    assert manifest["training"]["status"] == "completed"
+    assert not any("stopped before every requested epoch" in line for line in manifest["limitations"])
+
+
+def test_a_manifest_built_without_an_epoch_count_reads_as_truncated(tmp_path, monkeypatch):
+    """A missing fact resolves to the conservative reading, never to "completed"."""
+    prepared = _prepared_for_loop(tmp_path, monkeypatch, epochs=1)
+    manifest = runtime._training_manifest(
+        prepared,
+        device_type="cpu",
+        trainable_parameters=128,
+        run_facts={"optimizer_steps": 1, "examples_seen": 2},
+        artifacts=[{"path": "adapter/adapter_model.safetensors", "size_bytes": 1, "sha256": "0" * 64}],
+    )
+    assert manifest["training"]["status"] == "truncated_before_completion"
+
+
+# --------------------------------------------------------------------------------------
+# 19. Publication is atomic, or it is detectably incomplete.
+# --------------------------------------------------------------------------------------
+
+
+class _PowerCut(BaseException):
+    """Not an ``OSError``: nothing in the runtime may catch it, as with SIGKILL."""
+
+
+def test_a_crash_between_the_weights_and_the_manifest_leaves_a_directory_marked_incomplete(
+    tmp_path, monkeypatch,
+):
+    """The window this closes is the artifact this module exists to prevent.
+
+    ``_publish_staging`` renames children one at a time and keeps ``manifest.json`` for
+    last.  A crash in between left patient-derived LoRA weights on disk with no manifest, no
+    limitations, no ``deployment_ready: false``, and no provenance — a directory that looks
+    exactly like a finished adapter to anyone who finds it.  The sentinel is written before
+    the first child moves and removed only after the last one lands, so that window is
+    always marked, and no reader may treat a marked directory as an artifact.
+    """
+    output = tmp_path / "published"
+    staging = tmp_path / ".asr-runtime-crash"
+    (staging / "adapter").mkdir(mode=0o700, parents=True)
+    (staging / "adapter" / "adapter_model.safetensors").write_bytes(b"patient-derived-weights")
+    (staging / "manifest.json").write_text("{}\n")
+
+    real_rename = os.rename
+
+    def crash_before_the_manifest(source, destination):
+        if os.path.basename(source) == "manifest.json":
+            raise _PowerCut()
+        return real_rename(source, destination)
+
+    monkeypatch.setattr(runtime.os, "rename", crash_before_the_manifest)
+    with pytest.raises(_PowerCut):
+        runtime._publish_staging(staging, output)
+
+    assert (output / "adapter" / "adapter_model.safetensors").exists()
+    assert not (output / "manifest.json").exists()
+    assert os.path.lexists(output / runtime.INCOMPLETE_PUBLICATION_SENTINEL)
+    with pytest.raises(TrainingRuntimeError, match="artifact_incomplete") as caught:
+        runtime.verify_published_artifact(output)
+    assert str(output) not in str(caught.value)
+
+
+def test_a_finished_publication_clears_the_sentinel_and_verifies(tmp_path):
+    """The sentinel must not survive a successful run, or every artifact reads as broken."""
+    output = tmp_path / "smoke"
+    manifest_path = run_synthetic_smoke(output)
+    assert not os.path.lexists(output / runtime.INCOMPLETE_PUBLICATION_SENTINEL)
+    assert runtime.verify_published_artifact(output) == manifest_path
+
+    # A directory whose manifest is missing is not a finished artifact either, sentinel or no.
+    manifest_path.unlink()
+    with pytest.raises(TrainingRuntimeError, match="artifact_incomplete"):
+        runtime.verify_published_artifact(output)
+
+
+# --------------------------------------------------------------------------------------
+# 20. The sanitizer screens what the patient actually said.
+#
+# `forbidden_identifiers` covered the patient UUID, the capture ids, and the audio hashes.
+# It did not cover `target_text` — the utterances themselves, which are the highest-value
+# INV-1 content in the archive and the one thing a generated model card is most likely to
+# quote back as an "example".
+# --------------------------------------------------------------------------------------
+
+
+def test_an_adapter_that_quotes_a_patient_utterance_is_destroyed(tmp_path, monkeypatch):
+    """A transcript in a model card is a patient identifier that travels with the weights.
+
+    The quote below is re-cased and re-spaced, because a leak will not be byte-identical to
+    the archive row: matching is done on the normalised form for exactly that reason.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    utterance = prepared.selected_pairs[0].target_text
+    quoted = f"  {utterance.upper()}  "
+
+    class QuotingModel:
+        def save_pretrained(self, destination, **_kwargs):
+            (destination / "adapter_model.safetensors").write_bytes(b"weights")
+            (destination / "README.md").write_text(
+                f"# Adapter\n\nExample recognised phrase: {quoted}\n"
+            )
+
+    _training_harness(monkeypatch, prepared, QuotingModel())
+    with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation") as caught:
+        run_training(fixture.config, KEY, now=NOW)
+    assert utterance.lower() not in str(caught.value).lower()
+    _assert_nothing_was_written(fixture)
+
+
+def test_a_patient_utterance_hidden_in_a_safetensors_header_is_caught(tmp_path, monkeypatch):
+    """Weights carry a JSON header, and a header is metadata like any other.
+
+    The scan used to stop at ``.json``/``.md``/``.txt``, so anything a library chose to
+    record in ``__metadata__`` was invisible.  Only the length-prefixed header is read; the
+    tensor payload, which may be gigabytes, is never touched.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    utterance = prepared.selected_pairs[0].target_text
+
+    class MetadataModel:
+        def save_pretrained(self, destination, **_kwargs):
+            header = json.dumps(
+                {"__metadata__": {"training_example": utterance}, "format": "pt"}
+            ).encode("utf-8")
+            (destination / "adapter_model.safetensors").write_bytes(
+                struct.pack("<Q", len(header)) + header + b"\x00" * 64
+            )
+            (destination / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA"}))
+
+    _training_harness(monkeypatch, prepared, MetadataModel())
+    with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation") as caught:
+        run_training(fixture.config, KEY, now=NOW)
+    assert utterance.lower() not in str(caught.value).lower()
+    _assert_nothing_was_written(fixture)
+
+
+def test_a_short_utterance_is_deliberately_not_screened(tmp_path, monkeypatch):
+    """Pins the documented tradeoff, so it stays a decision rather than an accident.
+
+    A one- or two-character-word target occurs verbatim inside tokenizer vocabularies and
+    configuration keys.  Screening it would abort every real run on a false positive, and a
+    check that always fires is a check that gets deleted.  The runtime never writes
+    ``target_text`` into an artifact itself; this screen exists for third-party metadata,
+    and it covers phrase-length utterances only.  If that boundary is ever moved, this test
+    is where the move has to be argued.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    specs = _pair_specs(count=50, phrase_groups=10)
+    for index, spec in enumerate(specs):
+        spec["phrase"] = f"go {index % 10}"
+    fixture = _fixture(tmp_path, specs=specs)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    assert runtime._screened_phrases(prepared) == frozenset()
+
+    class ShortQuoteModel:
+        def save_pretrained(self, destination, **_kwargs):
+            (destination / "adapter_model.safetensors").write_bytes(b"weights")
+            (destination / "README.md").write_text("# Adapter\n\nvocabulary token: go 3\n")
+
+    _training_harness(monkeypatch, prepared, ShortQuoteModel())
+    manifest_path = run_training(fixture.config, KEY, now=NOW)
+    assert manifest_path.is_file()
+    assert "go 3" in (fixture.output / "adapter" / "README.md").read_text()
+
+
+# --------------------------------------------------------------------------------------
+# 21. The base-model snapshot stays out of shared system temp.
+# --------------------------------------------------------------------------------------
+
+
+def test_the_base_model_snapshot_is_not_copied_into_shared_system_temp(tmp_path, monkeypatch):
+    """A multi-gigabyte checkpoint copy in /tmp outlives the process that made it.
+
+    ``mkdtemp`` without ``dir=`` puts the snapshot in shared system temp, where the cleanup
+    covers a normal exit and an exception but not SIGKILL or a power loss, and where it can
+    exhaust a shared tmpfs mid-run.  The archive verifier in the same module already passes
+    ``dir=`` for the same reason; this is the other half of that fix.
+    """
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+
+    recorded: dict[str, object] = {}
+    real_mkdtemp = runtime.tempfile.mkdtemp
+
+    def spy(**kwargs):
+        recorded.update(kwargs)
+        return real_mkdtemp(**kwargs)
+
+    monkeypatch.setattr(runtime.tempfile, "mkdtemp", spy)
+    snapshot_root, snapshot = runtime._snapshot_approved_base_model(prepared)
+    try:
+        assert Path(recorded["dir"]) == fixture.base.resolve().parent
+        assert snapshot_root.parent == fixture.base.resolve().parent
+        assert snapshot.is_dir()
+        assert sha256_directory(snapshot) == sha256_directory(fixture.base)
+    finally:
+        shutil.rmtree(snapshot_root, ignore_errors=True)

@@ -68,6 +68,25 @@ TARGET_FRACTIONS = {"train": 0.70, "validation": 0.15, "test": 0.15}
 SPLIT_NAMES = tuple(TARGET_FRACTIONS)
 HARD_MINIMUM_PAIRS = 50
 HARD_MINIMUM_COMPONENTS = 10
+# Split adequacy.  Disjointness alone admits a legal split whose test partition is a single
+# utterance while the manifest still advertises a 70/15/15 target.  Every partition must
+# therefore hold at least MINIMUM_SPLIT_SAMPLES rows and at least half of its target share,
+# and none may swallow more than twice its target share -- the bound that stops validation
+# taking a third of a corpus it is supposed to take a seventh of.
+MINIMUM_SPLIT_SAMPLES = 5
+MINIMUM_SPLIT_SHARE_OF_TARGET = 0.5
+MAXIMUM_SPLIT_SHARE_OF_TARGET = 2.0
+# Generated-metadata screening.  See `_screened_phrases` for why short utterances are
+# deliberately excluded, and `_safetensors_header_text` for what is and is not read.
+MINIMUM_SCREENED_PHRASE_CHARACTERS = 12
+MINIMUM_SCREENED_PHRASE_WORDS = 2
+MAX_SCREENED_TEXT_BYTES = 2_000_000
+MAX_SAFETENSORS_HEADER_BYTES = 1_000_000
+SCREENED_TEXT_SUFFIXES = frozenset(
+    {".json", ".jsonl", ".md", ".markdown", ".txt", ".text", ".yaml", ".yml", ".cfg", ".ini"}
+)
+# Present only while an output directory is mid-publication; see `_publish_staging`.
+INCOMPLETE_PUBLICATION_SENTINEL = ".incomplete"
 PINNED_DEPENDENCY_VERSIONS = {
     "numpy": "1.26.4",
     "torch": "2.4.1",
@@ -139,12 +158,26 @@ class SplitPlan:
     group_unit: str
 
     def as_manifest(self) -> dict[str, Any]:
+        total = sum(self.sample_counts.values())
+        bounds = _split_size_bounds(total)
         return {
             "unit": "group_phrase_connected_component",
             "group_unit": self.group_unit,
-            "allocation": "largest_component_first_then_target_fraction_greedy",
+            "allocation": "minimum_size_floor_first_then_target_fraction_greedy",
             "seed": self.seed,
             "target_sample_fractions": dict(TARGET_FRACTIONS),
+            # Connected components are indivisible, so the achieved split is routinely
+            # coarser than the target.  A manifest that states only the target lets a reader
+            # believe the test partition holds 15% of the corpus when it may hold 2%; the
+            # achieved fractions and the bounds they had to satisfy are stated beside it.
+            "actual_sample_fractions": {
+                name: (round(self.sample_counts[name] / total, 4) if total else 0.0)
+                for name in SPLIT_NAMES
+            },
+            "required_sample_count_bounds": {
+                name: {"minimum": bounds[name][0], "maximum": bounds[name][1]}
+                for name in SPLIT_NAMES
+            },
             "component_counts": dict(self.component_counts),
             "sample_counts": dict(self.sample_counts),
             "assignments_in_manifest": False,
@@ -486,6 +519,53 @@ def _component_digest(
     return hashlib.sha256("\0".join(sorted(material)).encode("utf-8")).hexdigest()
 
 
+def _split_size_bounds(total_samples: int) -> dict[str, tuple[int, int]]:
+    """Return the inclusive (minimum, maximum) sample count each partition must hold.
+
+    The floor is relative to the target share rather than a flat count so that it scales
+    with the corpus, with an absolute floor underneath it: a two-row test partition is
+    equally useless at 50 pairs and at 5,000, but only the second reads as obviously wrong.
+    For a corpus far below the authorised minimum the relative maximum can fall under the
+    absolute floor; it is clamped so the reported bounds are never self-contradictory.
+    Such a corpus cannot reach real training anyway -- `corpus_too_small` refuses it first.
+    """
+    bounds: dict[str, tuple[int, int]] = {}
+    for name, fraction in TARGET_FRACTIONS.items():
+        target = fraction * total_samples
+        minimum = min(
+            max(MINIMUM_SPLIT_SAMPLES, math.ceil(target * MINIMUM_SPLIT_SHARE_OF_TARGET)),
+            max(total_samples, 1),
+        )
+        maximum = max(math.floor(target * MAXIMUM_SPLIT_SHARE_OF_TARGET), minimum)
+        bounds[name] = (minimum, maximum)
+    return bounds
+
+
+def _assert_split_adequate(split: SplitPlan) -> None:
+    """Refuse a split whose partitions are too small or too large to support any claim.
+
+    Disjointness is necessary but not sufficient.  A one-sample test partition is perfectly
+    disjoint and passes every invariant in `build_group_phrase_disjoint_split`, yet nothing
+    computed on it means anything -- and the manifest would still print a 15% target beside
+    it.  Refusing here is the fail-closed reading: an inadequate corpus is not trained on.
+    """
+    total = sum(split.sample_counts.values())
+    bounds = _split_size_bounds(total)
+    for name in SPLIT_NAMES:
+        minimum, maximum = bounds[name]
+        count = split.sample_counts[name]
+        if count < minimum:
+            raise PreflightError(
+                "split_too_small",
+                "A train, validation, or test partition is below the minimum usable size.",
+            )
+        if count > maximum:
+            raise PreflightError(
+                "split_unbalanced",
+                "A train, validation, or test partition exceeds its share of the corpus.",
+            )
+
+
 def build_group_phrase_disjoint_split(
     samples: Sequence[_PairLike],
     group_keys: Sequence[str],
@@ -560,11 +640,23 @@ def build_group_phrase_disjoint_split(
     for name, component in zip(SPLIT_NAMES, components[:3], strict=True):
         assigned[name].append(component)
         loads[name] += len(component)
+    minimum_samples = {
+        name: bound[0] for name, bound in _split_size_bounds(len(rows)).items()
+    }
     for component in components[3:]:
+        # Bring every partition up to its adequacy floor before optimising the target
+        # ratio.  Ratio-first allocation from the very first component is what allowed a
+        # lumpy corpus to leave test on a single row while satisfying every disjointness
+        # check.  This cannot weaken disjointness: components remain indivisible and each
+        # still lands in exactly one partition, and the phase stops once no partition is
+        # starved.  `_assert_split_adequate` still refuses a corpus that cannot get there.
+        starved = [name for name in SPLIT_NAMES if loads[name] < minimum_samples[name]]
+        candidates = starved or list(SPLIT_NAMES)
+        weights = minimum_samples if starved else TARGET_FRACTIONS
         destination = min(
-            SPLIT_NAMES,
+            candidates,
             key=lambda name: (
-                loads[name] / TARGET_FRACTIONS[name],
+                loads[name] / weights[name],
                 SPLIT_NAMES.index(name),
             ),
         )
@@ -693,32 +785,63 @@ def _validate_config(config: RuntimeConfig) -> None:
         raise PreflightError("config_invalid", "LoRA target module names are invalid.")
     if config.device not in {"auto", "cpu", "cuda", "mps"}:
         raise PreflightError("config_invalid", "The requested runtime device is unsupported.")
-    if os.path.lexists(config.output_dir):
+    _assert_output_location_contained(
+        config.output_dir, base_model_path=config.base_model_path
+    )
+
+
+def _assert_output_location_contained(
+    output_dir: Path,
+    *,
+    base_model_path: Path | None = None,
+) -> None:
+    """Refuse an output location that is not a fresh directory inside an approved parent.
+
+    This lives outside `_validate_config` because the synthetic smoke never builds a
+    `RuntimeConfig` and so never reached those checks: `synthetic-smoke --output-dir` could
+    create a directory and a manifest anywhere, including inside the tracked source tree
+    that this module's own rule reserves for `data/`.  Every writing path now passes through
+    here, before any mkdir.
+    """
+    output = Path(output_dir)
+    if os.path.lexists(output):
         raise PreflightError(
             "output_exists", "The output directory already exists; it will not be overwritten."
+        )
+    if not output.parent.is_dir():
+        # Refusing to create intermediate levels *is* the containment.  `mkdir(parents=True)`
+        # turns one mistyped path segment into a whole new tree of private artifacts, and
+        # nothing distinguishes that from an intended run root.  The operator provisions the
+        # run root deliberately; the runtime only ever adds the final component -- which also
+        # means a failed publish can leave no directory behind that the runtime created.
+        raise PreflightError(
+            "output_parent_missing",
+            "The parent of the output directory must already exist; it is not created here.",
         )
     repo_root = Path(__file__).resolve().parents[5]
     private_repo_root = repo_root / "data"
     try:
-        config.output_dir.resolve().relative_to(repo_root)
+        output.resolve().relative_to(repo_root)
     except ValueError:
         pass
     else:
         try:
-            config.output_dir.resolve().relative_to(private_repo_root)
+            output.resolve().relative_to(private_repo_root)
         except ValueError:
             raise PreflightError(
                 "unsafe_output_location",
                 "Inside this repository, patient-specific artifacts may be written only under data/.",
             ) from None
-    try:
-        config.output_dir.resolve().relative_to(config.base_model_path.resolve())
-    except ValueError:
-        pass
-    else:
-        raise PreflightError(
-            "unsafe_output_location", "The output directory cannot be inside the approved base-model tree."
-        )
+    if base_model_path is not None:
+        try:
+            output.resolve().relative_to(Path(base_model_path).resolve())
+        except ValueError:
+            pass
+        else:
+            raise PreflightError(
+                "unsafe_output_location",
+                "The output directory cannot be inside the approved base-model tree.",
+            )
 
 
 def _stable_verify_archive(
@@ -1013,6 +1136,9 @@ def _preflight_real_training_impl(
         raise PreflightError(
             "corpus_not_varied_enough", "The authorised corpus lacks enough independent split components."
         )
+    # Adequacy is judged after variety: a corpus with too few components is refused for that
+    # reason, which is the more useful answer, and a lopsided split is a symptom of it.
+    _assert_split_adequate(split)
     dependencies = _check_dependencies()
     if not hmac.compare_digest(
         sha256_directory(config.base_model_path), receipt.base_model_sha256
@@ -1175,12 +1301,10 @@ def _preflight_manifest(prepared: PreparedRun) -> dict[str, Any]:
 
 def _create_staging_directory(output_dir: Path) -> Path:
     output = Path(output_dir)
-    if os.path.lexists(output):
-        raise PreflightError(
-            "output_exists", "The output directory already exists; it will not be overwritten."
-        )
+    # Fail closed before any mkdir.  The smoke path reaches here without `_validate_config`,
+    # so this call -- not the caller -- is what keeps every written artifact contained.
+    _assert_output_location_contained(output)
     try:
-        output.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=".asr-runtime-", dir=output.parent))
         os.chmod(staging, 0o700)
         return staging
@@ -1223,6 +1347,33 @@ def _harden_and_fsync_tree(root: Path) -> None:
         ) from None
 
 
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def verify_published_artifact(output_dir: Path) -> Path:
+    """Return the manifest path of a *complete* publication, or refuse the directory.
+
+    Any consumer of an artifact directory -- a registry, a packaging step, a person -- must
+    ask this rather than trusting that adapter weights are there.  A directory still
+    carrying the sentinel was interrupted mid-publication: the weights in it are
+    patient-derived, and the manifest that labels them unvalidated, unevaluated, and
+    `deployment_ready: false` may never have been written.
+    """
+    output = Path(output_dir)
+    manifest_path = output / MANIFEST_NAME
+    if os.path.lexists(output / INCOMPLETE_PUBLICATION_SENTINEL) or not manifest_path.is_file():
+        raise TrainingRuntimeError(
+            "artifact_incomplete",
+            "The artifact directory is an interrupted publication and cannot be used.",
+        )
+    return manifest_path
+
+
 def _publish_staging(staging: Path, output_dir: Path) -> Path:
     output = Path(output_dir)
     _harden_and_fsync_tree(staging)
@@ -1232,6 +1383,17 @@ def _publish_staging(staging: Path, output_dir: Path) -> Path:
         # files, directories, and symlinks that appear after the earlier advisory check.
         os.mkdir(output, 0o700)
         reserved = True
+        # The ordering below is the whole point, and it is the reverse of the rename order.
+        # The sentinel is created and fsynced *before* the first child moves, and unlinked
+        # only after the last one -- manifest.json, kept last on purpose -- has landed.  So
+        # every window in which this directory holds patient-derived LoRA weights without
+        # the manifest that states their limitations is a window in which the sentinel is on
+        # disk.  A crash (SIGKILL, power loss) cannot run the rollback below; the sentinel is
+        # then the only evidence that what a later reader found is not a finished artifact,
+        # and `verify_published_artifact` refuses any directory carrying it.
+        sentinel = output / INCOMPLETE_PUBLICATION_SENTINEL
+        os.close(os.open(sentinel, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+        _fsync_directory(output)
         children = sorted(
             staging.iterdir(),
             key=lambda item: (item.name == MANIFEST_NAME, item.name),
@@ -1239,16 +1401,10 @@ def _publish_staging(staging: Path, output_dir: Path) -> Path:
         for child in children:
             os.rename(child, output / child.name)
         staging.rmdir()
-        output_descriptor = os.open(output, os.O_RDONLY)
-        try:
-            os.fsync(output_descriptor)
-        finally:
-            os.close(output_descriptor)
-        parent_descriptor = os.open(output.parent, os.O_RDONLY)
-        try:
-            os.fsync(parent_descriptor)
-        finally:
-            os.close(parent_descriptor)
+        _fsync_directory(output)
+        os.unlink(sentinel)
+        _fsync_directory(output)
+        _fsync_directory(output.parent)
     except OSError:
         if reserved and output.exists():
             try:
@@ -1260,7 +1416,9 @@ def _publish_staging(staging: Path, output_dir: Path) -> Path:
         raise TrainingRuntimeError(
             "artifact_publish_failed", "The private output directory could not be published."
         ) from None
-    return output / MANIFEST_NAME
+    # Self-check: a publication that reaches here without a manifest, or with its sentinel
+    # still in place, is not a finished artifact and must not be reported as one.
+    return verify_published_artifact(output)
 
 
 def _write_manifest_directory(output_dir: Path, payload: dict[str, Any]) -> Path:
@@ -1295,6 +1453,8 @@ def run_synthetic_smoke(output_dir: Path, *, seed: int = 42) -> Path:
         seed=seed,
         group_unit="synthetic_fixture_group",
     )
+    # The smoke exercises the real gates or it is not a smoke test.
+    _assert_split_adequate(split)
     fixture_description = {
         "seed": seed,
         "pair_count": len(rows),
@@ -1524,8 +1684,27 @@ def _seed_runtime(seed: int, numpy: Any, torch: Any) -> None:
 
 
 def _snapshot_approved_base_model(prepared: PreparedRun) -> tuple[Path, Path]:
-    snapshot_root = Path(tempfile.mkdtemp(prefix="neurotrace-approved-base-"))
-    os.chmod(snapshot_root, 0o700)
+    # `dir=` is load-bearing, not tidiness -- the same reasoning as the archive snapshot in
+    # `_stable_verify_archive`.  Without it mkdtemp puts a multi-gigabyte copy of the
+    # licensed checkpoint in the shared system temp directory, where the rmtree below covers
+    # a normal exit and an exception but not SIGKILL or a power loss, and where it can
+    # exhaust a shared tmpfs mid-run.  The approved base-model tree's own parent already
+    # holds these exact bytes, so snapshotting beside it adds no exposure the operator has
+    # not already accepted.  An unwritable parent raises OSError and fails closed into
+    # `base_model_snapshot_failed`, which is the correct outcome.
+    try:
+        snapshot_root = Path(
+            tempfile.mkdtemp(
+                prefix=".neurotrace-approved-base-",
+                dir=Path(prepared.config.base_model_path).resolve().parent,
+            )
+        )
+        os.chmod(snapshot_root, 0o700)
+    except OSError:
+        raise TrainingRuntimeError(
+            "base_model_snapshot_failed",
+            "The approved local checkpoint could not be privately snapshotted.",
+        ) from None
     snapshot = snapshot_root / "model"
     try:
         shutil.copytree(
@@ -1664,13 +1843,87 @@ def _apply_lora(model: Any, config: RuntimeConfig, peft: Any) -> tuple[Any, int]
     return adapted, int(trainable)
 
 
+def _screened_phrases(prepared: PreparedRun) -> frozenset[str]:
+    """Return the normalised utterances that generated metadata is screened for.
+
+    `target_text` is the highest-value INV-1 content in the archive and was screened for
+    nowhere: the identifier set covered the patient UUID, capture ids, and audio hashes only.
+
+    Screening is deliberately limited to utterances of at least
+    MINIMUM_SCREENED_PHRASE_WORDS words and MINIMUM_SCREENED_PHRASE_CHARACTERS characters,
+    and matched on word boundaries.  A one-word target ("yes", a drink, a name) occurs
+    verbatim inside tokenizer vocabularies, label maps, and configuration keys, so screening
+    it would abort every real run on a false positive -- and a check that always fires is a
+    check that gets deleted.  The tradeoff is real and is not hidden: a short utterance that
+    does leak into third-party metadata is not caught here.  What backs the short cases is
+    that this runtime never writes `target_text` into any artifact itself; this screen exists
+    for the metadata a third-party library generates, where we cannot make that promise.
+    """
+    phrases = set()
+    for pair in prepared.selected_pairs:
+        normalised = normalise_phrase(pair.target_text)
+        if (
+            len(normalised) >= MINIMUM_SCREENED_PHRASE_CHARACTERS
+            and len(normalised.split()) >= MINIMUM_SCREENED_PHRASE_WORDS
+        ):
+            phrases.add(normalised)
+    return frozenset(phrases)
+
+
+def _contains_screened_phrase(text: str, phrases: frozenset[str]) -> bool:
+    """Match phrases against the normalised text so casing and wrapping cannot hide them."""
+    if not phrases:
+        return False
+    haystack = normalise_phrase(text)
+    return any(
+        re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", haystack) is not None
+        for phrase in phrases
+    )
+
+
+def _safetensors_header_text(path: Path) -> str | None:
+    """Return the length-prefixed JSON header of a safetensors file, or None.
+
+    Reading the header costs one seek and at most MAX_SAFETENSORS_HEADER_BYTES, so the
+    tensor payload -- which may be gigabytes -- is never read.  Anything that does not look
+    like a header (short file, implausible length, non-UTF-8) returns None rather than
+    failing the run: adapter weights written by a test double or a future format are not
+    evidence of a leak, and refusing them would make the screen unusable.  This is an
+    explicit gap: content hidden in a tensor payload is not covered, and headers are
+    screened only, never rewritten, so a private path there would survive sanitisation.
+    """
+    try:
+        with path.open("rb") as source:
+            prefix = source.read(8)
+            if len(prefix) != 8:
+                return None
+            length = int.from_bytes(prefix, "little")
+            if not 1 <= length <= MAX_SAFETENSORS_HEADER_BYTES:
+                return None
+            return source.read(length).decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    except OSError:
+        raise TrainingRuntimeError(
+            "artifact_metadata_invalid", "Generated adapter metadata could not be inspected."
+        ) from None
+
+
 def _sanitize_adapter_metadata(
     adapter_dir: Path,
     prepared: PreparedRun,
     *,
     additional_private_paths: Sequence[str] = (),
 ) -> None:
-    """Remove local paths and reject literal identifiers from generated text metadata."""
+    """Strip local paths from, and refuse private content in, generated adapter metadata.
+
+    Screened: textual metadata (see SCREENED_TEXT_SUFFIXES) up to MAX_SCREENED_TEXT_BYTES,
+    plus the JSON header of any safetensors file.  Screened for: the patient UUID, capture
+    ids, audio hashes, and -- newly -- the patients' own utterances.  Not screened: tensor
+    payloads, oversized text, and any other binary format; and a private path found in a
+    safetensors header is refused nowhere and rewritten nowhere, because rewriting a file we
+    only partially parse is worse than leaving it.
+    """
     private_paths = {
         str(prepared.config.archive_path),
         str(prepared.config.receipt_path),
@@ -1685,19 +1938,38 @@ def _sanitize_adapter_metadata(
     forbidden_identifiers = {str(prepared.archive.patient_id)}
     forbidden_identifiers.update(str(pair.capture_id) for pair in prepared.selected_pairs)
     forbidden_identifiers.update(pair.sha256 for pair in prepared.selected_pairs)
+    screened_phrases = _screened_phrases(prepared)
     for path in sorted(item for item in adapter_dir.rglob("*") if item.is_file()):
-        if path.suffix.lower() not in {".json", ".md", ".txt"} or path.stat().st_size > 2_000_000:
+        # Rewritable files are the textual formats a model card or config lands in.  A
+        # safetensors file is screened through its header only; everything else (binary
+        # blobs, oversized text) is not inspected at all and is not claimed to be.
+        rewritable = (
+            path.suffix.lower() in SCREENED_TEXT_SUFFIXES
+            and path.stat().st_size <= MAX_SCREENED_TEXT_BYTES
+        )
+        if rewritable:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                raise TrainingRuntimeError(
+                    "artifact_metadata_invalid", "Generated adapter metadata could not be inspected."
+                ) from None
+        elif path.suffix.lower() == ".safetensors":
+            text = _safetensors_header_text(path)
+        else:
+            text = None
+        if text is None:
             continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            raise TrainingRuntimeError(
-                "artifact_metadata_invalid", "Generated adapter metadata could not be inspected."
-            ) from None
         if any(value and value in text for value in forbidden_identifiers):
             raise TrainingRuntimeError(
                 "artifact_privacy_violation", "Generated adapter metadata contains a private identifier."
             )
+        if _contains_screened_phrase(text, screened_phrases):
+            raise TrainingRuntimeError(
+                "artifact_privacy_violation", "Generated adapter metadata contains a patient utterance."
+            )
+        if not rewritable:
+            continue
         sanitized = text
         for value in sorted(private_paths, key=len, reverse=True):
             if value:
@@ -1734,6 +2006,7 @@ def _optimise_lora(
     optimizer_steps = 0
     examples_seen = 0
     epochs_completed = 0
+    stopped_at_step_limit = False
     order = list(prepared.split.train)
     generator = random.Random(config.seed)
     optimizer.zero_grad(set_to_none=True)
@@ -1765,9 +2038,19 @@ def _optimise_lora(
                     optimizer_steps += 1
                     accumulation = 0
                 if optimizer_steps >= config.max_optimizer_steps:
+                    stopped_at_step_limit = True
+                    # An epoch is counted only when every batch of the training split was
+                    # seen.  Incrementing on the way out of a truncated epoch made the
+                    # manifest -- the one document whose purpose is to not overstate what
+                    # was done -- report a completed epoch after a single batch.  The limit
+                    # landing exactly on the final batch is a genuinely complete epoch, so
+                    # that case still counts.
+                    if last_batch:
+                        epochs_completed += 1
                     break
-            epochs_completed += 1
-            if optimizer_steps >= config.max_optimizer_steps:
+            else:
+                epochs_completed += 1
+            if stopped_at_step_limit:
                 break
     except TrainingRuntimeError:
         raise
@@ -1780,7 +2063,9 @@ def _optimise_lora(
     return {
         "optimizer_steps": optimizer_steps,
         "examples_seen": examples_seen,
+        "epochs_requested": config.epochs,
         "epochs_completed": epochs_completed,
+        "stopped_at_step_limit": stopped_at_step_limit,
     }
 
 
@@ -1816,6 +2101,26 @@ def _training_manifest(
 ) -> dict[str, Any]:
     payload = _preflight_manifest(prepared)
     payload["privacy"]["contains_patient_derived_weights"] = True
+    # "completed" means every requested epoch ran to the end of the training split.  The
+    # previous code hard-coded it, so a run the optimiser-step limit cut off after one batch
+    # still published `"status": "completed"`.  A missing fact is read as truncated: the
+    # conservative direction for a manifest is to understate, never to overstate.
+    epochs_completed = int(run_facts.get("epochs_completed", 0))
+    completed = epochs_completed >= prepared.config.epochs
+    limitations = [
+        "The adapter was optimised on authorised real pairs but has not been evaluated.",
+        "Validation and test partitions remain untouched; no WER, CER, loss, or "
+        "intelligibility metric is claimed.",
+        "The split is within one patient and cannot measure unseen-speaker generalisation.",
+        "The adapter is not registered, shipped, or deployment-ready.",
+        "A short-lived signed receipt is a point-in-time revocation check, not an online registry.",
+    ]
+    if not completed:
+        limitations.insert(
+            1,
+            "The run stopped before every requested epoch finished; the training split was "
+            "not seen in full.",
+        )
     payload.update(
         {
             "status": "trained_not_evaluated",
@@ -1827,19 +2132,13 @@ def _training_manifest(
                 "device_type": device_type,
             },
             "training": {
-                "status": "completed",
+                "status": "completed" if completed else "truncated_before_completion",
+                "epochs_requested": prepared.config.epochs,
                 "trainable_lora_parameters": trainable_parameters,
                 **run_facts,
             },
             "artifacts": artifacts,
-            "limitations": [
-                "The adapter was optimised on authorised real pairs but has not been evaluated.",
-                "Validation and test partitions remain untouched; no WER, CER, loss, or "
-                "intelligibility metric is claimed.",
-                "The split is within one patient and cannot measure unseen-speaker generalisation.",
-                "The adapter is not registered, shipped, or deployment-ready.",
-                "A short-lived signed receipt is a point-in-time revocation check, not an online registry.",
-            ],
+            "limitations": limitations,
         }
     )
     return payload
