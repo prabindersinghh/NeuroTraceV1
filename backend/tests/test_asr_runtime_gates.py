@@ -1400,3 +1400,38 @@ def test_the_runtime_module_declares_no_module_level_machine_learning_import():
     assert not {"torch", "transformers", "peft", "safetensors", "accelerate"} & set(
         module_level_imports
     )
+
+
+def test_the_optional_requirements_file_matches_the_pinned_dependency_contract():
+    """`requirements-train.txt` and PINNED_DEPENDENCY_VERSIONS must not drift apart.
+
+    The gate checks for an EXACT version match, so a package the runtime pins but the
+    requirements file omits does not degrade gracefully -- it fails `dependencies_missing`
+    on the training host, after someone has provisioned a GPU box and copied a consented
+    archive onto it. That is the worst possible place to discover a packaging mistake.
+
+    This test exists because it already happened: accelerate was dropped from the
+    requirements file after reading which modules `runtime.py` imports. Imports are the
+    wrong contract. The dict below is the contract, and nothing but a test keeps a human
+    from reasoning their way to the same wrong answer again.
+    """
+    repo = Path(__file__).resolve().parents[2]
+    runtime_source = Path(runtime.__file__).read_text(encoding="utf-8")
+    block = re.search(r"PINNED_DEPENDENCY_VERSIONS = \{(.*?)\}", runtime_source, re.S)
+    assert block, "PINNED_DEPENDENCY_VERSIONS is gone or was renamed"
+    pinned = dict(re.findall(r'"([A-Za-z0-9_.-]+)":\s*"([^"]+)"', block.group(1)))
+    assert pinned, "the pinned-version dict parsed as empty"
+
+    requirements_path = repo / "backend" / "requirements-train.txt"
+    declared = dict(
+        re.findall(r"^([A-Za-z0-9_.-]+)==([^\s#]+)$",
+                   requirements_path.read_text(encoding="utf-8"), re.M)
+    )
+
+    assert declared == pinned, (
+        "backend/requirements-train.txt disagrees with PINNED_DEPENDENCY_VERSIONS.\n"
+        f"  only in runtime.py:            {sorted(set(pinned) - set(declared))}\n"
+        f"  only in requirements-train:    {sorted(set(declared) - set(pinned))}\n"
+        f"  version disagreements:         "
+        f"{ {k: (pinned[k], declared[k]) for k in set(pinned) & set(declared) if pinned[k] != declared[k]} }"
+    )

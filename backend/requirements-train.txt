@@ -30,9 +30,11 @@
 # consented Awaaz archive, local base-model weights, a signed purpose-specific governance
 # receipt, a GPU host, and a held-out human intelligibility evaluation. See docs/ML_STATUS.md.
 
-# ---------------------------------------------------------------- minimums enforced in code
-# runtime.py MINIMUM_DEPENDENCY_VERSIONS: torch (2,1) · transformers (4,40) · peft (0,10)
-# · safetensors (0,4) · numpy (1,24). The pins here are at or above each of those.
+# ---------------------------------------------------------------- pins enforced in code
+# runtime.py carries PINNED_DEPENDENCY_VERSIONS and refuses to train unless the installed
+# version matches EXACTLY — not a floor, an equality. Every line below must stay identical
+# to that dict; changing one without the other surfaces as `dependencies_missing` or
+# `dependencies_incompatible` on the training host rather than as a readable error here.
 
 # Restates the requirements.txt pin so no resolver can upgrade it out from under mediapipe.
 numpy==1.26.4
@@ -45,10 +47,15 @@ torch==2.4.1
 # Wav2Vec2 / MMS CTC model classes and the feature extractor.
 transformers==4.44.2
 
-# LoRA. runtime.py uses LoraConfig + get_peft_model directly and runs its own training
-# loop, so `accelerate`, `datasets` and `Trainer` are NOT dependencies and are omitted on
-# purpose — adding them would imply a training path this code does not take.
+# LoRA. runtime.py uses LoraConfig + get_peft_model directly.
 peft==0.12.0
+
+# Required by the dependency gate, even though runtime.py runs its own optimisation loop
+# rather than a `Trainer`. This file briefly omitted accelerate, reasoning from which
+# modules runtime.py imports — the wrong contract to read. PINNED_DEPENDENCY_VERSIONS is
+# what the gate actually checks, so a host installing this file without accelerate fails
+# `dependencies_missing` before training starts. `datasets` is absent from both and stays out.
+accelerate==0.34.2
 
 # Adapter serialisation. The adapter is written as safetensors, never as a pickle.
 safetensors==0.4.5
