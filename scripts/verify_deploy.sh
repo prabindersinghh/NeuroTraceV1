@@ -25,7 +25,14 @@ bad()  { echo "  FAIL  $*"; fail=$((fail+1)); }
 step() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 # The values the local instance produces. Any difference is a real difference.
-EXPECT_BANDS="SSSSSSSSSSSSSSSSSSWAA"
+#
+# Re-derived 2026-08-30 by running `seed_demo` against a fresh local database and reading
+# the result, THEN confirming the deployed instance matches — in that order, so this is the
+# local truth and not the deployed output copied back into its own expectation. The previous
+# value (`...SSWAA`, a WATCH on day 19) predates the Part 3 baseline-confirmation work:
+# the baseline now confirms ON day 19, so that session no longer scores a band of its own.
+# Both sides now produce nineteen STABLE then two ALERT.
+EXPECT_BANDS="SSSSSSSSSSSSSSSSSSSAA"
 EXPECT_FINAL="ALERT"
 EXPECT_LATERAL="cranial_nerves,motor"
 
@@ -65,7 +72,12 @@ else
 fi
 
 step "5 · seed the demo"
-seeded=$(curl -fsS --max-time 180 -X POST "$BASE/demo/seed" 2>/dev/null || echo "")
+# 180s was not enough and the failure was indistinguishable from a real one: the seed runs
+# 21 days through the full engine and took 3m06s against a cold Neon instance, so curl
+# aborted and this reported "demo seed failed (is DEMO_MODE=true?)" — sending three deploys
+# chasing a DEMO_MODE flag that was never the problem. Check 6 then compared an empty string
+# and reported the engine as behaving differently. A timeout must not read as a wrong answer.
+seeded=$(curl -fsS --max-time 600 -X POST "$BASE/demo/seed" 2>/dev/null || echo "")
 if [ -z "$seeded" ]; then
   bad "demo seed failed (is DEMO_MODE=true?)"
 else
