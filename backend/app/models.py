@@ -433,6 +433,23 @@ class ExamSession(Base):
     is_practice: Mapped[bool] = mapped_column(
         sa.Boolean, default=False, nullable=False, server_default=sa.false())
 
+    @property
+    def abandoned(self) -> dict | None:
+        """`{"at", "steps_completed", "steps_total"}` if the patient exited part-way.
+
+        Derived from `device_info` rather than stored in a column of its own. `completed`
+        already distinguishes finished from unfinished and is what the pipeline filters on;
+        what a column would add is only the ability to tell "walked out" apart from "still
+        in progress", which is presentation. That did not seem worth a migration against a
+        schema that had just been deployed and verified — see D-058 on the cost of moving
+        schema and code apart. If this needs to be queryable (a report counting abandoned
+        sessions, say) it should become a real nullable `abandoned_at` column; JSON is the
+        right place for it exactly as long as nothing filters on it.
+        """
+        info = self.device_info or {}
+        value = info.get("abandoned") if isinstance(info, dict) else None
+        return value if isinstance(value, dict) else None
+
     patient: Mapped[Patient] = relationship(back_populates="sessions")
     module_results: Mapped[list["ModuleResult"]] = relationship(
         back_populates="session", cascade="all, delete-orphan", passive_deletes=True)

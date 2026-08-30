@@ -14,6 +14,62 @@ import type { Lang } from "./types";
 /** Exported so behavioural tests can assert on the copy the app actually renders,
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
+  // ---- leaving a session part-way, and looking back at it (Part 1) ----
+  // Accessible names for two controls that had hardcoded English ones. A screen-reader
+  // user on the Punjabi build heard "line angle" in English on the SVV slider — a control
+  // that IS the measurement, so the instruction and the label disagreed.
+  cameraPreview: { en: "Camera preview", hi: "कैमरा दृश्य", pa: "ਕੈਮਰਾ ਦ੍ਰਿਸ਼" },
+  svvLineAngle: { en: "Line angle", hi: "रेखा का कोण", pa: "ਰੇਖਾ ਦਾ ਕੋਣ" },
+  exitShort: { en: "Stop", hi: "रोकें", pa: "ਰੋਕੋ" },
+  exitLabel: {
+    en: "Stop this check-in",
+    hi: "यह जाँच रोकें",
+    pa: "ਇਹ ਜਾਂਚ ਰੋਕੋ",
+  },
+  exitTitle: {
+    en: "Stop this check-in?",
+    hi: "क्या यह जाँच रोकनी है?",
+    pa: "ਕੀ ਇਹ ਜਾਂਚ ਰੋਕਣੀ ਹੈ?",
+  },
+  // `{done}` and `{total}` are substituted by the caller. Kept as placeholders rather
+  // than string concatenation so each language keeps its own word order.
+  exitProgress: {
+    en: "You have completed {done} of {total} steps.",
+    hi: "आपने {total} में से {done} चरण पूरे किए हैं।",
+    pa: "ਤੁਸੀਂ {total} ਵਿੱਚੋਂ {done} ਪੜਾਅ ਪੂਰੇ ਕੀਤੇ ਹਨ।",
+  },
+  // Says what happens to the work, because "are you sure?" with no answer to "what do I
+  // lose?" is what makes someone stay in a check-in they wanted to leave.
+  exitKept: {
+    en: "What you have already done is saved. You can start again whenever you like.",
+    hi: "आपने अब तक जो किया है वह सुरक्षित है। आप जब चाहें फिर से शुरू कर सकते हैं।",
+    pa: "ਤੁਸੀਂ ਹੁਣ ਤੱਕ ਜੋ ਕੀਤਾ ਹੈ ਉਹ ਸੰਭਾਲਿਆ ਗਿਆ ਹੈ। ਤੁਸੀਂ ਜਦੋਂ ਚਾਹੋ ਦੁਬਾਰਾ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ।",
+  },
+  exitCancel: {
+    en: "Carry on with the check-in",
+    hi: "जाँच जारी रखें",
+    pa: "ਜਾਂਚ ਜਾਰੀ ਰੱਖੋ",
+  },
+  exitConfirm: { en: "Stop for now", hi: "अभी के लिए रोकें", pa: "ਹੁਣ ਲਈ ਰੋਕੋ" },
+  stepBack: { en: "Back", hi: "पीछे", pa: "ਪਿੱਛੇ" },
+  stepForward: { en: "Forward", hi: "आगे", pa: "ਅੱਗੇ" },
+  reviewNavLabel: {
+    en: "Look back at earlier steps",
+    hi: "पिछले चरण देखें",
+    pa: "ਪਿਛਲੇ ਪੜਾਅ ਵੇਖੋ",
+  },
+  reviewTitle: {
+    en: "Looking back",
+    hi: "पीछे देख रहे हैं",
+    pa: "ਪਿੱਛੇ ਵੇਖ ਰਹੇ ਹੋ",
+  },
+  // States plainly that this step cannot be redone, so the absence of a retake button
+  // reads as a decision rather than something missing.
+  reviewBody: {
+    en: "This step is already done and cannot be repeated. Go forward to carry on.",
+    hi: "यह चरण हो चुका है और दोबारा नहीं किया जा सकता। जारी रखने के लिए आगे जाएँ।",
+    pa: "ਇਹ ਪੜਾਅ ਹੋ ਚੁੱਕਾ ਹੈ ਅਤੇ ਦੁਬਾਰਾ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਜਾਰੀ ਰੱਖਣ ਲਈ ਅੱਗੇ ਜਾਓ।",
+  },
   qualityNoPerson: {
     en: "We could not see the whole body. Step back so everything fits, then try again.",
     hi: "पूरा शरीर नहीं दिखा। थोड़ा पीछे हों ताकि सब दिखे, फिर दोबारा करें।",
@@ -533,14 +589,44 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null);
 const LANG_KEY = "neurotrace.lang";
 
+/**
+ * Has a human actually picked a language yet?
+ *
+ * The absence of the key is the signal — which is why the default below must NOT write
+ * "en" on first read. "Nobody has chosen" and "somebody chose English" have to stay
+ * distinguishable, or the language screen could never be shown to the people who most need
+ * it: an English default that silently becomes a choice is exactly how a Punjabi-speaking
+ * household ends up using an English app without ever being offered anything else.
+ */
+export function hasChosenLang(): boolean {
+  try {
+    return localStorage.getItem(LANG_KEY) !== null;
+  } catch {
+    // Private mode, or storage disabled. Treat as "not chosen": showing the picker again
+    // is a small cost, and assuming English would be the wrong way to fail.
+    return false;
+  }
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(
-    () => (localStorage.getItem(LANG_KEY) as Lang | null) ?? "en",
-  );
+  const [lang, setLangState] = useState<Lang>(() => {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(LANG_KEY);
+    } catch { /* storage unavailable — fall through to the default */ }
+    const initial = (stored as Lang | null) ?? "en";
+    // Set on first paint, not only on change. Without this the document carries no `lang`
+    // until someone switches language, so a screen reader announces Hindi and Punjabi
+    // content with an English voice on the very screens that most need to be spoken.
+    document.documentElement.lang = initial;
+    return initial;
+  });
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
-    localStorage.setItem(LANG_KEY, next);
+    try {
+      localStorage.setItem(LANG_KEY, next);
+    } catch { /* the choice still applies for this session */ }
     document.documentElement.lang = next;
   }, []);
 

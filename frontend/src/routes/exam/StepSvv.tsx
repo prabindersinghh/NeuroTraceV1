@@ -68,7 +68,7 @@ export default function StepSvv({
 }: {
   onComplete: (result: SvvResult) => void;
 }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const [conditionIndex, setConditionIndex] = useState(0);
   const [trial, setTrial] = useState(0);
   // Random start each trial so the patient cannot carry a correction across trials.
@@ -239,7 +239,7 @@ export default function StepSvv({
           value={angle}
           onChange={(e) => setAngle(Number(e.target.value))}
           className="h-12 w-full"
-          aria-label="line angle"
+          aria-label={t("svvLineAngle")}
         />
       </label>
 

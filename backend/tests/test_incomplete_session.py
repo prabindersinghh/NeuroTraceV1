@@ -196,3 +196,101 @@ async def test_the_control_baseline_is_actually_sensitive_to_contamination(sessi
         "a COMPLETED session with the same contents changed nothing either — the fixture "
         "cannot detect contamination, so the headline test proves nothing"
     )
+
+
+# --------------------------------------------------------------- the exit, over the API
+CAREGIVER = {"email": "exit@example.com", "password": "correct-horse-battery",
+             "role": "caregiver"}
+
+
+def _auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _caregiver_and_patient(client) -> tuple[str, str]:
+    resp = await client.post("/auth/register", json=CAREGIVER)
+    assert resp.status_code == 201, resp.text
+    token = resp.json()["tokens"]["access_token"]
+    resp = await client.post("/patients", json={
+        "name": "Harjit Kaur", "age": 71, "sex": "female",
+        "stroke_date": (START - timedelta(days=200)).isoformat(),
+        "stroke_side": "right", "languages": ["pa", "en"], "preferred_hour": 9.0,
+    }, headers=_auth(token))
+    assert resp.status_code == 201, resp.text
+    return token, resp.json()["id"]
+
+
+async def _started_session(client, token: str, patient_id: str) -> str:
+    resp = await client.post(f"/sessions/{patient_id}/start",
+                             json={"type": "DAILY_PULSE"}, headers=_auth(token))
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_exiting_records_how_far_the_patient_got(client):
+    token, patient_id = await _caregiver_and_patient(client)
+    session_id = await _started_session(client, token, patient_id)
+
+    resp = await client.post(f"/sessions/{session_id}/abandon",
+                             json={"steps_completed": 4, "steps_total": 21},
+                             headers=_auth(token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["completed"] is False, "an exited session must never read as completed"
+    assert body["abandoned"]["steps_completed"] == 4
+    assert body["abandoned"]["steps_total"] == 21
+    assert body["abandoned"]["at"], "the exit must be timestamped"
+
+
+async def test_exiting_twice_is_not_an_error(client):
+    """A double tap, or the offline queue retrying, must not 409 at someone leaving."""
+    token, patient_id = await _caregiver_and_patient(client)
+    session_id = await _started_session(client, token, patient_id)
+
+    first = await client.post(f"/sessions/{session_id}/abandon",
+                              json={"steps_completed": 2, "steps_total": 21},
+                              headers=_auth(token))
+    second = await client.post(f"/sessions/{session_id}/abandon",
+                               json={"steps_completed": 9, "steps_total": 21},
+                               headers=_auth(token))
+    assert first.status_code == second.status_code == 200, second.text
+    assert second.json()["abandoned"]["steps_completed"] == 2, (
+        "the SECOND call overwrote the first exit — the record of how far they actually "
+        "got before stopping is the thing worth keeping"
+    )
+
+
+async def test_an_exited_session_is_not_offered_for_resume(client):
+    """Interrupted and abandoned are both `completed=False`. Only one is an invitation."""
+    token, patient_id = await _caregiver_and_patient(client)
+    session_id = await _started_session(client, token, patient_id)
+
+    resumable = await client.get(f"/sessions/{patient_id}/current", headers=_auth(token))
+    assert resumable.json() is not None, "a merely interrupted session SHOULD resume"
+
+    await client.post(f"/sessions/{session_id}/abandon",
+                      json={"steps_completed": 3, "steps_total": 21}, headers=_auth(token))
+
+    after = await client.get(f"/sessions/{patient_id}/current", headers=_auth(token))
+    assert after.json() is None, (
+        "a session the patient chose to stop was offered back to them for resume"
+    )
+
+
+async def test_a_finished_session_cannot_be_retro_abandoned(client, session):
+    """Guards the engine: a scored session must not be quietly reclassified afterwards.
+
+    `client` and `session` share the `engine` fixture, so this reaches the same database
+    the API is writing to.
+    """
+    token, patient_id = await _caregiver_and_patient(client)
+    session_id = await _started_session(client, token, patient_id)
+
+    exam = await session.get(ExamSession, uuid.UUID(session_id))
+    exam.completed = True
+    await session.commit()
+
+    resp = await client.post(f"/sessions/{session_id}/abandon",
+                             json={"steps_completed": 21, "steps_total": 21},
+                             headers=_auth(token))
+    assert resp.status_code == 409, resp.text

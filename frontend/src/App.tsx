@@ -1,8 +1,10 @@
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { LanguageGate } from "@/components/LanguageGate";
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
+import { hasChosenLang } from "@/lib/i18n";
 import Landing from "@/routes/Landing";
 import { Login } from "@/routes/Login";
 
@@ -93,6 +95,11 @@ function Home() {
 }
 
 export default function App() {
+  // First run only: nobody has picked a language yet. Held in state as well as storage so
+  // the choice takes effect immediately rather than on the next load.
+  const [needsLang, setNeedsLang] = useState(() => !hasChosenLang());
+  if (needsLang) return <LanguageGate onChosen={() => setNeedsLang(false)} />;
+
   return (
     // One boundary for every split route. The exam is the only surface where a spinner
     // is a real cost, and its chunk is fetched while the caregiver is still on the home

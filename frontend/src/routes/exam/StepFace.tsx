@@ -123,7 +123,7 @@ export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentit
           playsInline
           muted
           className="h-full w-full scale-x-[-1] object-cover"
-          aria-label="Camera preview"
+          aria-label={t("cameraPreview")}
         />
         {!started && (
           <div className="absolute inset-0 grid place-items-center text-muted-foreground">
