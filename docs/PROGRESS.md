@@ -250,7 +250,30 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-08-30 · **`feat/caretaker-onboarding` is merged to `main` and
+**Last updated:** 2026-08-31 · **The UX branch is merged to `main` and DEPLOYED**
+(`25d856a`, Railway SUCCESS, `verify_deploy.sh` 7/7). Mid-test exit and view-only back,
+a language screen before demo/login, and a first-run tour. **No migration** — head stays
+`0020` and no column changed, so this deployed as code only and D-058's coordinated release
+did not apply.
+
+Two live defects were fixed that nothing local could see. `_module_history` fed
+**unfinished sessions into every baseline** (INV-14), reachable by closing the tab
+mid-session; fixing it also turned out-of-order offline replay from producing a *wrong,
+unrepairable* baseline into producing *none*, recoverable by an in-order rescore. And the
+demo seed never created a clinician link or consent, so after Part 3.2 the **demo doctor
+saw an empty roster** — on the surface shown to judges. Both confirmed fixed in production:
+roster returns 1 patient at ALERT, and an exited session leaves the baseline byte-identical
+with history 21 → 21 and no band, trend or alert.
+
+Six further defects came from driving the app in Punjabi and Hindi, none visible to `tsc`,
+`vitest` or `oxlint` — including **Pause and Exit rendering as the same word** in both
+languages, and **`PatientHome` having no emergency button at all**. See D-059, D-060 and the
+2026-08-31 CHANGELOG entry.
+
+**Still open:** Part 4's broad visual restyling was not attempted, and `Landing.tsx` remains
+English-only, so choosing Hindi or Punjabi still lands on an English page.
+
+· Earlier: **`feat/caretaker-onboarding` is merged to `main` and
 pushed** (`--no-ff`), together with the D-055 repair. The reconcile also caught Deepesh's
 README rewrite reintroducing the "90-second" Daily Pulse figure in four places — three of
 which git merged silently — corrected against `app/models.py:92` (~195s).

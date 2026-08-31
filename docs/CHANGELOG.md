@@ -6,7 +6,10 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ## 2026-08-31 — UX: leaving a session, choosing a language, and five defects only the running app showed
 
-Branch `feat/ux-navigation-language`, off `main`. **Not merged, not pushed.**
+Branch `feat/ux-navigation-language`, off `main`. **Merged `--no-ff` and deployed**
+as `25d856a` (Railway SUCCESS). **No migration** — head stays `0020`, no column added or
+altered, `ExamSession.abandoned` is a property over existing `device_info` — so this went
+out as code only and D-058's coordinated release did not apply.
 
 ### Mid-test navigation (Part 1)
 A patient could not leave a check-in once it started. Exit now sits beside pause, always
@@ -78,6 +81,19 @@ heading skips).
 
 Frontend: `tsc` 0, `vitest` 113 passed (10 files), `oxlint` 9 warnings (unchanged baseline),
 `build` 0.
+
+Backend: **1100 passed, exit 0** (baseline 1091; +8 incomplete-session, +1 offline-ordering).
+
+**In production, after deploy:** `verify_deploy.sh` **7 passed, 0 failed**; a session still
+writes (start 201, module 200); the demo clinician roster returns **1 patient at ALERT**; and
+an exited session is stored `completed=False` with its counts while the dashboard is
+untouched — baseline byte-identical, history 21 → 21, latest unchanged, no band, no trend
+point, no alert.
+
+One correction: the first run of that last check compared `band` and `session_count`, which
+the dashboard does not return. Both sides were `None`, so it passed while proving nothing —
+the same vacuous-pass shape this branch spent its tests pinning against. Redone against the
+fields the payload actually has, with a pin that fails if they are empty.
 
 ## 2026-08-30 — main reconciled and merged; the chain validated on a Neon branch, and it failed
 

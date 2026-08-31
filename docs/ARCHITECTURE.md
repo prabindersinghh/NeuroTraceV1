@@ -64,7 +64,7 @@ per-request cost to users with intermittent data.
 |---|---|
 | `users` | accounts; role ∈ patient / caregiver / clinician / caretaker / asha_worker / admin |
 | `patients` | enrolment, stroke details, `deployment_tier`, exclusions, ASHA assignment |
-| `sessions` | one exam sitting |
+| `sessions` | one exam sitting. `completed=False` means unfinished — either still in progress or **exited by the patient**, and either way excluded from baselines and scoring (D-059) |
 | `module_results` | extracted features per module — **numbers only** |
 | `baselines` | adaptive median/MAD/trajectory **and** the frozen reference snapshot |
 | `deviations` | per-module z, RCI, CUSUM, laterality |
@@ -104,7 +104,7 @@ routine PATCH silently un-enrols the patient and the check stops running unrepor
 
 | Role | Can see | Can do |
 |---|---|---|
-| patient | own exam | run the battery |
+| patient | own exam | run the battery, pause, **exit part-way**, and look back at completed steps read-only (D-059) |
 | caregiver | own patients: band, explanation, trends, FAST | enrol, run exams, log symptoms and vertigo, acknowledge falls |
 | clinician | **only linked patients**: roster, deviations, drift, typed cards | acknowledge alerts, export reports, confirm baselines |
 | caretaker | **only their own linked patients**: everything clinical the caregiver sees | acknowledge falls. NOT alerts, consent, linking or erasure |

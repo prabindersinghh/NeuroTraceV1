@@ -748,11 +748,19 @@ NeuroTraceV1/
 | Patient | `ramesh@neurotrace.app` | `neurotrace-demo` |
 | Admin | `admin@neurotrace.app` | `neurotrace-demo` |
 
+**The first screen asks for a language** — English, हिंदी or ਪੰਜਾਬੀ. It appears once, before
+sign-in, and the whole signed-in app follows that choice. Pick Punjabi to see the product as
+the target household would. (This page itself is English only; see *Limits* below.)
+
 These are **demonstration accounts on demonstration data**. There is no real patient record in
-the demo environment.
+the demo environment. Passwords are the seeded defaults and are overridden by `DEMO_PASSWORD`
+on any instance where that is set — on a deployment carrying real patients, `DEMO_MODE=false`
+is the control that matters, not the password.
 
 The clinician view contains a seeded longitudinal story showing baseline, drift, persistence,
-cross-domain agreement and alert gating.
+cross-domain agreement and alert gating. The seed links the demo clinician to the demo patient
+and grants the sharing consent, because access requires **both** an active link and current
+consent — without them the roster is empty, which is exactly what it was until 2026-08-31.
 
 The admin view exposes operational counts and events rather than patient clinical records.
 

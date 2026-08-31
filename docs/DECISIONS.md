@@ -1079,3 +1079,59 @@ read of a patient-scoped route.
 See also **D-057**, found immediately afterwards: the same deploy was still broken for session
 CREATION for a completely independent reason, which the recovered `/patients` route did not
 reveal.
+
+---
+
+### D-059 — leaving a session keeps the data and forfeits the score; going back is view-only
+
+**2026-08-31.** Patients could not exit a check-in once it started, and could not look back
+at what they had done. Both are now possible, with semantics that are not negotiable.
+
+**EXITING.** The session is stored with everything captured so far — the family should see a
+check-in was started, and adherence should count the attempt — and it is excluded from every
+baseline and from scoring. `completed=False` is the whole mechanism; the pipeline already
+filters on it, so exiting is not a special case the engine has to know about. It is just a
+session that never finished.
+
+The reason it must be excluded is INV-14. `session_position` and
+`elapsed_seconds_at_task_start` exist because a module's baseline absorbs its own place on
+the fatigue curve. A truncated session is a different measurement condition, and blending
+the two widens a module's normal range until real drift stops standing out. `is_practice`
+(0009) already establishes exactly this shape for a different reason.
+
+**GOING BACK is view-only, and the restriction is the feature.** A patient who feels they
+performed badly wants another go. Allowing it freely would teach each module's baseline the
+patient's BEST attempt rather than their typical one, so genuine decline would have to be
+worse than their best-ever day before anything fired. That is the same reasoning that caps
+retries at two and discards the first three sessions. The "I did that wrong" need is already
+met inside the step, by the two-retry rule, at the moment the capture actually failed its
+quality check.
+
+`taskFlow.mayCapture()` is the single guard: no capture component exists in the tree while
+an earlier step is on screen, so there is no code path by which a completed step can be
+discarded and retaken.
+
+**No migration.** `completed` already distinguished finished from unfinished; the step counts
+live in `device_info`. A real `abandoned_at` column is the right move if anything ever needs
+to FILTER on abandonment — JSON is the right place for it exactly as long as nothing does.
+
+### D-060 — the guided tour is in-house, and not because of bundle size
+
+**2026-08-31.** `react-joyride` was evaluated properly: v3.2.0 bundles to **26.8 KB gzipped**
+(77.9 KB raw, React excluded) and brings **ten transitive dependencies**, measured by
+bundling it rather than quoting a figure. Against a 104 KB main bundle that is a quarter
+again, and ten more packages in the SBOM of a medical PWA. Arguable either way.
+
+What settled it is architectural. Joyride's central mechanic is a **modal spotlight** — a
+full-screen overlay that blocks everything except the highlighted element. This product
+guarantees that the FAST and emergency paths are always reachable. Someone having a second
+stroke during a first-run tour must be able to hit the emergency button. Making Joyride safe
+here would mean overriding its main abstraction on every screen it appears on, and a safety
+guarantee that depends on successfully fighting a library is not one to rely on.
+
+The in-house tour never blocks anything: it outlines the target and captions it in a bar
+while the page underneath stays fully interactive. It is markedly less capable — no scroll
+management, no repositioning — and it cannot fail in the way that matters.
+
+(If this is revisited: v3 removed the default export, so most Joyride examples in
+circulation are v2 and will not compile against it.)
