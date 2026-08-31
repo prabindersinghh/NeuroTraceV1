@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from .models import (
-    Band, BaselineState, DeploymentTier, Instrument, Role, SessionType, StrokeSide,
-    WearableMetric,
+    Band, BaselineState, DeploymentTier, Instrument, MAX_POLICY_CANDIDATES,
+    MIN_POLICY_CANDIDATES, PolicyEventOutcome, PolicyFeedbackActor, Role, SessionType,
+    StrokeSide, WearableMetric,
 )
 
 ORM = ConfigDict(from_attributes=True)
@@ -719,3 +720,137 @@ class AwaazEmergencyRequest(BaseModel):
                 and not self.location_consent:
             raise ValueError("location_consent must be true when location is provided")
         return self
+
+
+# ------------------------------------------------------- Awaaz policy events (AWA-FR-014)
+# `extra="forbid"` on both request models is load-bearing, not tidiness. The whole value of
+# `awaaz_policy_events` is that it cannot hold a transcript; a permissive request model lets
+# a well-meaning client post `{"candidate_id": ..., "text": "..."}`, and the field would then
+# be sitting in the request log and one `model_dump()` away from the row. Rejecting unknown
+# keys makes "no text crosses this boundary" checkable at the boundary.
+
+
+class AwaazPolicyCandidate(BaseModel):
+    """One already-screened option, as an opaque id and the ranker's score.
+
+    The score is used to build the logging distribution and is then discarded: it is a
+    property of the model, not of the patient, and persisting it would let a reader rebuild
+    a per-utterance confidence trace beside the slate.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: uuid.UUID
+    score: float = Field(ge=0.0, le=1.0)
+
+
+class AwaazPolicyDecisionRequest(BaseModel):
+    """Ask the behaviour policy which candidate to show first, and at what probability.
+
+    The server does the sampling. A client-reported propensity is not a propensity -- it is
+    a number the estimator would divide by on trust, and nothing downstream could tell a
+    mistaken one from an honest one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Minted by the client when it rendered the slate, so a retry after a lost response is
+    #: the same event rather than a second draw from the same decision.
+    event_id: uuid.UUID
+    candidates: list[AwaazPolicyCandidate] = Field(
+        min_length=MIN_POLICY_CANDIDATES, max_length=MAX_POLICY_CANDIDATES)
+    #: Must be true. Randomising a slate that may be spoken without confirmation would be
+    #: exploration on a patient's mouth; see the router.
+    requires_confirmation: bool = False
+    #: PRD_AWAAZ.md §10.2 requires a separate consent record per purpose. Analytics logging
+    #: is its own purpose and does not ride on the consent given for anything else.
+    policy_logging_consent: bool = False
+
+    @model_validator(mode="after")
+    def slate_is_a_set(self):
+        ids = [item.candidate_id for item in self.candidates]
+        if len(set(ids)) != len(ids):
+            raise ValueError("candidates must not repeat a candidate_id")
+        return self
+
+
+class AwaazPolicyDecision(BaseModel):
+    """What to show, and the propensity that will be logged against it."""
+
+    event_id: uuid.UUID
+    behavior_policy_id: str
+    #: Display order. Index 0 is the logged action.
+    offered_candidate_ids: list[uuid.UUID]
+    logged_action_id: uuid.UUID
+    logged_action_probability: float
+    top_ranked_action_id: uuid.UUID
+    #: False means the slate had a clear winner and this event carries no counterfactual
+    #: information. Returned so a caller can see it rather than infer it from a 1.0.
+    randomised: bool
+    exploration_epsilon: float
+    near_tie_margin: float
+
+
+class AwaazPolicyOutcomeRequest(BaseModel):
+    """What the patient actually did. One write, then the row is immutable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: uuid.UUID
+    outcome: PolicyEventOutcome
+    #: Who supplied the signal. A caregiver tap is retained and marked, never silently
+    #: promoted to the patient's own preference.
+    actor: PolicyFeedbackActor = PolicyFeedbackActor.patient
+    selected_action_id: uuid.UUID | None = None
+    rejected_action_ids: list[uuid.UUID] = Field(
+        default_factory=list, max_length=MAX_POLICY_CANDIDATES)
+    confirmation_observed: bool = False
+    output_spoken: bool = False
+
+    @model_validator(mode="after")
+    def outcome_matches_its_evidence(self):
+        rejected = self.rejected_action_ids
+        if len(set(rejected)) != len(rejected):
+            raise ValueError("rejected_action_ids must not contain duplicates")
+        if self.selected_action_id is not None and self.selected_action_id in rejected:
+            raise ValueError("an action cannot be both selected and rejected")
+        if self.outcome is PolicyEventOutcome.selected and self.selected_action_id is None:
+            raise ValueError("a selected outcome requires selected_action_id")
+        if self.outcome is PolicyEventOutcome.rejected and not rejected:
+            raise ValueError("a rejected outcome requires rejected_action_ids")
+        if self.outcome in (
+            PolicyEventOutcome.phrase_board_fallback,
+            PolicyEventOutcome.no_explicit_signal,
+        ) and self.selected_action_id is not None:
+            raise ValueError(
+                "leaving for the phrase board or giving no signal is not a selection")
+        if self.outcome is PolicyEventOutcome.no_explicit_signal and (
+            rejected or self.confirmation_observed or self.output_spoken
+        ):
+            raise ValueError("no_explicit_signal cannot carry evidence of a signal")
+        return self
+
+
+class AwaazPolicyEventRead(BaseModel):
+    """The stored row, in full. Everything it can say is on this list."""
+
+    model_config = ORM
+
+    id: uuid.UUID
+    behavior_policy_id: str
+    candidate_action_ids: list[uuid.UUID]
+    logged_action_id: uuid.UUID
+    logged_action_probability: float
+    top_ranked_action_id: uuid.UUID
+    randomised: bool
+    speech_profile: str
+    confirmation_required: bool
+    confirmation_observed: bool
+    output_spoken: bool
+    emergency: bool
+    feedback_actor: PolicyFeedbackActor
+    outcome: PolicyEventOutcome
+    selected_action_id: uuid.UUID | None
+    rejected_action_ids: list[uuid.UUID]
+    #: A day, deliberately. See `models.AwaazPolicyEvent`.
+    logged_on: date

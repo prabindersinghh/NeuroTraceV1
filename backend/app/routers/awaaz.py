@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unicodedata
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,10 +23,17 @@ from ..awaaz.safety import (
     decide,
 )
 from ..db import get_session
-from ..models import AuditLog, AwaazProfile, Patient, PhraseCard, User, UtteranceLog
+from ..models import (
+    AuditLog, AwaazPolicyEvent, AwaazProfile, MAX_POLICY_CANDIDATES, Patient,
+    PhraseCard, PolicyEventOutcome, PolicyFeedbackActor, User, UtteranceLog,
+)
 from ..services.emergency_notifications import deliver_emergency
 from ..schemas import (
     AwaazBoard,
+    AwaazPolicyDecision,
+    AwaazPolicyDecisionRequest,
+    AwaazPolicyEventRead,
+    AwaazPolicyOutcomeRequest,
     AwaazCardCreate,
     AwaazCardRead,
     AwaazEmergencyResult,
@@ -656,8 +663,6 @@ async def review_queue(patient: AuthorisedPatient, db: Session) -> dict:
     only three items should have done the three that mattered, and a list that scrolls
     forever teaches them to do none.
     """
-    from datetime import timedelta
-
     since = datetime.now(timezone.utc) - timedelta(hours=24)
     rows = list(await db.scalars(
         select(UtteranceLog)
@@ -749,3 +754,492 @@ async def label_utterance(
         if capture_id else
         "Correction saved for review and future personalisation."
     ))
+
+
+# ------------------------------------------------- D5 · privacy-safe policy event logging
+# AWA-FR-014. `app/ml/rl/` has been able to compare candidate-ranking policies offline for
+# a while, and not one production event was eligible for it: Awaaz recorded no slate, no
+# policy version, no propensity, and no confirmation outcome, so every importance weight had
+# an unknown denominator. `docs/PLAN_RL.md` and `docs/PRD_AWAAZ.md` §11 both say so. This
+# section is the missing half -- a behaviour policy that genuinely randomises among near-tied
+# candidates, and an append-only row that records the probability of the action it logged.
+#
+# It is NOT online learning. Nothing here reads the logged rows, no model is fitted, and no
+# ranking adapts from feedback at runtime. The distribution below is a fixed function of the
+# scores the client's ranker already produced. Data is being collected so that a human can
+# later run `compare_policies` offline; that is the entire scope.
+from collections.abc import Sequence  # noqa: E402  (grouped with the endpoints they serve)
+from dataclasses import dataclass  # noqa: E402
+import math  # noqa: E402
+import random as _random  # noqa: E402
+
+#: Bump on ANY change to the distribution below, including a constant. An estimate is a
+#: statement about a named logger; two distributions sharing one slug makes the log a
+#: mixture nobody can decompose after the fact.
+BEHAVIOUR_POLICY_ID = "awaaz-neartie-explore-v1"
+
+# ------------------------------------------------------------------ the exploration bound
+#
+# WHY WE RANDOMISE AT ALL. IPS and SNIPS are unidentifiable under a deterministic logger:
+# with pi_0(a|x)=1 no alternative was ever observable, positivity fails, and the importance
+# weight collapses to the evaluated policy's own probability. `offline.compare_policies`
+# refuses such a log outright (`logging_policy_is_deterministic`), which is correct and also
+# means a non-randomising product can never be evaluated. So the randomisation has to be
+# real, and the probability of the action we actually showed has to be written down.
+#
+# WHY IT IS SAFE AT THIS SIZE. Three bounds, each doing separate work:
+#
+#   1. NEAR-TIE ONLY. A candidate can be logged only if its score is within
+#      `NEAR_TIE_MARGIN` of the best score. A clearly-better candidate is therefore never
+#      displaced by a clearly-worse one -- not "rarely", never, because a worse candidate is
+#      assigned probability 0 and cannot be drawn. Exploration lives entirely inside the
+#      region where the ranker itself is not claiming a difference.
+#   2. TOP STAYS MODAL BY A LARGE MARGIN. Each alternative gets a flat `EXPLORATION_EPSILON`
+#      and the top keeps the rest, so with the maximum explored set the top still holds
+#      1 - 0.08*2 = 0.84 and any single alternative holds 0.08. Flat-per-alternative rather
+#      than epsilon-split-k on purpose: a split shrinks as the slate grows and would push
+#      propensities under `offline.MIN_LOGGED_PROBABILITY_FLOOR`, where one event becomes a
+#      100x weight and the estimate is one patient's afternoon.
+#   3. CONFIRMATION ONLY. The decision endpoint refuses to randomise unless the caller
+#      declares that this slate goes to the confirmation loop. Reordering options a patient
+#      is about to read and choose between is a presentation change they can override with a
+#      tap. Reordering something that will be SPOKEN without confirmation would be
+#      exploration on a disabled person's mouth, which INV-9 forbids and which no evaluation
+#      is worth. Nothing in this section touches the gate, `decide()`, or `/speak`.
+#
+# The emergency flow is never ranked and never reaches this code at all.
+#
+#: Score units are the ranker's calibrated confidence in [0, 1]; 0.05 is roughly the width
+#: at which the phrase-board study could not tell two candidates apart either.
+NEAR_TIE_MARGIN = 0.05
+#: Ceiling on the margin. Beyond this "near-tied" stops meaning near-tied.
+MAX_NEAR_TIE_MARGIN = 0.10
+#: Flat probability for each non-top member of the explored set.
+EXPLORATION_EPSILON = 0.08
+#: Below this the log is effectively deterministic and buys nothing; above it the patient
+#: pays too much for our statistics.
+MIN_EXPLORATION_EPSILON = 0.02
+MAX_EXPLORATION_EPSILON = 0.15
+#: Top candidate plus at most two alternatives.
+MAX_EXPLORED_CANDIDATES = 3
+#: However the bound is configured, the top-ranked candidate keeps at least this much mass.
+MIN_TOP_ACTION_PROBABILITY = 0.75
+
+#: A sampled decision waits here between the two requests. Process memory on purpose, the
+#: same reasoning as the listener capabilities above: the propensity must come from the
+#: server that drew it, never from the client, and the row is append-only so the outcome has
+#: to be known before the single INSERT. A restart drops pending decisions and those events
+#: are never logged -- losing an observation is the right failure, inventing one is not.
+_PENDING_POLICY_DECISIONS: dict[uuid.UUID, "_PendingDecision"] = {}
+PENDING_DECISION_TTL_MINUTES = 30
+MAX_PENDING_DECISIONS = 1_024
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationBound:
+    """The randomisation bound, validated so it cannot be configured into uselessness."""
+
+    epsilon: float = EXPLORATION_EPSILON
+    near_tie_margin: float = NEAR_TIE_MARGIN
+    max_explored: int = MAX_EXPLORED_CANDIDATES
+
+    def __post_init__(self) -> None:
+        for name in ("epsilon", "near_tie_margin"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not math.isfinite(float(value)):
+                raise ValueError(f"{name} must be finite")
+        if not MIN_EXPLORATION_EPSILON <= float(self.epsilon) <= MAX_EXPLORATION_EPSILON:
+            raise ValueError(
+                "epsilon must be in "
+                f"[{MIN_EXPLORATION_EPSILON}, {MAX_EXPLORATION_EPSILON}]: an exploration "
+                "probability of zero makes every logged propensity 1.0, and "
+                "offline.compare_policies refuses that log with "
+                "logging_policy_is_deterministic rather than producing an estimate from it"
+            )
+        if not 0.0 < float(self.near_tie_margin) <= MAX_NEAR_TIE_MARGIN:
+            raise ValueError(
+                f"near_tie_margin must be in (0, {MAX_NEAR_TIE_MARGIN}]; a wider margin "
+                "would let a clearly-worse candidate be shown ahead of a better one"
+            )
+        if type(self.max_explored) is not int or not (
+            2 <= self.max_explored <= MAX_POLICY_CANDIDATES
+        ):
+            raise ValueError(
+                f"max_explored must be an integer in [2, {MAX_POLICY_CANDIDATES}]")
+        top = 1.0 - float(self.epsilon) * (self.max_explored - 1)
+        if top < MIN_TOP_ACTION_PROBABILITY:
+            raise ValueError(
+                "this bound leaves the top-ranked candidate only "
+                f"{top:.2f} probability; it may not fall below "
+                f"{MIN_TOP_ACTION_PROBABILITY} on a patient-facing surface"
+            )
+
+
+DEFAULT_EXPLORATION_BOUND = ExplorationBound()
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyDecision:
+    """What the behaviour policy did for one slate."""
+
+    #: Display order. Index 0 is `logged_action_id` -- the slate is presented with the
+    #: sampled candidate first, so "logged" and "what the patient saw first" are the same
+    #: fact and cannot drift apart.
+    offered_candidate_ids: tuple[uuid.UUID, ...]
+    logged_action_id: uuid.UUID
+    #: pi_0(logged_action_id | context). The probability of the action we LOGGED.
+    logged_action_probability: float
+    top_ranked_action_id: uuid.UUID
+    randomised: bool
+
+
+def rank_and_sample(
+    candidates: Sequence[tuple[uuid.UUID, float]],
+    *,
+    rng: _random.Random | None = None,
+    bound: ExplorationBound | None = None,
+) -> PolicyDecision:
+    """Rank by score, then sample which near-tied candidate to show first.
+
+    Pure: no database, no patient, no clock. That is what makes the empirical frequencies
+    testable against the recorded propensities, which is the only way anyone can check that
+    the number in the denominator is the number the sampler actually used.
+    """
+    bound = bound or DEFAULT_EXPLORATION_BOUND
+    draw_from = rng if rng is not None else _random
+    # Descending score, then ascending UUID. The UUID tie-break matters: without it two
+    # exactly-equal scores would rank by whatever order the request happened to arrive in,
+    # and `top_ranked_action_id` would stop being a reproducible property of the scores.
+    ordered = sorted(candidates, key=lambda item: (-item[1], item[0].int))
+    top_id, top_score = ordered[0]
+    explored = [
+        item for item in ordered
+        if top_score - item[1] <= bound.near_tie_margin
+    ][:bound.max_explored]
+
+    if len(explored) < 2:
+        # A clear winner. There is nothing to randomise among, so the honest propensity is
+        # 1.0 and the row is flagged unrandomised. Refusing to log it would select the log
+        # on the shape of the slate; `offline.py` already fails closed when too many of
+        # these accumulate, which is the right place for that judgement.
+        return PolicyDecision(
+            offered_candidate_ids=tuple(item[0] for item in ordered),
+            logged_action_id=top_id,
+            logged_action_probability=1.0,
+            top_ranked_action_id=top_id,
+            randomised=False,
+        )
+
+    probabilities = {item[0]: bound.epsilon for item in explored[1:]}
+    probabilities[top_id] = 1.0 - bound.epsilon * (len(explored) - 1)
+
+    draw = draw_from.random()
+    cumulative = 0.0
+    logged_id = top_id
+    for action_id, _ in explored:
+        cumulative += probabilities[action_id]
+        if draw < cumulative:
+            logged_id = action_id
+            break
+
+    rest = [item[0] for item in ordered if item[0] != logged_id]
+    return PolicyDecision(
+        offered_candidate_ids=(logged_id, *rest),
+        logged_action_id=logged_id,
+        logged_action_probability=probabilities[logged_id],
+        top_ranked_action_id=top_id,
+        randomised=True,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingDecision:
+    """A drawn-but-unlogged decision. Never persisted, never returned to a caller."""
+
+    #: Held so the outcome POST can be checked against the patient the decision was drawn
+    #: for. It stays in memory: writing it to the row is exactly the patient link this table
+    #: exists without.
+    patient_id: uuid.UUID
+    speech_profile: str
+    decision: PolicyDecision
+    expires_at: datetime
+
+
+def _prune_pending_decisions(now: datetime) -> None:
+    """Bounded in both time and count so a client that never reports cannot grow this."""
+    for event_id, pending in list(_PENDING_POLICY_DECISIONS.items()):
+        if pending.expires_at <= now:
+            del _PENDING_POLICY_DECISIONS[event_id]
+    while len(_PENDING_POLICY_DECISIONS) > MAX_PENDING_DECISIONS:
+        oldest = min(_PENDING_POLICY_DECISIONS.items(),
+                     key=lambda item: item[1].expires_at)[0]
+        del _PENDING_POLICY_DECISIONS[oldest]
+
+
+def _decision_response(
+    event_id: uuid.UUID, decision: PolicyDecision,
+) -> AwaazPolicyDecision:
+    return AwaazPolicyDecision(
+        event_id=event_id,
+        behavior_policy_id=BEHAVIOUR_POLICY_ID,
+        offered_candidate_ids=list(decision.offered_candidate_ids),
+        logged_action_id=decision.logged_action_id,
+        logged_action_probability=decision.logged_action_probability,
+        top_ranked_action_id=decision.top_ranked_action_id,
+        randomised=decision.randomised,
+        exploration_epsilon=DEFAULT_EXPLORATION_BOUND.epsilon,
+        near_tie_margin=DEFAULT_EXPLORATION_BOUND.near_tie_margin,
+    )
+
+
+@router.post("/{patient_id}/policy/decision", response_model=AwaazPolicyDecision)
+async def policy_decision(
+    payload: AwaazPolicyDecisionRequest, patient: AuthorisedPatient,
+    user: CurrentUser, db: Session,
+) -> AwaazPolicyDecision:
+    """Draw which near-tied candidate to show first, and remember its probability.
+
+    Returns an ordering only. Nothing is spoken, no gate is consulted or changed, and no
+    candidate text ever reaches this endpoint -- the slate is opaque UUIDs and scores.
+    """
+    if not payload.policy_logging_consent:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Explicit consent is required before a policy event is recorded",
+        )
+    if not payload.requires_confirmation:
+        # See bound 3 above. A slate that may be spoken without the patient choosing from it
+        # is not a surface we will reorder for the sake of an offline estimate.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Candidate ranking is only randomised on the confirmation path, where the "
+            "person still chooses. Nothing is reordered on a path that speaks without "
+            "confirmation.",
+        )
+
+    requested = {item.candidate_id for item in payload.candidates}
+    now = datetime.now(timezone.utc)
+    _prune_pending_decisions(now)
+
+    # Idempotent retry, in both directions. A repeated decision request must return the
+    # SAME draw: resampling would mean the propensity we eventually write was not the
+    # probability of the action the patient was actually shown.
+    pending = _PENDING_POLICY_DECISIONS.get(payload.event_id)
+    if pending is not None:
+        if (
+            pending.patient_id != patient.id
+            or set(pending.decision.offered_candidate_ids) != requested
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This event id was already used for a different slate",
+            )
+        return _decision_response(payload.event_id, pending.decision)
+
+    committed = await db.get(AwaazPolicyEvent, payload.event_id)
+    if committed is not None:
+        if {uuid.UUID(value) for value in committed.candidate_action_ids} != requested:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This event id was already used for a different slate",
+            )
+        return _decision_response(payload.event_id, PolicyDecision(
+            offered_candidate_ids=tuple(
+                uuid.UUID(value) for value in committed.candidate_action_ids),
+            logged_action_id=committed.logged_action_id,
+            logged_action_probability=committed.logged_action_probability,
+            top_ranked_action_id=committed.top_ranked_action_id,
+            randomised=committed.randomised,
+        ))
+
+    profile = await _profile(db, patient)
+    decision = rank_and_sample(
+        [(item.candidate_id, item.score) for item in payload.candidates])
+    _PENDING_POLICY_DECISIONS[payload.event_id] = _PendingDecision(
+        patient_id=patient.id,
+        speech_profile=profile.speech_profile,
+        decision=decision,
+        expires_at=now + timedelta(minutes=PENDING_DECISION_TTL_MINUTES),
+    )
+    # The audit row carries the actor, the patient and the consent fact -- that is what an
+    # audit trail is for. It deliberately does NOT carry the event id or any candidate id:
+    # audit_log has patient_id and a microsecond ts, so an event id here would be an exact
+    # join key back onto a table built to have no patient link.
+    db.add(AuditLog(
+        actor_id=user.id, action="awaaz.policy_event.decide", patient_id=patient.id,
+        meta_json={
+            "behavior_policy_id": BEHAVIOUR_POLICY_ID,
+            "slate_size": len(payload.candidates),
+            "randomised": decision.randomised,
+            "exploration_epsilon": DEFAULT_EXPLORATION_BOUND.epsilon,
+            "near_tie_margin": DEFAULT_EXPLORATION_BOUND.near_tie_margin,
+            "consent": "policy_event_logging",
+        },
+    ))
+    await db.commit()
+    return _decision_response(payload.event_id, decision)
+
+
+@router.post("/{patient_id}/policy/outcome", response_model=AwaazPolicyEventRead)
+async def policy_outcome(
+    payload: AwaazPolicyOutcomeRequest, patient: AuthorisedPatient,
+    user: CurrentUser, db: Session,
+) -> AwaazPolicyEventRead:
+    """Close one decision with what the patient did. One INSERT, then immutable (INV-8)."""
+    now = datetime.now(timezone.utc)
+    _prune_pending_decisions(now)
+
+    existing = await db.get(AwaazPolicyEvent, payload.event_id)
+    if existing is not None:
+        # Retry after a lost response. Append-only means a differing report cannot be
+        # accepted as a correction -- it would silently rewrite an observation an estimate
+        # may already have been computed from.
+        if (
+            existing.outcome != payload.outcome.value
+            or existing.feedback_actor != payload.actor.value
+            or existing.selected_action_id != payload.selected_action_id
+            or [uuid.UUID(v) for v in existing.rejected_action_ids]
+            != payload.rejected_action_ids
+            or existing.confirmation_observed != payload.confirmation_observed
+            or existing.output_spoken != payload.output_spoken
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This policy event was already logged with a different outcome",
+            )
+        return AwaazPolicyEventRead.model_validate(existing, from_attributes=True)
+
+    pending = _PENDING_POLICY_DECISIONS.get(payload.event_id)
+    if pending is None or pending.patient_id != patient.id:
+        # Indistinguishable for "expired", "never existed", and "belongs to someone else":
+        # a caller must not be able to probe which event ids are live.
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No pending ranking decision matches this event. Without the propensity the "
+            "policy drew, a row here would carry an unknown denominator and is worse than "
+            "no row at all.",
+        )
+
+    decision = pending.decision
+    slate = set(decision.offered_candidate_ids)
+    referenced = set(payload.rejected_action_ids)
+    if payload.selected_action_id is not None:
+        referenced.add(payload.selected_action_id)
+    if not referenced.issubset(slate):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Feedback may only reference candidates that were offered for this event",
+        )
+    # INV-9 as an observation, not a new rule. These are the same consistency conditions
+    # `rl.safety.gate_logged_feedback` applies at read time; enforcing them at write time
+    # too is deliberate, because an append-only row that contradicts the confirmation gate
+    # can never be corrected and would sit in the log looking like evidence.
+    if payload.confirmation_observed and payload.selected_action_id is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "A confirmation without a selected candidate is not a confirmation",
+        )
+    if payload.output_spoken and not (
+        payload.confirmation_observed and payload.selected_action_id is not None
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Nothing on the confirmation path is spoken before the person confirms it",
+        )
+
+    row = AwaazPolicyEvent(
+        id=payload.event_id,
+        behavior_policy_id=BEHAVIOUR_POLICY_ID,
+        candidate_action_ids=[str(value) for value in decision.offered_candidate_ids],
+        logged_action_id=decision.logged_action_id,
+        logged_action_probability=decision.logged_action_probability,
+        top_ranked_action_id=decision.top_ranked_action_id,
+        randomised=decision.randomised,
+        speech_profile=pending.speech_profile,
+        # True by construction: the decision endpoint refuses any other path.
+        confirmation_required=True,
+        confirmation_observed=payload.confirmation_observed,
+        output_spoken=payload.output_spoken,
+        emergency=False,
+        feedback_actor=payload.actor.value,
+        outcome=payload.outcome.value,
+        selected_action_id=payload.selected_action_id,
+        rejected_action_ids=[str(value) for value in payload.rejected_action_ids],
+        logged_on=now.date(),
+    )
+    db.add(row)
+    db.add(AuditLog(
+        actor_id=user.id, action="awaaz.policy_event.log", patient_id=patient.id,
+        meta_json={
+            "behavior_policy_id": BEHAVIOUR_POLICY_ID,
+            "outcome": payload.outcome.value,
+            "actor": payload.actor.value,
+            "randomised": decision.randomised,
+        },
+    ))
+    await db.commit()
+    _PENDING_POLICY_DECISIONS.pop(payload.event_id, None)
+    return AwaazPolicyEventRead.model_validate(row, from_attributes=True)
+
+
+def logged_feedback_from(row: AwaazPolicyEvent):
+    """Turn one stored row into an `app.ml.rl.contracts.LoggedFeedback`.
+
+    Lives beside the writer rather than in `app/ml/rl/` so the row shape and the wire shape
+    cannot drift apart unnoticed: if a column is added or renamed, this function is in the
+    same file and the round-trip test fails immediately. The import is deferred because the
+    RL package is an analysis dependency, and the request path should not pay for it at boot.
+
+    Raises ValueError for a row the contract cannot represent -- an event with no explicit
+    signal. Inactivity is not a preference and must not become one by being cast into a
+    feedback record with all-false fields.
+    """
+    from ..ml.rl.contracts import (
+        CollectionMode, ExplicitFeedback, FeedbackActor, LoggedFeedback,
+    )
+
+    outcome = PolicyEventOutcome(row.outcome)
+    if outcome is PolicyEventOutcome.no_explicit_signal:
+        raise ValueError(
+            "an event with no explicit patient signal is not eligible feedback")
+    feedback = ExplicitFeedback(
+        actor=FeedbackActor(row.feedback_actor),
+        selected_action_id=row.selected_action_id,
+        rejected_action_ids=tuple(
+            uuid.UUID(value) for value in row.rejected_action_ids),
+        correction_made=outcome is PolicyEventOutcome.corrected,
+        phrase_board_fallback=outcome is PolicyEventOutcome.phrase_board_fallback,
+    )
+    return LoggedFeedback(
+        event_id=row.id,
+        behavior_policy_id=row.behavior_policy_id,
+        candidate_action_ids=tuple(
+            uuid.UUID(value) for value in row.candidate_action_ids),
+        logged_action_id=row.logged_action_id,
+        logged_action_probability=row.logged_action_probability,
+        top_ranked_action_id=row.top_ranked_action_id,
+        speech_profile=SpeechProfile(row.speech_profile),
+        confirmation_required=row.confirmation_required,
+        confirmation_observed=row.confirmation_observed,
+        output_spoken=row.output_spoken,
+        emergency=row.emergency,
+        feedback=feedback,
+        # Never `offline_replay`: these rows are observations of the live product, and
+        # mislabelling them would let a replay be scored as though it were passive.
+        collection_mode=CollectionMode.passive_observation,
+    )
+
+
+def eligible_logged_feedback(rows) -> list:
+    """Map a batch, skipping only the rows the contract genuinely cannot represent.
+
+    The skip rate is a number a reviewer has to look at: a log whose eligible subset was
+    chosen by the outcome is a sample selected on the dependent variable.
+    """
+    out = []
+    for row in rows:
+        try:
+            out.append(logged_feedback_from(row))
+        except ValueError:
+            continue
+    return out
