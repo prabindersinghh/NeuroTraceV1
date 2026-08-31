@@ -4,6 +4,81 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-31 — UX: leaving a session, choosing a language, and five defects only the running app showed
+
+Branch `feat/ux-navigation-language`, off `main`. **Not merged, not pushed.**
+
+### Mid-test navigation (Part 1)
+A patient could not leave a check-in once it started. Exit now sits beside pause, always
+visible, confirms with "You have completed X of Y steps", states that the work is kept, and
+offers carrying on first. What was captured uploads; the session is marked abandoned, and
+`completed=False` is what keeps it out of every baseline and score. Offline it queues with
+the same marker and `syncPending` calls abandon rather than finalize — draining a partial
+session through finalize would score it.
+
+Back is **view-only**. `mayCapture()` is the single guard: no capture component exists in
+the tree while an earlier step is shown, so a completed step cannot be discarded and
+retaken. Unlimited retakes would teach a module's baseline the patient's best attempt
+rather than their typical one.
+
+No migration: `completed` already distinguished finished from unfinished, and the step
+counts live in `device_info`.
+
+### A pre-existing INV-14 hole, found on the way
+`_module_history` — the query feeding every baseline — filtered `is_practice` but not
+`completed`, while every other pipeline query pairs them. An unfinished session's results
+were already reaching the baseline, reachable by closing the tab mid-session.
+
+Fixing it also changed out-of-order offline replay: backwards drain used to produce a
+*wrong, unrepairable* baseline and now produces *none*, with an in-order rescore converging
+exactly. Visible and recoverable instead of silent and permanent. `test_offline_ordering`
+was rewritten to pin the new behaviour after measuring field by field what still diverges —
+the old assertion was replaced, not relaxed. Ordering is still required.
+
+### Language (Part 2)
+A language screen now precedes demo and login: three buttons, each in its own script, no
+prompt sentence. Shown once, keyed on the *absence* of the stored value — "nobody chose" and
+"chose English" must stay distinguishable.
+
+The dictionary was already complete (219 keys × 3). The leaks were elsewhere: two hardcoded
+`aria-label`s in the exam path — one on the SVV slider, which *is* the measurement — the
+language toggle's own group label, `or` on the login screen, and no `lang` attribute on the
+document until someone switched language.
+
+`Landing.tsx` is **not** translated and is excluded deliberately, recorded in the test.
+
+### Tour (Part 3) — in-house, not react-joyride
+Measured: v3.2.0 is **26.8 KB gzipped**, 77.9 KB raw, ten transitive dependencies, against a
+104 KB main bundle. Size was arguable. The architecture was not: Joyride's core mechanic is a
+modal spotlight blocking everything except the highlighted element, and FAST/emergency must
+stay reachable. This tour outlines and captions; the page stays interactive.
+
+### Five defects found by driving the app
+Every one passed `tsc`, `vitest` and `oxlint`.
+
+| | defect |
+|---|---|
+| 1 | **Pause and Exit rendered as the same word** — रोकें / ਰੋਕੋ — two adjacent buttons, one recoverable, one not |
+| 2 | **The demo doctor saw an empty roster** — the seed never created a clinician link or consent, so Part 3.2 silently removed every patient from the demo login |
+| 3 | **Dates rendered `M08 31`** — trimmed ICU reports `pa-IN` as supported then leaks the raw CLDR field |
+| 4 | **Two identical Skip buttons** — five steps render their own; the runner added another |
+| 5 | **An `aria-label` contradicting its button** — WCAG 2.5.3, so voice control could not activate it |
+
+Plus: **`PatientHome` had no emergency button at all** — it was on the caregiver, family and
+dashboard surfaces but not the patient's own screen. And my own tour copy claimed "about
+three minutes" while the screen behind it said 12 — D-045, in copy written the same hour.
+
+### Verified
+Live, in a real browser against a local stack, in Punjabi and Hindi: exit saves
+`completed=0` with `abandoned{0 of 18}` and one audit row; in real airplane mode the same
+exit queues to IndexedDB with `abandoned{1 of 18}`; back shows the step with **no capture
+control present**; zero English leaks on the patient path in either language; a11y sweep
+clean (one `h1`, one `main`, `lang` set, no unnamed controls, no unlabelled inputs, no
+heading skips).
+
+Frontend: `tsc` 0, `vitest` 113 passed (10 files), `oxlint` 9 warnings (unchanged baseline),
+`build` 0.
+
 ## 2026-08-30 — main reconciled and merged; the chain validated on a Neon branch, and it failed
 
 ### Merged to main
