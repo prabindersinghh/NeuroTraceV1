@@ -78,7 +78,9 @@ export function PatientHome() {
 
   return (
     <AppShell>
-      <div className="patient-scale mx-auto flex max-w-md flex-col items-center gap-8 py-10 text-center">
+      {/* max-w-md is right on a phone and a strip on a laptop. Widened at lg with the
+          vertical rhythm tightened, so a large screen is used rather than padded. */}
+      <div className="patient-scale mx-auto flex max-w-md flex-col items-center gap-8 py-10 text-center lg:max-w-xl lg:gap-6 lg:py-8">
         <HeartPulse className="h-20 w-20 text-accent" aria-hidden />
         {me ? (
           <>

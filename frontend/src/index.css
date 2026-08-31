@@ -118,6 +118,26 @@
   .patient-scale input[type="checkbox"] + span {
     min-height: 4rem;
   }
+
+  /* THE DESKTOP CASE, which this rule never had.
+   *
+   * The 64px minimum is about a tremor and a fingertip. On a large screen driven by a
+   * MOUSE neither applies, and holding it there is what made the patient app read as a
+   * phone stretched across a laptop: a 448px column of 72px buttons with 1450px of empty
+   * screen either side.
+   *
+   * The 20px TEXT floor above is deliberately NOT relaxed here. That one is about vision —
+   * a population of 55-75 with post-stroke visual change — and vision does not improve
+   * because the input device changed. Only the touch target moves.
+   *
+   * Gated on `pointer: fine` as well as width, so a tablet in landscape keeps the full
+   * touch sizing. */
+  @media (min-width: 1024px) and (pointer: fine) {
+    .patient-scale button,
+    .patient-scale a[class*="button"] {
+      min-height: 3.5rem;
+    }
+  }
 }
 
 @layer components {
@@ -237,7 +257,13 @@
    *
    * `text-label` is uppercase by definition — the tracking in the token only reads
    * correctly in caps, so binding the transform to the token stops it being half-applied. */
-  .text-label { text-transform: uppercase; }
+  /* Mono as well as caps — the landing page uses `font-mono` 75 times for exactly
+   * these micro-labels, and the monospace figure width is also what keeps a column
+   * of them aligned. Bound to the token so it cannot be half-applied. */
+  .text-label {
+    text-transform: uppercase;
+    font-family: theme('fontFamily.mono');
+  }
 
   /* Tabular figures wherever numbers are compared or change in place. Without this a
    * counting metric jitters as glyph widths change, and a column of numbers fails to

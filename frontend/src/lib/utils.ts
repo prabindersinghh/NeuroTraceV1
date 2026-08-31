@@ -1,8 +1,35 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * tailwind-merge has to be TOLD about custom font sizes, or it silently deletes them.
+ *
+ * It resolves conflicts by class group, and it infers the group from the prefix. `text-*`
+ * covers BOTH font size and text colour, so for any `text-<name>` it does not recognise as
+ * a size it assumes a colour — and then `cn("text-title-fluid", "text-foreground")` drops
+ * the first as an overridden colour.
+ *
+ * That is what happened: the page title rendered at 16px/400 with a class list of
+ * `text-foreground mt-2`, the type token gone, and nothing anywhere reported it. Every
+ * custom size was exposed the same way — the scale only survived where a callsite happened
+ * to write a plain string instead of going through `cn()`, which is not a property anyone
+ * can maintain.
+ *
+ * Registering them as font sizes makes the conflict resolve the right way round: a size and
+ * a colour stop competing, and two sizes still override each other as they should.
+ */
+const merge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [
+        { text: ["display", "title-1", "title-2", "title-3", "title-fluid", "metric", "label"] },
+      ],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return merge(clsx(inputs));
 }
 
 export function formatDate(iso: string, locale = "en-IN") {

@@ -3,7 +3,15 @@ export default {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
-    container: { center: true, padding: "1rem", screens: { "2xl": "1200px" } },
+    /* Full-width, not a 1200px letterbox. On a 1900px laptop the old cap left ~700px
+       of unused screen either side, which is most of why the app read as a phone layout
+       stretched rather than a desktop one. Padding grows with the viewport so text never
+       runs to the physical edge. */
+    container: {
+      center: true,
+      padding: { DEFAULT: "1rem", sm: "1.5rem", lg: "2rem", xl: "2.5rem" },
+      screens: { "2xl": "1680px" },
+    },
     extend: {
       fontFamily: {
         // "Inter var" is self-hosted in index.css; the rest is the platform stack it
@@ -53,7 +61,13 @@ export default {
         "title-2": ["1.5rem",  { lineHeight: "1.2",  fontWeight: "700", letterSpacing: "-0.018em" }],
         "title-3": ["1.125rem",{ lineHeight: "1.3",  fontWeight: "600", letterSpacing: "-0.01em" }],
         metric:    ["2.25rem", { lineHeight: "1",    fontWeight: "700", letterSpacing: "-0.02em" }],
-        label:     ["0.6875rem",{ lineHeight: "1.2", fontWeight: "600", letterSpacing: "0.08em" }],
+        /* The micro-label, matched to the landing page rather than approximating it:
+         * measured there as font-mono + uppercase + tracking 0.18-0.22em, used 75
+         * times. Mono and wide tracking are most of why that page reads as
+         * instrumentation and the app did not. */
+        label:     ["0.6875rem",{ lineHeight: "1.2", fontWeight: "500", letterSpacing: "0.18em" }],
+        /* Fluid page title, the landing page's own clamp. */
+        "title-fluid": ["clamp(1.75rem,3.4vw,2.6rem)", { lineHeight: "1.1", fontWeight: "600", letterSpacing: "-0.025em" }],
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -22,6 +22,10 @@ export const STRINGS = {
     hi: "आपसे जुड़े, सहमति लागू है",
     pa: "ਤੁਹਾਡੇ ਨਾਲ ਜੁੜੇ, ਸਹਿਮਤੀ ਲਾਗੂ ਹੈ",
   },
+  // Mono caps eyebrows above a page title — the landing page's own vocabulary.
+  clinicEyebrow: { en: "Clinician", hi: "चिकित्सक", pa: "ਡਾਕਟਰ" },
+  caregiverEyebrow: { en: "Care at home", hi: "घर पर देखभाल", pa: "ਘਰ ਵਿੱਚ ਦੇਖਭਾਲ" },
+  patientEyebrow: { en: "Today", hi: "आज", pa: "ਅੱਜ" },
   alerts: { en: "Alerts", hi: "अलर्ट", pa: "ਅਲਰਟ" },
   unacknowledged: {
     en: "Not yet acknowledged",

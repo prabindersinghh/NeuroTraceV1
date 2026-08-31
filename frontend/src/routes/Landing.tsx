@@ -128,7 +128,7 @@ export default function Landing() {
 
       <main id="main">
         {/* ══════════════════════════════════════════════════════════ 01 · HERO */}
-        <section ref={cueScene} className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-14 lg:pb-24">
+        <section ref={cueScene} className="mx-auto max-w-[1680px] px-6 pb-16 pt-10 sm:pt-14 lg:pb-24">
           <div className="grid items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
             <div>
               <Reveal>
@@ -218,7 +218,7 @@ export default function Landing() {
 
         {/* ═══════════════════════════════════════════════════════ 02 · THE GAP */}
         <section id="problem" className="border-y border-line bg-surface/50">
-          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
             <Reveal><Rule n="01" label="The gap" /></Reveal>
 
             <div className="mt-7 grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-16">
@@ -264,7 +264,7 @@ export default function Landing() {
         </section>
 
         {/* ════════════════════════════════════════════════════ 03 · WHOSE NORMAL */}
-        <section id="baseline" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <section id="baseline" className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
           <Reveal><Rule n="02" label="Whose normal" /></Reveal>
           <div className="mt-7 grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-end lg:gap-14">
             <h2 className={H2}>
@@ -302,7 +302,7 @@ export default function Landing() {
 
         {/* ══════════════════════════════════════════════ 04 · THE SECOND PROBLEM */}
         <section id="laterality" className="border-y border-line bg-surface/50">
-          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
             <div className="mx-auto max-w-3xl text-center">
               <Reveal>
                 <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -339,7 +339,7 @@ export default function Landing() {
         </section>
 
         {/* ═══════════════════════════════════════════════════ 05 · THE DECISION */}
-        <section id="gates" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <section id="gates" className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
           <div>
             <Reveal><Rule n="03" label="The decision" /></Reveal>
             <div className="mt-7 grid gap-8 lg:grid-cols-[1fr_1fr] lg:items-end lg:gap-14">
@@ -370,7 +370,7 @@ export default function Landing() {
 
         {/* ═══════════════════════════════════════════════════════ 06 · THE RUN */}
         <section id="run" className="border-y border-line bg-surface/50">
-          <div className="mx-auto max-w-6xl px-6 pb-2 pt-16 lg:pt-20">
+          <div className="mx-auto max-w-[1680px] px-6 pb-2 pt-16 lg:pt-20">
             <Reveal><Rule n="04" label="Twenty-one days" /></Reveal>
             <Reveal step={1} className="mt-7 max-w-2xl">
               <h2 className={H2}>One alert for the episode. Not one every morning.</h2>
@@ -380,7 +380,7 @@ export default function Landing() {
         </section>
 
         {/* ════════════════════════════════════════════════════════ 07 · ON DEVICE */}
-        <section id="device" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <section id="device" className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
           <Reveal><Rule n="05" label="On the phone" /></Reveal>
           <div className="mt-7 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
             <div>
@@ -428,7 +428,7 @@ export default function Landing() {
 
         {/* ═══════════════════════════════════════════════════ 08 · WHAT IT MEASURES */}
         <section id="measures" className="border-y border-line bg-surface/50">
-          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
             <Reveal><Rule n="06" label="What it measures" /></Reveal>
             <div className="mt-7 grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-14">
               <h2 className={H2}>
@@ -484,7 +484,7 @@ export default function Landing() {
         </section>
 
         {/* ══════════════════════════════════════════════════ 09 · THE CARE NETWORK */}
-        <section id="care" className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <section id="care" className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
           <Reveal><Rule n="07" label="One morning, four views" /></Reveal>
           <h2 className={`mt-7 max-w-2xl ${H2}`}>
             <LineReveal lines={["Four people. Four different", "views of the same morning."]} />
@@ -538,7 +538,7 @@ export default function Landing() {
         {/* A chapter break, not a band of colour: the dark plate rides up over the page on
             its own rounded edge, so the tone change reads as deliberate. */}
         <section id="limits" className="relative -mt-6 rounded-t-[1.75rem] bg-[#0A121C] text-white">
-          <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-[1680px] px-6 py-16 lg:py-20">
             <Reveal><Rule n="08" label="What we do not claim" dark /></Reveal>
             <h2 className={`mt-7 max-w-2xl ${H2}`}>
               <LineReveal lines={["The limits are part of the product."]} />
@@ -612,7 +612,7 @@ export default function Landing() {
       </main>
 
       <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-7 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-[1680px] flex-col gap-3 px-6 py-7 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Built for families in Punjab. Works offline. Nothing identifiable leaves the phone.</span>
           <span className="font-mono tracking-wide">engine deterministic · seed 42</span>
         </div>

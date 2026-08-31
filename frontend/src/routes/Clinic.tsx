@@ -18,6 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tour } from "@/components/Tour";
 import { Metric } from "@/components/ui/metric";
+import { PageHeader } from "@/components/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -79,13 +80,16 @@ export function Clinic() {
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-title-1">
-          <Stethoscope className="h-6 w-6" aria-hidden />
-          {t("clinicTitle")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("clinicSubtitle")}</p>
-      </div>
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Stethoscope className="h-3.5 w-3.5" aria-hidden />
+            {t("clinicEyebrow")}
+          </span>
+        }
+        title={t("clinicTitle")}
+        subtitle={t("clinicSubtitle")}
+      />
 
       {/* The roster's shape, before the roster. A clinician opening this needs to know how
           much is waiting for them before reading any one row — DESIGN_LANGUAGE §1.4,

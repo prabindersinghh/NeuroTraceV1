@@ -7,13 +7,14 @@
  * would put them in a product that structurally cannot watch for what threatens them.
  * The form says so plainly rather than letting the server reject it silently.
  */
-import { ChevronRight, Plus, Stethoscope, Users } from "lucide-react";
+import { ChevronRight, Plus, Users } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
 import { EmergencyButton } from "@/components/EmergencyButton";
 import { Tour } from "@/components/Tour";
+import { PageHeader } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Select } from "@/components/ui/field";
@@ -49,17 +50,11 @@ export function CaregiverHome() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-title-2">{t("yourPatients")}</h1>
-          {user?.role === "clinician" && (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Stethoscope className="h-4 w-4" aria-hidden />
-              {t("readOnly")}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        eyebrow={t("caregiverEyebrow")}
+        title={t("yourPatients")}
+        subtitle={user?.role === "clinician" ? t("readOnly") : undefined}
+        actions={<>
           <EmergencyButton patientId={patients?.[0]?.id} />
           {canAdd && !adding && (
             <Button data-tour="add-patient" variant="accent" onClick={() => setAdding(true)}>
@@ -67,8 +62,8 @@ export function CaregiverHome() {
               {t("addPatient")}
             </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {adding && (
         <AddPatientForm
