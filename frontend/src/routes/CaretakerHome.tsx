@@ -65,7 +65,7 @@ export function CaretakerHome() {
     <AppShell>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-title-2">
+          <h1 className="flex items-center gap-2 text-title-fluid">
             <Users className="h-6 w-6 text-accent" aria-hidden />
             {t("familyTitle")}
           </h1>

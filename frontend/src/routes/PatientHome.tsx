@@ -78,13 +78,15 @@ export function PatientHome() {
 
   return (
     <AppShell>
-      {/* max-w-md is right on a phone and a strip on a laptop. Widened at lg with the
-          vertical rhythm tightened, so a large screen is used rather than padded. */}
-      <div className="patient-scale mx-auto flex max-w-md flex-col items-center gap-8 py-10 text-center lg:max-w-xl lg:gap-6 lg:py-8">
-        <HeartPulse className="h-20 w-20 text-accent" aria-hidden />
+      {/* NOT `.patient-scale`. This is the patient's HOME — software chrome, where they
+          choose what to do — and the 20px floor with 64px targets belongs on the exam,
+          where they are performing a task. Applying the test treatment here is what made
+          a laptop render a 448px column of 72px buttons. The exam surfaces keep it. */}
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-8 text-center">
+        <HeartPulse className="h-14 w-14 text-accent" aria-hidden />
         {me ? (
           <>
-            <h1 className="text-title-1">
+            <h1 className="text-title-fluid">
               {t("checkinTitle")}
               <span className="mt-2 block text-lg font-normal text-muted-foreground">{me.name}</span>
             </h1>

@@ -109,7 +109,7 @@ export default function Admin() {
     <AppShell>
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <header>
-          <h1 className="text-title-2">Operations</h1>
+          <h1 className="text-title-fluid">Operations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Counts, system health and the audit trail. No patient records appear on this
             page by design — reading one patient's data is a clinician's path, not an

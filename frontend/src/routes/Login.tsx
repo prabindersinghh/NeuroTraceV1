@@ -1,6 +1,7 @@
-import { Activity, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { LogoMark } from "@/components/brand/Logo";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,12 +58,12 @@ export function Login() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
       <div className="flex w-full max-w-md items-center justify-between">
+        {/* The real mark, and the mono caps eyebrow the rest of the app now uses. */}
         <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Activity className="h-5 w-5" aria-hidden />
-          </span>
-          <div>
-            <p className="text-lg font-semibold tracking-tight text-primary">{t("appName")}</p>
+          <LogoMark className="h-9 w-9 shrink-0 text-primary" />
+          <div className="leading-none">
+            <p className="text-title-3 text-primary">{t("appName")}</p>
+            <p className="mt-1.5 text-label text-muted-foreground">{t("signInEyebrow")}</p>
           </div>
         </div>
         <LanguageToggle />
@@ -70,9 +71,9 @@ export function Login() {
 
       <main className="w-full max-w-md">
         <Card>
-        <CardHeader>
-          <CardTitle as="h1" className="text-xl">{t("signIn")}</CardTitle>
-          <CardDescription>{t("tagline")}</CardDescription>
+        <CardHeader className="border-b border-border pb-5">
+          <CardTitle as="h1" className="text-title-fluid">{t("signIn")}</CardTitle>
+          <CardDescription className="mt-2">{t("tagline")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -108,7 +109,7 @@ export function Login() {
             </Button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="my-6 flex items-center gap-3 text-label text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
             {t("orDivider")}
             <span className="h-px flex-1 bg-border" />
