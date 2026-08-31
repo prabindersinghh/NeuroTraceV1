@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "_comment": [
+    "Governance trust root for the Awaaz ASR training runtime. Tracked in the repository",
+    "and located by runtime.GOVERNANCE_PUBLIC_KEYS_PATH -- never by an environment",
+    "variable and never by a command-line argument.",
+    "",
+    "PUBLIC HALVES ONLY. A private Ed25519 key must never appear in this repository, on a",
+    "training host, or in any backup that a training operator can reach.",
+    "",
+    "This file ships EMPTY. With no key pinned, the runtime refuses every real command with",
+    "governance_trust_root_missing, which is the correct state until a clinical owner",
+    "exists. Adding a key here is a governance act, not a configuration change: whoever can",
+    "run training must not be the person who commits the key, or the approval boundary this",
+    "file exists to create is defeated. See docs/GOVERNANCE_KEYS.md for the procedure.",
+    "",
+    "Entry shape (all fields required, all strings):",
+    "  key_id      stable label, [A-Za-z0-9][A-Za-z0-9._-]{0,127}, signed inside the receipt",
+    "  algorithm   must be exactly \"Ed25519\"",
+    "  public_key  raw 32-byte Ed25519 public key, lowercase hex, 64 characters",
+    "  not_before  timezone-aware ISO-8601 instant the key becomes usable",
+    "  not_after   timezone-aware ISO-8601 instant the key stops being usable",
+    "  holder      named accountable human and role, e.g. \"Dr A. N. Other, stroke neurologist\"",
+    "",
+    "A malformed entry fails the whole file closed; it is never skipped."
+  ],
+  "keys": []
+}

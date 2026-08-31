@@ -59,3 +59,11 @@ accelerate==0.34.2
 
 # Adapter serialisation. The adapter is written as safetensors, never as a pickle.
 safetensors==0.4.5
+
+# Ed25519 verification of the governance approval receipt. runtime.py imports it lazily,
+# inside `_verify_ed25519_signature`, so importing the package still costs nothing; a host
+# without it refuses with `signature_runtime_missing` instead of skipping the check. This is
+# the only pin here that a *non*-training command can be blocked on, because the receipt is
+# verified before the corpus is opened. It is not in requirements.txt: the API process never
+# verifies a training approval.
+cryptography==43.0.1

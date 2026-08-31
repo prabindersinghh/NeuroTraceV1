@@ -13,8 +13,11 @@ survived — a refusal that leaves patient-derived bytes on disk is not a refusa
 """
 from __future__ import annotations
 
+import ast
 import copy
+import functools
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -39,7 +42,6 @@ from app.ml.train.asr_runtime import (
     RuntimeConfig,
     TrainingRuntimeError,
     build_group_phrase_disjoint_split,
-    governance_receipt_signature,
     preflight_real_training,
     run_preflight,
     run_synthetic_smoke,
@@ -53,9 +55,87 @@ from app.ml.train.asr_runtime import (
 NOW = datetime(2026, 8, 31, 6, 0, tzinfo=timezone.utc)
 PATIENT_ID = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 OTHER_PATIENT_ID = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-KEY = b"dedicated-awaaz-governance-key!" * 2
 KEY_ID = "awaaz-governance-test"
-KEY_SHA256 = hashlib.sha256(KEY).hexdigest()
+
+# Governance receipts are Ed25519-signed by a key whose public half is pinned in a tracked
+# file inside the package.  Producing one therefore needs a real asymmetric implementation,
+# so the tests below that require an authentic receipt cannot run where `cryptography` is
+# absent.  The refusal paths that matter most -- no key pinned, unknown key, wrong
+# algorithm, no verification library at all -- are written so that they do run there.
+# Captured at import time: the autouse fixture below repoints the module constant, and the
+# two tests that judge the *shipped* trust root must still see the file the package ships.
+SHIPPED_TRUST_ROOT = runtime.GOVERNANCE_PUBLIC_KEYS_PATH
+
+CRYPTOGRAPHY_INSTALLED = importlib.util.find_spec("cryptography") is not None
+requires_cryptography = pytest.mark.skipif(
+    not CRYPTOGRAPHY_INSTALLED,
+    reason="cryptography is not installed here; Ed25519 receipts cannot be signed or checked",
+)
+# A syntactically valid public key that no private key corresponds to.  It exists so key
+# *resolution* stays testable without an Ed25519 implementation; nothing verifies under it.
+UNVERIFIABLE_PUBLIC_KEY = "11" * 32
+
+
+@functools.lru_cache(maxsize=1)
+def _test_signing_key():
+    """TEST-ONLY governance signing key, generated in memory for this process alone.
+
+    Nothing under ``app/`` can do this.  The HMAC scheme this replaced exported a signing
+    helper from the shipped package, so the training operator who held the verification key
+    could also mint their own approval.  The private half of the real key now belongs to the
+    clinical approver, is generated offline, and never reaches a training host.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    private_key = ed25519.Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return private_key, public_bytes.hex()
+
+
+def _pinned_key_entry(**overrides) -> dict:
+    """The shape the tracked trust-root file declares; any field may be overridden."""
+    entry = {
+        "key_id": KEY_ID,
+        "algorithm": "Ed25519",
+        "public_key": _test_public_key(),
+        "not_before": "2020-01-01T00:00:00+00:00",
+        "not_after": "2099-01-01T00:00:00+00:00",
+        "holder": "Test clinical approver",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _write_pinned_keys(path: Path, entries, *, schema_version: int = 1, mode: int = 0o644):
+    path.write_text(
+        json.dumps({"schema_version": schema_version, "keys": entries}, indent=2) + "\n"
+    )
+    os.chmod(path, mode)
+    return path
+
+
+def _test_public_key() -> str:
+    return _test_signing_key()[1] if CRYPTOGRAPHY_INSTALLED else UNVERIFIABLE_PUBLIC_KEY
+
+
+@pytest.fixture(autouse=True)
+def pinned_governance_trust_root(tmp_path_factory, monkeypatch) -> Path:
+    """Redirect the module-constant trust root at a temporary file holding the test key.
+
+    ``GOVERNANCE_PUBLIC_KEYS_PATH`` is a module constant precisely so that no operator input
+    can reach it; a test may only move it by patching the module, which is a code change by
+    construction.  The file the package actually ships is empty, so without this fixture
+    every run would stop at ``governance_trust_root_missing``.  Tests that want that refusal
+    rewrite this file themselves.
+    """
+    path = tmp_path_factory.mktemp("trust-root") / "governance_public_keys.json"
+    _write_pinned_keys(path, [_pinned_key_entry()])
+    monkeypatch.setattr(runtime, "GOVERNANCE_PUBLIC_KEYS_PATH", path)
+    return path
 
 # The runtime refuses any WAV shorter than this; the shared fixture sits exactly on the
 # boundary, which is why the "too short" case below uses the boundary minus one frame.
@@ -221,11 +301,15 @@ def _receipt_body(
     }
 
 
-def _sign_receipt(body: dict, path: Path, *, key: bytes = KEY) -> dict:
+def _sign_receipt(body: dict, path: Path, *, key_id: str = KEY_ID, private_key=None) -> dict:
+    """TEST-ONLY receipt minting; see `_test_signing_key` for why it lives here."""
+    signer = private_key if private_key is not None else _test_signing_key()[0]
     receipt = copy.deepcopy(body)
     receipt.pop("signature", None)
-    receipt["signature"] = {"algorithm": "HMAC-SHA256", "key_id": KEY_ID}
-    receipt["signature"]["digest"] = governance_receipt_signature(receipt, key)
+    receipt["signature"] = {"algorithm": "Ed25519", "key_id": key_id}
+    receipt["signature"]["signature"] = signer.sign(
+        runtime._canonical_receipt_bytes(receipt)
+    ).hex()
     path.write_text(json.dumps(receipt, indent=2) + "\n")
     os.chmod(path, 0o600)
     return receipt
@@ -263,8 +347,6 @@ def _fixture(
         receipt_path=receipt_path,
         base_model_path=base_model_path,
         output_dir=output_dir,
-        governance_key_id=KEY_ID,
-        governance_key_sha256=KEY_SHA256,
         language=config_language,
     )
     return SimpleNamespace(
@@ -296,7 +378,7 @@ def _assert_nothing_was_written(fixture) -> None:
 def _resign(fixture, mutate) -> None:
     """Apply a mutation to the receipt body and re-sign it, so the signature stays valid.
 
-    Mutating a signed receipt without re-signing would only ever prove that the HMAC works.
+    Mutating a signed receipt without re-signing would only prove the signature works.
     Every semantic gate below must refuse a receipt that is perfectly authentic.
     """
     body = copy.deepcopy(fixture.body)
@@ -309,6 +391,7 @@ def _resign(fixture, mutate) -> None:
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_a_corpus_with_enough_pairs_but_too_few_distinct_phrases_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -330,11 +413,12 @@ def test_a_corpus_with_enough_pairs_but_too_few_distinct_phrases_is_refused(
     monkeypatch.setattr(runtime, "_check_dependencies", should_not_import)
     fixture = _fixture(tmp_path, specs=_pair_specs(count=50, phrase_groups=5))
     with pytest.raises(PreflightError, match="corpus_not_varied_enough"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     assert imported is False
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 @pytest.mark.parametrize("phrase_groups", [3, 6, 9])
 def test_every_phrase_count_below_the_variety_floor_is_refused(
     tmp_path, monkeypatch, phrase_groups,
@@ -343,17 +427,18 @@ def test_every_phrase_count_below_the_variety_floor_is_refused(
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path, specs=_pair_specs(count=50, phrase_groups=phrase_groups))
     with pytest.raises(PreflightError, match="corpus_not_varied_enough"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_ten_independent_components_is_the_first_accepted_corpus_variety(
     tmp_path, monkeypatch,
 ):
     """Pin the accepted side of the boundary so the floor cannot drift downward unnoticed."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path, specs=_pair_specs(count=50, phrase_groups=10))
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     assert prepared.component_count == 10
     assert prepared.component_count == runtime.HARD_MINIMUM_COMPONENTS
 
@@ -453,6 +538,7 @@ def test_a_local_build_suffix_on_the_pinned_version_is_accepted_and_reported_ver
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "mutate, expected_code, why",
     [
@@ -508,10 +594,11 @@ def test_a_receipt_whose_consent_was_never_granted_is_refused_before_any_work(
     fixture = _fixture(tmp_path)
     _resign(fixture, mutate)
     with pytest.raises(PreflightError, match=expected_code):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -540,7 +627,7 @@ def test_an_unacknowledged_local_archive_handoff_is_refused(tmp_path, monkeypatc
     fixture = _fixture(tmp_path)
     _resign(fixture, mutate)
     with pytest.raises(PreflightError, match="receipt_not_approved"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
@@ -549,6 +636,7 @@ def test_an_unacknowledged_local_archive_handoff_is_refused(tmp_path, monkeypatc
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "receipt_language, config_language",
     [("hi", "en"), ("en", "hi"), ("pa", "en"), ("en", "pa")],
@@ -569,7 +657,7 @@ def test_a_receipt_approved_for_one_language_cannot_authorise_another(
         config_language=config_language,
     )
     with pytest.raises(PreflightError, match="receipt_input_mismatch"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
@@ -578,6 +666,7 @@ def test_a_receipt_approved_for_one_language_cannot_authorise_another(
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_a_receipt_approved_in_the_future_is_not_yet_valid(tmp_path, monkeypatch):
     """A post-dated approval is either a clock fault or a backdated authorisation.
 
@@ -594,10 +683,11 @@ def test_a_receipt_approved_in_the_future_is_not_yet_valid(tmp_path, monkeypatch
         ),
     )
     with pytest.raises(PreflightError, match="receipt_not_yet_valid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_consent_recorded_after_the_approval_it_supposedly_justified_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -615,10 +705,11 @@ def test_consent_recorded_after_the_approval_it_supposedly_justified_is_refused(
         ),
     )
     with pytest.raises(PreflightError, match="receipt_time_order_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_governance_approved_after_the_receipt_it_authorises_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -632,10 +723,11 @@ def test_governance_approved_after_the_receipt_it_authorises_is_refused(
         ),
     )
     with pytest.raises(PreflightError, match="receipt_time_order_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "validity",
     [timedelta(hours=48), timedelta(days=3_650)],
@@ -658,10 +750,11 @@ def test_a_receipt_valid_for_longer_than_the_maximum_window_is_refused(
         lambda body: body.update(expires_at=(approved_at + validity).isoformat()),
     )
     with pytest.raises(PreflightError, match="receipt_validity_too_long"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "field_name",
     ["approved_at", "expires_at", "revocation_checked_at"],
@@ -681,10 +774,11 @@ def test_a_receipt_timestamp_without_a_timezone_offset_is_refused(
     assert "+" not in naive and not naive.endswith("Z")
     _resign(fixture, lambda body: body.__setitem__(field_name, naive))
     with pytest.raises(PreflightError, match="receipt_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_a_naive_consent_timestamp_is_refused(tmp_path, monkeypatch):
     """The nested consent timestamp needs the same offset discipline as the top-level ones."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
@@ -692,7 +786,7 @@ def test_a_naive_consent_timestamp_is_refused(tmp_path, monkeypatch):
     naive = "2026-08-31T05:00:00"
     _resign(fixture, lambda body: body["consent"].__setitem__("recorded_at", naive))
     with pytest.raises(PreflightError, match="receipt_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
@@ -701,6 +795,7 @@ def test_a_naive_consent_timestamp_is_refused(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_an_archive_belonging_to_a_different_patient_than_the_receipt_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -716,7 +811,7 @@ def test_an_archive_belonging_to_a_different_patient_than_the_receipt_is_refused
         tmp_path, patient_id=PATIENT_ID, receipt_patient_id=OTHER_PATIENT_ID
     )
     with pytest.raises(PreflightError, match="receipt_subject_mismatch") as caught:
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     message = str(caught.value)
     assert str(PATIENT_ID) not in message
     assert str(OTHER_PATIENT_ID) not in message
@@ -728,6 +823,7 @@ def test_an_archive_belonging_to_a_different_patient_than_the_receipt_is_refused
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "audio_kwargs, why",
     [
@@ -777,10 +873,11 @@ def test_every_violation_of_the_audio_contract_is_refused(
     specs[0]["audio"] = _wav(0, **audio_kwargs)
     fixture = _fixture(tmp_path, specs=specs)
     with pytest.raises(PreflightError, match="audio_contract_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_a_wav_whose_declared_duration_contradicts_its_frame_count_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -795,10 +892,11 @@ def test_a_wav_whose_declared_duration_contradicts_its_frame_count_is_refused(
     specs[0]["duration_seconds"] = 10.0
     fixture = _fixture(tmp_path, specs=specs)
     with pytest.raises(PreflightError, match="audio_contract_invalid"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_the_shortest_accepted_wav_sits_exactly_on_the_minimum_frame_count(
     tmp_path, monkeypatch,
 ):
@@ -807,7 +905,7 @@ def test_the_shortest_accepted_wav_sits_exactly_on_the_minimum_frame_count(
     specs = _pair_specs()
     specs[0]["audio"] = _wav(0, frames=MINIMUM_FRAMES)
     fixture = _fixture(tmp_path, specs=specs)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     assert prepared.pair_count == 50
 
 
@@ -816,6 +914,7 @@ def test_the_shortest_accepted_wav_sits_exactly_on_the_minimum_frame_count(
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_identical_audio_carrying_two_different_transcripts_is_refused(
     tmp_path, monkeypatch,
 ):
@@ -832,10 +931,11 @@ def test_identical_audio_carrying_two_different_transcripts_is_refused(
     assert specs[1]["phrase"] != specs[0]["phrase"]  # ... under a different transcript
     fixture = _fixture(tmp_path, specs=specs)
     with pytest.raises(PreflightError, match="conflicting_audio_labels"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_case_and_whitespace_variants_of_one_transcript_do_not_count_as_a_conflict(
     tmp_path, monkeypatch,
 ):
@@ -845,10 +945,11 @@ def test_case_and_whitespace_variants_of_one_transcript_do_not_count_as_a_confli
     specs[1]["audio"] = specs[0]["audio"]
     specs[1]["phrase"] = f"  {specs[0]['phrase'].upper()}  "
     fixture = _fixture(tmp_path, specs=specs)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     assert prepared.pair_count == 50
 
 
+@requires_cryptography
 def test_the_split_groups_recordings_by_audio_content_not_by_capture_identity(
     tmp_path, monkeypatch,
 ):
@@ -879,7 +980,7 @@ def test_the_split_groups_recordings_by_audio_content_not_by_capture_identity(
     specs[1]["audio"] = specs[0]["audio"]
     specs[1]["phrase"] = specs[0]["phrase"]
     fixture = _fixture(tmp_path, specs=specs)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
 
     expected_keys = [pair.sha256 for pair in prepared.selected_pairs]
     assert captured["group_keys"] == expected_keys
@@ -946,6 +1047,7 @@ def _training_harness(monkeypatch, prepared, model) -> None:
     )
 
 
+@requires_cryptography
 @pytest.mark.parametrize("leaked", ["patient_id", "audio_sha256", "capture_id"])
 def test_an_adapter_that_writes_a_private_identifier_into_its_metadata_is_destroyed(
     tmp_path, monkeypatch, leaked,
@@ -960,7 +1062,7 @@ def test_an_adapter_that_writes_a_private_identifier_into_its_metadata_is_destro
     """
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     secrets = {
         "patient_id": str(prepared.archive.patient_id),
         "audio_sha256": prepared.selected_pairs[0].sha256,
@@ -977,16 +1079,17 @@ def test_an_adapter_that_writes_a_private_identifier_into_its_metadata_is_destro
 
     _training_harness(monkeypatch, prepared, LeakyModel())
     with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation") as caught:
-        run_training(fixture.config, KEY, now=NOW)
+        run_training(fixture.config, now=NOW)
     assert secret not in str(caught.value)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_a_leak_in_a_plain_text_adapter_readme_is_caught_too(tmp_path, monkeypatch):
     """The scan must cover generated model cards, not only JSON configuration."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     patient = str(prepared.archive.patient_id)
 
     class ChattyModel:
@@ -998,7 +1101,7 @@ def test_a_leak_in_a_plain_text_adapter_readme_is_caught_too(tmp_path, monkeypat
 
     _training_harness(monkeypatch, prepared, ChattyModel())
     with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation"):
-        run_training(fixture.config, KEY, now=NOW)
+        run_training(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
@@ -1007,6 +1110,7 @@ def test_a_leak_in_a_plain_text_adapter_readme_is_caught_too(tmp_path, monkeypat
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_an_archive_mutated_between_preflight_and_publication_stops_the_run(
     tmp_path, monkeypatch,
 ):
@@ -1029,10 +1133,11 @@ def test_an_archive_mutated_between_preflight_and_publication_stops_the_run(
 
     monkeypatch.setattr(runtime, "preflight_real_training", preflight_then_tamper)
     with pytest.raises(PreflightError, match="input_changed"):
-        run_preflight(fixture.config, KEY, now=NOW)
+        run_preflight(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 @pytest.mark.parametrize("target", ["receipt", "base_model"])
 def test_a_receipt_or_checkpoint_mutated_after_preflight_stops_the_run(
     tmp_path, monkeypatch, target,
@@ -1053,7 +1158,7 @@ def test_a_receipt_or_checkpoint_mutated_after_preflight_stops_the_run(
 
     monkeypatch.setattr(runtime, "preflight_real_training", preflight_then_tamper)
     with pytest.raises(PreflightError, match="input_changed"):
-        run_preflight(fixture.config, KEY, now=NOW)
+        run_preflight(fixture.config, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
@@ -1062,54 +1167,285 @@ def test_a_receipt_or_checkpoint_mutated_after_preflight_stops_the_run(
 # --------------------------------------------------------------------------------------
 
 
-def test_a_receipt_signed_under_an_unpinned_key_identifier_is_refused(
-    tmp_path, monkeypatch,
-):
-    """A valid HMAC proves possession of *a* key, not of *the* pinned governance key.
+def _verify(path, *, now=NOW, language="en"):
+    """Call the verifier with every input binding disabled, isolating authenticity."""
+    return verify_governance_receipt(
+        path,
+        expected_archive_sha256=None,
+        expected_base_model_sha256=None,
+        expected_patient_id=None,
+        expected_language=language,
+        now=now,
+    )
 
-    The existing suite only corrupts the key fingerprint, which fails before the receipt is
-    ever parsed.  This case is the dangerous one: the signature verifies perfectly, and only
-    the ``key_id`` comparison distinguishes the approved trust root from a second key that
-    someone in the organisation also holds.
+
+def _receipt_with_signature_block(
+    path: Path, *, algorithm: str = "Ed25519", key_id: str = KEY_ID, value: str = "0" * 128,
+) -> Path:
+    """Write a receipt whose signature block is controllable and whose body is irrelevant.
+
+    Authenticity is decided before any semantic field is read, so these cases need no
+    archive, no base model, and -- crucially -- no ability to sign.
     """
-    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
-    fixture = _fixture(tmp_path)
-    config = replace(fixture.config, governance_key_id="awaaz-governance-some-other-key")
-    with pytest.raises(PreflightError, match="governance_trust_root_mismatch") as caught:
-        preflight_real_training(config, KEY, now=NOW)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "signature": {"algorithm": algorithm, "key_id": key_id, "signature": value},
+            }
+        )
+    )
+    os.chmod(path, 0o600)
+    return path
+
+
+def test_the_shipped_trust_root_pins_no_key_and_holds_no_private_material():
+    """The file committed to this repository must be empty and must stay public-only.
+
+    A pinned key is a governance act performed by a clinical owner who does not run
+    training.  Shipping a placeholder key -- or, far worse, a private key -- would hand the
+    approval boundary to whoever cloned the repository.
+    """
+    raw = SHIPPED_TRUST_ROOT.read_text(encoding="utf-8")
+    shipped = json.loads(raw)
+    assert shipped["schema_version"] == 1
+    assert shipped["keys"] == []
+    assert "PRIVATE KEY" not in raw
+    assert "private_key" not in raw
+
+
+def test_the_trust_root_path_is_a_module_constant_with_no_operator_supplied_channel():
+    """The finding was not "HMAC"; it was that the operator declared their own trust root.
+
+    Ed25519 alone fixes nothing if the public key still arrives by environment variable or
+    ``--key-file``: the operator generates a keypair, points the runtime at their own public
+    half, and mints approvals exactly as before.  The constant must resolve inside the
+    package, and neither channel may reappear anywhere in the module.
+    """
+    module = ast.parse(Path(runtime.__file__).read_text(encoding="utf-8"))
+    # Unparsing drops comments, so the prose explaining what was removed does not count as
+    # the thing still being there. Executable references are what this test forbids.
+    executable = ast.unparse(module)
+    assert "AWAAZ_GOVERNANCE_KEY" not in executable
+    assert "receipt-key-file" not in executable
+    assert "receipt_key_file" not in executable
+    assert not hasattr(runtime, "_read_verification_key")
+    # No command-line option may name key material, and the config builder may not read the
+    # environment: those were the two channels that made the trust root operator-supplied.
+    for node in ast.walk(module):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "add_argument":
+            for argument in node.args:
+                assert "key" not in str(getattr(argument, "value", "")).lower()
+    builder = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_config_from_args"
+    )
+    assert "environ" not in ast.unparse(builder)
+    package_directory = Path(runtime.__file__).resolve().parent
+    assert SHIPPED_TRUST_ROOT.parent == package_directory
+    assert SHIPPED_TRUST_ROOT.name == "governance_public_keys.json"
+    # No field of the operator-supplied configuration can name or fingerprint a key.
+    assert not [
+        name for name in RuntimeConfig.__dataclass_fields__ if "governance" in name or "key" in name
+    ]
+
+
+def test_the_shipped_package_offers_no_way_to_mint_a_governance_receipt():
+    """The thing that verifies must not also ship the thing that signs.
+
+    While one HMAC key did both jobs, "the verifier cannot forge" was unachievable in
+    principle.  The signing helper is gone from the package surface and from the module.
+    """
+    import app.ml.train.asr_runtime as package
+
+    assert "governance_receipt_signature" not in package.__all__
+    assert not hasattr(package, "governance_receipt_signature")
+    assert not hasattr(runtime, "governance_receipt_signature")
+    source = Path(runtime.__file__).read_text(encoding="utf-8")
+    assert "Ed25519PrivateKey" not in source
+    assert "def sign" not in source
+
+
+def test_a_build_with_no_pinned_key_refuses_before_the_receipt_is_opened(tmp_path):
+    """The shipped fail-closed state, reached through the public preflight entry point.
+
+    The receipt path here does not exist, so a run that reached the receipt at all would
+    refuse with ``receipt_invalid``.  Getting ``governance_trust_root_missing`` instead is
+    the evidence that the trust root is consulted first.
+    """
+    _write_pinned_keys(runtime.GOVERNANCE_PUBLIC_KEYS_PATH, [])
+    config = RuntimeConfig(
+        archive_path=tmp_path / "absent-archive.tar",
+        receipt_path=tmp_path / "absent-receipt.json",
+        base_model_path=tmp_path / "absent-base-model",
+        output_dir=tmp_path / "private-output",
+    )
+    with pytest.raises(PreflightError, match="governance_trust_root_missing"):
+        preflight_real_training(config, now=NOW)
+    assert not (tmp_path / "private-output").exists()
+
+
+def test_a_missing_trust_root_file_is_a_refusal_not_an_empty_allow_list(tmp_path):
+    """Deleting the pinned file must not read as "no restrictions"."""
+    runtime.GOVERNANCE_PUBLIC_KEYS_PATH.unlink()
+    with pytest.raises(PreflightError, match="governance_trust_root_missing") as caught:
+        runtime._load_pinned_governance_keys()
+    assert str(runtime.GOVERNANCE_PUBLIC_KEYS_PATH) not in str(caught.value)
+
+
+def test_a_receipt_naming_a_key_the_build_does_not_pin_is_refused(tmp_path):
+    """Whoever holds *a* private key must not be able to authorise this training host.
+
+    This is the case the old design could never refuse: the operator's own key was the
+    pinned key by definition.  Resolution against the tracked file is now the only route in.
+    """
+    path = _receipt_with_signature_block(
+        tmp_path / "governance.json", key_id="awaaz-governance-some-other-key"
+    )
+    with pytest.raises(PreflightError, match="governance_key_not_pinned") as caught:
+        _verify(path)
+    assert "awaaz-governance-some-other-key" not in str(caught.value)
     assert KEY_ID not in str(caught.value)
-    _assert_nothing_was_written(fixture)
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "algorithm",
+    ["HMAC-SHA256", "Ed448", "none", "RS256", "ed25519", ""],
+)
+def test_a_receipt_that_does_not_declare_ed25519_is_refused(tmp_path, algorithm):
+    """A downgrade to the symmetric scheme, or to no scheme, must not be negotiable.
+
+    ``HMAC-SHA256`` is listed first deliberately: an attacker with an old receipt, or with
+    the retired shared key, must not be able to have it honoured.  The lowercase spelling
+    guards against a case-insensitive comparison creeping in.
+    """
+    path = _receipt_with_signature_block(tmp_path / "governance.json", algorithm=algorithm)
+    with pytest.raises(PreflightError, match="receipt_signature_invalid"):
+        _verify(path)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "0" * 127, "0" * 129, "0" * 64, "z" * 128, "0" * 128 + " ", "0X" * 64],
+)
+def test_a_signature_that_is_not_a_64_byte_hex_value_is_refused(tmp_path, value):
+    """``0`` * 64 is the retired HMAC digest length; it must not be mistaken for a signature."""
+    path = _receipt_with_signature_block(tmp_path / "governance.json", value=value)
+    with pytest.raises(PreflightError, match="receipt_signature_invalid"):
+        _verify(path)
+
+
+def test_verification_refuses_cleanly_when_the_ed25519_library_is_unavailable(
+    tmp_path, monkeypatch,
+):
+    """An absent optional dependency must be a refusal code, never a traceback.
+
+    Forced here rather than inferred from the environment, so the behaviour is pinned on a
+    host that *does* have ``cryptography`` installed as well as on one that does not.
+    """
+    def blocked_import(name, *args, **kwargs):
+        raise ImportError(name)
+
+    monkeypatch.setattr(runtime.importlib, "import_module", blocked_import)
+    path = _receipt_with_signature_block(tmp_path / "governance.json")
+    with pytest.raises(PreflightError, match="signature_runtime_missing") as caught:
+        _verify(path)
+    assert str(tmp_path) not in str(caught.value)
+
+
+def test_the_signed_bytes_cover_the_algorithm_and_the_key_identifier(tmp_path):
+    """Canonicalisation must strip the signature value and nothing else.
+
+    If ``algorithm`` or ``key_id`` fell outside the signed bytes, a captured receipt could
+    be re-pointed at another pinned key, or downgraded, without breaking its signature.
+    """
+    receipt = {
+        "schema_version": 1,
+        "purpose": APPROVED_PURPOSE,
+        "signature": {"algorithm": "Ed25519", "key_id": KEY_ID, "signature": "ab" * 64},
+    }
+    signed = runtime._canonical_receipt_bytes(receipt)
+    assert b'"algorithm":"Ed25519"' in signed
+    assert f'"key_id":"{KEY_ID}"'.encode() in signed
+    assert b"ab" * 64 not in signed
+    # Only the signature value is excluded: every other change moves the signed bytes.
+    for mutate in (
+        lambda body: body["signature"].__setitem__("algorithm", "HMAC-SHA256"),
+        lambda body: body["signature"].__setitem__("key_id", "another-key"),
+        lambda body: body.__setitem__("purpose", "something_else"),
+    ):
+        mutated = copy.deepcopy(receipt)
+        mutate(mutated)
+        assert runtime._canonical_receipt_bytes(mutated) != signed
+    resigned = copy.deepcopy(receipt)
+    resigned["signature"]["signature"] = "cd" * 64
+    assert runtime._canonical_receipt_bytes(resigned) == signed
+
+
+@requires_cryptography
+def test_an_authentic_ed25519_receipt_verifies_under_the_pinned_public_key(tmp_path):
+    """The refusals above must not be satisfiable by refusing everything."""
+    fixture = _fixture(tmp_path)
+    verified = _verify(fixture.receipt_path)
+    assert verified.key_id == KEY_ID
+    assert verified.archive_sha256 == sha256_file(fixture.archive)
+
+
+@requires_cryptography
+def test_a_receipt_signed_by_a_different_private_key_is_refused(tmp_path, monkeypatch):
+    """The central property: holding *a* private key does not authorise this build.
+
+    The forged receipt is perfectly formed and correctly signed; it names the pinned
+    ``key_id`` and every semantic field is authentic.  Only the private key differs, which
+    is exactly the position a training operator who generates their own keypair is in.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    fixture = _fixture(tmp_path)
+    _sign_receipt(fixture.body, fixture.receipt_path, private_key=ed25519.Ed25519PrivateKey.generate())
+    with pytest.raises(PreflightError, match="receipt_signature_invalid"):
+        preflight_real_training(fixture.config, now=NOW)
+    _assert_nothing_was_written(fixture)
+
+
+@requires_cryptography
+def test_an_authentic_receipt_mutated_after_signing_no_longer_verifies(tmp_path):
+    """The signature must cover the body, not merely accompany it."""
+    fixture = _fixture(tmp_path)
+    tampered = copy.deepcopy(fixture.receipt)
+    tampered["data_subject_id"] = str(OTHER_PATIENT_ID)
+    fixture.receipt_path.write_text(json.dumps(tampered))
+    with pytest.raises(PreflightError, match="receipt_signature_invalid"):
+        _verify(fixture.receipt_path)
+
+
+@requires_cryptography
+@pytest.mark.parametrize(
+    "window",
     [
-        pytest.param({}, id="both_defaults_empty"),
-        pytest.param({"governance_key_id": KEY_ID}, id="fingerprint_missing"),
-        pytest.param({"governance_key_sha256": KEY_SHA256}, id="identifier_missing"),
-        pytest.param({"governance_key_id": "   "}, id="identifier_only_whitespace"),
         pytest.param(
-            {"governance_key_id": KEY_ID, "governance_key_sha256": "not-a-digest"},
-            id="fingerprint_malformed",
+            {"not_before": "2020-01-01T00:00:00+00:00", "not_after": "2020-02-01T00:00:00+00:00"},
+            id="key_retired",
+        ),
+        pytest.param(
+            {"not_before": "2098-01-01T00:00:00+00:00", "not_after": "2099-01-01T00:00:00+00:00"},
+            id="key_not_yet_live",
         ),
     ],
 )
-def test_a_config_without_a_pinned_trust_root_never_reaches_the_receipt(
-    tmp_path, monkeypatch, overrides,
+def test_a_pinned_key_outside_its_declared_validity_window_cannot_approve(
+    tmp_path, pinned_governance_trust_root, window,
 ):
-    """``RuntimeConfig`` defaults to no trust root, so forgetting to set one must fail loudly.
-
-    The CLI reads both values from the environment; an unset variable yields the empty
-    default.  Without this gate a misconfigured operator would get a run that trusts any
-    receipt whose signature it can reproduce.
-    """
-    monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
+    """Key rotation has to actually retire the old key, not merely add a new one."""
     fixture = _fixture(tmp_path)
-    defaults = {"governance_key_id": "", "governance_key_sha256": ""}
-    config = replace(fixture.config, **{**defaults, **overrides})
-    with pytest.raises(PreflightError, match="governance_trust_root_missing"):
-        preflight_real_training(config, KEY, now=NOW)
-    _assert_nothing_was_written(fixture)
+    _write_pinned_keys(
+        pinned_governance_trust_root,
+        [_pinned_key_entry(**window)],
+    )
+    with pytest.raises(PreflightError, match="governance_key_not_valid_now"):
+        _verify(fixture.receipt_path)
 
 
 # --------------------------------------------------------------------------------------
@@ -1117,6 +1453,7 @@ def test_a_config_without_a_pinned_trust_root_never_reaches_the_receipt(
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_the_minimum_pair_floor_alone_cannot_be_lowered(tmp_path, monkeypatch):
     """Pinned on its own: the existing test weakens both floors in a single call.
 
@@ -1129,10 +1466,11 @@ def test_the_minimum_pair_floor_alone_cannot_be_lowered(tmp_path, monkeypatch):
     weakened = replace(fixture.config, minimum_pairs=runtime.HARD_MINIMUM_PAIRS - 1)
     assert weakened.minimum_components == runtime.HARD_MINIMUM_COMPONENTS
     with pytest.raises(PreflightError, match="config_invalid"):
-        preflight_real_training(weakened, KEY, now=NOW)
+        preflight_real_training(weakened, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_the_minimum_component_floor_alone_cannot_be_lowered(tmp_path, monkeypatch):
     """The variety floor is the one that stops phrase memorisation; pin it by itself."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
@@ -1142,10 +1480,11 @@ def test_the_minimum_component_floor_alone_cannot_be_lowered(tmp_path, monkeypat
     )
     assert weakened.minimum_pairs == runtime.HARD_MINIMUM_PAIRS
     with pytest.raises(PreflightError, match="config_invalid"):
-        preflight_real_training(weakened, KEY, now=NOW)
+        preflight_real_training(weakened, now=NOW)
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_both_corpus_floors_may_be_made_stricter(tmp_path, monkeypatch):
     """Stricter is always allowed; only weakening is refused, so pin that direction too."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
@@ -1156,96 +1495,173 @@ def test_both_corpus_floors_may_be_made_stricter(tmp_path, monkeypatch):
         minimum_components=runtime.HARD_MINIMUM_COMPONENTS + 1,
     )
     with pytest.raises(PreflightError, match="corpus_not_varied_enough"):
-        preflight_real_training(stricter, KEY, now=NOW)
+        preflight_real_training(stricter, now=NOW)
 
 
 # --------------------------------------------------------------------------------------
-# 15. The governance verification key file, and the CLI's blocked path.
+# 15. The tracked trust-root file itself, and the CLI's blocked path.
+#
+# This section used to defend a `--receipt-key-file` on disk: its mode, its size, whether it
+# was a symlink.  All of that protected a key the operator supplied, which was the defect.
+# What has to be defended now is the integrity of the tracked file the runtime reads instead.
 # --------------------------------------------------------------------------------------
 
 
-def test_a_missing_governance_key_file_is_reported_without_a_path(tmp_path):
-    """The key path is operational secret; its absence must not leak where it was sought."""
-    with pytest.raises(PreflightError, match="receipt_key_missing") as caught:
-        runtime._read_verification_key(tmp_path / "absent-governance.key")
-    assert str(tmp_path) not in str(caught.value)
+@pytest.mark.parametrize(
+    "entry, note",
+    [
+        pytest.param({"algorithm": "HMAC-SHA256"}, "downgraded algorithm", id="algorithm"),
+        pytest.param({"algorithm": "Ed448"}, "unsupported algorithm", id="other_algorithm"),
+        pytest.param({"public_key": "11" * 31}, "short key", id="public_key_short"),
+        pytest.param({"public_key": "zz" * 32}, "non-hex key", id="public_key_not_hex"),
+        pytest.param({"public_key": "11" * 33}, "long key", id="public_key_long"),
+        pytest.param({"key_id": ""}, "empty identifier", id="key_id_empty"),
+        pytest.param({"key_id": "has spaces"}, "malformed identifier", id="key_id_spaces"),
+        pytest.param({"key_id": "../escape"}, "path-like identifier", id="key_id_pathlike"),
+        pytest.param({"not_before": "2026-01-01T00:00:00"}, "naive timestamp", id="naive_time"),
+        pytest.param({"not_before": "not-a-time"}, "unparseable timestamp", id="bad_time"),
+        pytest.param(
+            {"not_before": "2030-01-01T00:00:00+00:00", "not_after": "2029-01-01T00:00:00+00:00"},
+            "inverted window",
+            id="inverted_window",
+        ),
+        pytest.param({"holder": "   "}, "unnamed holder", id="holder_blank"),
+    ],
+)
+def test_a_malformed_pinned_key_entry_fails_the_whole_file_closed(
+    tmp_path, pinned_governance_trust_root, entry, note,
+):
+    """A key entry nobody can parse must stop the run, not be quietly skipped.
 
-
-@pytest.mark.parametrize("mode", [0o644, 0o640, 0o604, 0o666, 0o700 | 0o004])
-def test_a_governance_key_readable_by_group_or_others_is_refused(tmp_path, mode):
-    """Any bit outside the owner triplet means another local account can forge receipts.
-
-    Possession of this key is the entire trust root: with it, an attacker writes their own
-    approval for any patient's archive.  A key file that the ``staff`` group can read is
-    therefore not a key at all.
+    Skipping a bad row is the dangerous behaviour: an approver who believes their key is
+    pinned, but typed it wrong, gets a build that trusts whatever else is in the file --
+    including, after a rotation, only the key that was supposed to have been retired.
     """
-    key_path = tmp_path / "governance.key"
-    key_path.write_bytes(KEY)
-    os.chmod(key_path, mode)
-    with pytest.raises(PreflightError, match="receipt_key_permissions"):
-        runtime._read_verification_key(key_path)
+    _write_pinned_keys(
+        pinned_governance_trust_root,
+        [_pinned_key_entry(**entry)],
+    )
+    with pytest.raises(PreflightError, match="governance_trust_root_invalid") as caught:
+        runtime._load_pinned_governance_keys()
+    assert str(pinned_governance_trust_root) not in str(caught.value)
 
 
-@pytest.mark.parametrize("size", [0, 1, 31])
-def test_a_governance_key_shorter_than_the_minimum_is_refused(tmp_path, size):
-    """A short HMAC key is brute-forceable, and thirty-two bytes is the declared floor."""
-    key_path = tmp_path / "governance.key"
-    key_path.write_bytes(b"k" * size)
-    os.chmod(key_path, 0o600)
-    with pytest.raises(PreflightError, match="receipt_key_invalid"):
-        runtime._read_verification_key(key_path)
+def test_a_duplicated_pinned_key_identifier_is_refused(
+    tmp_path, pinned_governance_trust_root,
+):
+    """Two entries under one identifier make "which key approved this" unanswerable."""
+    entry = _pinned_key_entry()
+    _write_pinned_keys(pinned_governance_trust_root, [entry, dict(entry)])
+    with pytest.raises(PreflightError, match="governance_trust_root_invalid"):
+        runtime._load_pinned_governance_keys()
 
 
-def test_a_symlinked_governance_key_is_refused(tmp_path):
-    """A symlink means the bytes actually read are decided somewhere else.
+@pytest.mark.parametrize("mode", [0o666, 0o664, 0o622, 0o646])
+def test_a_trust_root_writable_outside_its_owner_is_refused(
+    pinned_governance_trust_root, mode,
+):
+    """Public keys are not secret, but they are the integrity root of the whole gate.
 
-    The permission and size checks apply to the link's own metadata, not the target's, so
-    following one would let a mode-0600 link point at a world-readable file.
+    Any local account that can rewrite this file can pin its own approver, which is the
+    same authority as holding the private key.
     """
-    real_key = tmp_path / "real-governance.key"
-    real_key.write_bytes(KEY)
-    os.chmod(real_key, 0o600)
-    link = tmp_path / "governance.key"
-    link.symlink_to(real_key)
-    with pytest.raises(PreflightError, match="receipt_key_invalid"):
-        runtime._read_verification_key(link)
+    os.chmod(pinned_governance_trust_root, mode)
+    with pytest.raises(PreflightError, match="governance_trust_root_invalid"):
+        runtime._load_pinned_governance_keys()
 
 
-def test_a_directory_supplied_as_the_governance_key_is_refused(tmp_path):
-    """Only a regular file can be a key; a directory would raise deep inside the reader."""
-    directory = tmp_path / "governance.key"
-    directory.mkdir(mode=0o700)
-    with pytest.raises(PreflightError, match="receipt_key_invalid"):
-        runtime._read_verification_key(directory)
+def test_a_symlinked_trust_root_is_refused(tmp_path, pinned_governance_trust_root, monkeypatch):
+    """A symlink moves the decision about which bytes are read somewhere else entirely."""
+    link = tmp_path / "governance_public_keys.json"
+    link.symlink_to(pinned_governance_trust_root)
+    monkeypatch.setattr(runtime, "GOVERNANCE_PUBLIC_KEYS_PATH", link)
+    with pytest.raises(PreflightError, match="governance_trust_root_invalid"):
+        runtime._load_pinned_governance_keys()
 
 
-def test_a_well_formed_governance_key_is_read_verbatim(tmp_path):
-    """Pin the accepted case so the refusals above cannot be satisfied by refusing all keys."""
-    key_path = tmp_path / "governance.key"
-    key_path.write_bytes(KEY)
-    os.chmod(key_path, 0o600)
-    assert runtime._read_verification_key(key_path) == KEY
+@pytest.mark.parametrize(
+    "document",
+    [
+        pytest.param({"schema_version": 2, "keys": []}, id="unsupported_schema"),
+        pytest.param({"keys": []}, id="schema_absent"),
+        pytest.param({"schema_version": 1}, id="key_list_absent"),
+        pytest.param({"schema_version": 1, "keys": {}}, id="key_list_not_a_list"),
+        pytest.param({"schema_version": 1, "keys": ["awaaz-governance-test"]}, id="entry_not_object"),
+    ],
+)
+def test_a_trust_root_document_that_is_not_the_declared_shape_is_refused(
+    pinned_governance_trust_root, document,
+):
+    """An unreadable trust root is never a permissive one."""
+    pinned_governance_trust_root.write_text(json.dumps(document))
+    os.chmod(pinned_governance_trust_root, 0o644)
+    with pytest.raises(PreflightError, match="governance_trust_root_"):
+        runtime._load_pinned_governance_keys()
 
 
-def test_the_cli_exit_for_a_blocked_run_carries_only_an_error_code(tmp_path, capsys):
+def test_the_cli_refuses_without_a_pinned_key_and_names_no_path(tmp_path, capsys):
+    """The shipped state, exercised through ``main`` and needing no signing capability."""
+    _write_pinned_keys(runtime.GOVERNANCE_PUBLIC_KEYS_PATH, [])
+    argv = [
+        "preflight",
+        "--archive",
+        str(tmp_path / "patient-secret-archive.tar"),
+        "--receipt",
+        str(tmp_path / "patient-secret-governance.json"),
+        "--base-model",
+        str(tmp_path / "patient-secret-base-model"),
+        "--output-dir",
+        str(tmp_path / "private-output"),
+    ]
+    with pytest.raises(SystemExit) as exited:
+        runtime.main(argv)
+    assert exited.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.strip() == "asr-runtime blocked [governance_trust_root_missing]"
+    assert str(tmp_path) not in captured.err
+
+
+def test_the_cli_rejects_any_attempt_to_supply_a_verification_key(tmp_path, capsys):
+    """The retired argument must not linger as an accepted no-op."""
+    argv = [
+        "preflight",
+        "--archive",
+        str(tmp_path / "a.tar"),
+        "--receipt",
+        str(tmp_path / "r.json"),
+        "--receipt-key-file",
+        str(tmp_path / "governance.key"),
+        "--base-model",
+        str(tmp_path / "m"),
+        "--output-dir",
+        str(tmp_path / "o"),
+    ]
+    with pytest.raises(SystemExit) as exited:
+        runtime.main(argv)
+    assert exited.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+@requires_cryptography
+def test_the_cli_exit_for_a_blocked_run_carries_only_an_error_code(
+    tmp_path, capsys, pinned_governance_trust_root,
+):
     """Operators see stderr; stderr must not become the leak channel the manifest is not.
 
     The CLI is invoked with real, private paths on the command line.  Its refusal message
     must name the machine-readable code and nothing else — no archive path, no receipt
-    path, no output path, and certainly no key material.
+    path, no output path, and no key identifier.
     """
-    key_path = tmp_path / "governance.key"
-    key_path.write_bytes(KEY)
-    os.chmod(key_path, 0o644)  # deliberately unsafe, so the run is blocked at the key
     fixture = _fixture(tmp_path)
+    # Empty the trust root so an otherwise fully authorised run is blocked at the gate.
+    _write_pinned_keys(pinned_governance_trust_root, [])
     argv = [
         "preflight",
         "--archive",
         str(fixture.archive),
         "--receipt",
         str(fixture.receipt_path),
-        "--receipt-key-file",
-        str(key_path),
         "--base-model",
         str(fixture.base),
         "--output-dir",
@@ -1256,32 +1672,27 @@ def test_the_cli_exit_for_a_blocked_run_carries_only_an_error_code(tmp_path, cap
     assert exited.value.code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err.strip() == "asr-runtime blocked [receipt_key_permissions]"
+    assert captured.err.strip() == "asr-runtime blocked [governance_trust_root_missing]"
     for secret in (
         str(fixture.archive),
         str(fixture.receipt_path),
         str(fixture.base),
         str(fixture.output),
-        str(key_path),
         str(tmp_path),
         str(PATIENT_ID),
-        KEY.hex(),
-        KEY_SHA256,
+        str(pinned_governance_trust_root),
+        KEY_ID,
     ):
         assert secret not in captured.err
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_the_cli_blocked_path_reports_a_governance_refusal_without_private_values(
     tmp_path, capsys, monkeypatch,
 ):
     """The same discipline applies once the run gets far enough to read patient media."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
-    monkeypatch.setenv("AWAAZ_GOVERNANCE_KEY_ID", KEY_ID)
-    monkeypatch.setenv("AWAAZ_GOVERNANCE_KEY_SHA256", KEY_SHA256)
-    key_path = tmp_path / "governance.key"
-    key_path.write_bytes(KEY)
-    os.chmod(key_path, 0o600)
     # The CLI has no injectable clock, so this receipt is anchored to the real wall clock.
     fixture = _fixture(
         tmp_path,
@@ -1294,8 +1705,6 @@ def test_the_cli_blocked_path_reports_a_governance_refusal_without_private_value
         str(fixture.archive),
         "--receipt",
         str(fixture.receipt_path),
-        "--receipt-key-file",
-        str(key_path),
         "--base-model",
         str(fixture.base),
         "--output-dir",
@@ -1468,6 +1877,7 @@ def test_the_synthetic_smoke_cannot_write_a_manifest_into_the_tracked_source_tre
         shutil.rmtree(unsafe, ignore_errors=True)
 
 
+@requires_cryptography
 def test_no_writing_path_creates_missing_parent_directories(tmp_path, monkeypatch):
     """A mistyped path must not silently mkdir a tree of private artifact directories.
 
@@ -1486,7 +1896,7 @@ def test_no_writing_path_creates_missing_parent_directories(tmp_path, monkeypatc
     fixture = _fixture(tmp_path)
     nested_config = replace(fixture.config, output_dir=tmp_path / "also-missing" / "adapter")
     with pytest.raises(PreflightError, match="output_parent_missing"):
-        run_preflight(nested_config, KEY, now=NOW)
+        run_preflight(nested_config, now=NOW)
     assert not (tmp_path / "also-missing").exists()
 
 
@@ -1498,6 +1908,7 @@ def test_no_writing_path_creates_missing_parent_directories(tmp_path, monkeypatc
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_a_corpus_whose_held_out_partitions_would_be_tiny_is_refused(tmp_path, monkeypatch):
     """Fifty pairs, ten components, and a test partition of four is not an evaluable corpus.
 
@@ -1513,7 +1924,7 @@ def test_a_corpus_whose_held_out_partitions_would_be_tiny_is_refused(tmp_path, m
         specs[index]["phrase"] = "One dominant practised phrase"
     fixture = _fixture(tmp_path, specs=specs)
     with pytest.raises(PreflightError, match="split_too_small") as caught:
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     assert "dominant" not in str(caught.value)
     _assert_nothing_was_written(fixture)
 
@@ -1538,6 +1949,7 @@ def test_the_split_floor_is_relative_to_the_corpus_and_bounded_both_ways():
         runtime._assert_split_adequate(swollen)
 
 
+@requires_cryptography
 def test_the_manifest_states_the_achieved_split_fractions_beside_the_target(
     tmp_path, monkeypatch,
 ):
@@ -1549,7 +1961,7 @@ def test_the_manifest_states_the_achieved_split_fractions_beside_the_target(
     """
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    payload = json.loads(run_preflight(fixture.config, KEY, now=NOW).read_text())
+    payload = json.loads(run_preflight(fixture.config, now=NOW).read_text())
     split = payload["split"]
 
     assert split["target_sample_fractions"] == {"train": 0.7, "validation": 0.15, "test": 0.15}
@@ -1564,6 +1976,7 @@ def test_the_manifest_states_the_achieved_split_fractions_beside_the_target(
     assert split["invariants"]["exact_normalised_phrase_within_language_disjoint"] is True
 
 
+@requires_cryptography
 def test_the_disjointness_guarantees_survive_the_floor_first_allocation(tmp_path, monkeypatch):
     """Filling the floor first changes which partition a component lands in, nothing else."""
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
@@ -1571,7 +1984,7 @@ def test_the_disjointness_guarantees_survive_the_floor_first_allocation(tmp_path
     specs[1]["audio"] = specs[0]["audio"]
     specs[1]["phrase"] = specs[0]["phrase"]
     fixture = _fixture(tmp_path, specs=specs)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
 
     partitions = {
         name: set(getattr(prepared.split, name)) for name in ("train", "validation", "test")
@@ -1632,11 +2045,12 @@ def _fake_torch() -> SimpleNamespace:
 def _prepared_for_loop(tmp_path, monkeypatch, **overrides):
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     monkeypatch.setattr(runtime, "_collate_batch", lambda *_a, **_k: {})
     return replace(prepared, config=replace(prepared.config, **overrides))
 
 
+@requires_cryptography
 def test_an_epoch_the_step_limit_cut_short_is_not_reported_as_an_epoch(tmp_path, monkeypatch):
     """One batch of twenty is not an epoch, and the manifest may not call the run completed.
 
@@ -1674,6 +2088,7 @@ def test_an_epoch_the_step_limit_cut_short_is_not_reported_as_an_epoch(tmp_path,
     assert manifest["claims"]["deployment_ready"] is False
 
 
+@requires_cryptography
 def test_a_run_that_finishes_every_requested_epoch_is_reported_as_completed(
     tmp_path, monkeypatch,
 ):
@@ -1700,6 +2115,7 @@ def test_a_run_that_finishes_every_requested_epoch_is_reported_as_completed(
     assert not any("stopped before every requested epoch" in line for line in manifest["limitations"])
 
 
+@requires_cryptography
 def test_a_manifest_built_without_an_epoch_count_reads_as_truncated(tmp_path, monkeypatch):
     """A missing fact resolves to the conservative reading, never to "completed"."""
     prepared = _prepared_for_loop(tmp_path, monkeypatch, epochs=1)
@@ -1782,6 +2198,7 @@ def test_a_finished_publication_clears_the_sentinel_and_verifies(tmp_path):
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_an_adapter_that_quotes_a_patient_utterance_is_destroyed(tmp_path, monkeypatch):
     """A transcript in a model card is a patient identifier that travels with the weights.
 
@@ -1790,7 +2207,7 @@ def test_an_adapter_that_quotes_a_patient_utterance_is_destroyed(tmp_path, monke
     """
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     utterance = prepared.selected_pairs[0].target_text
     quoted = f"  {utterance.upper()}  "
 
@@ -1803,11 +2220,12 @@ def test_an_adapter_that_quotes_a_patient_utterance_is_destroyed(tmp_path, monke
 
     _training_harness(monkeypatch, prepared, QuotingModel())
     with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation") as caught:
-        run_training(fixture.config, KEY, now=NOW)
+        run_training(fixture.config, now=NOW)
     assert utterance.lower() not in str(caught.value).lower()
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_a_patient_utterance_hidden_in_a_safetensors_header_is_caught(tmp_path, monkeypatch):
     """Weights carry a JSON header, and a header is metadata like any other.
 
@@ -1817,7 +2235,7 @@ def test_a_patient_utterance_hidden_in_a_safetensors_header_is_caught(tmp_path, 
     """
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     utterance = prepared.selected_pairs[0].target_text
 
     class MetadataModel:
@@ -1832,11 +2250,12 @@ def test_a_patient_utterance_hidden_in_a_safetensors_header_is_caught(tmp_path, 
 
     _training_harness(monkeypatch, prepared, MetadataModel())
     with pytest.raises(TrainingRuntimeError, match="artifact_privacy_violation") as caught:
-        run_training(fixture.config, KEY, now=NOW)
+        run_training(fixture.config, now=NOW)
     assert utterance.lower() not in str(caught.value).lower()
     _assert_nothing_was_written(fixture)
 
 
+@requires_cryptography
 def test_a_short_utterance_is_deliberately_not_screened(tmp_path, monkeypatch):
     """Pins the documented tradeoff, so it stays a decision rather than an accident.
 
@@ -1852,7 +2271,7 @@ def test_a_short_utterance_is_deliberately_not_screened(tmp_path, monkeypatch):
     for index, spec in enumerate(specs):
         spec["phrase"] = f"go {index % 10}"
     fixture = _fixture(tmp_path, specs=specs)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     assert runtime._screened_phrases(prepared) == frozenset()
 
     class ShortQuoteModel:
@@ -1861,7 +2280,7 @@ def test_a_short_utterance_is_deliberately_not_screened(tmp_path, monkeypatch):
             (destination / "README.md").write_text("# Adapter\n\nvocabulary token: go 3\n")
 
     _training_harness(monkeypatch, prepared, ShortQuoteModel())
-    manifest_path = run_training(fixture.config, KEY, now=NOW)
+    manifest_path = run_training(fixture.config, now=NOW)
     assert manifest_path.is_file()
     assert "go 3" in (fixture.output / "adapter" / "README.md").read_text()
 
@@ -1871,6 +2290,7 @@ def test_a_short_utterance_is_deliberately_not_screened(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------------------
 
 
+@requires_cryptography
 def test_the_base_model_snapshot_is_not_copied_into_shared_system_temp(tmp_path, monkeypatch):
     """A multi-gigabyte checkpoint copy in /tmp outlives the process that made it.
 
@@ -1881,7 +2301,7 @@ def test_the_base_model_snapshot_is_not_copied_into_shared_system_temp(tmp_path,
     """
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture = _fixture(tmp_path)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
 
     recorded: dict[str, object] = {}
     real_mkdtemp = runtime.tempfile.mkdtemp

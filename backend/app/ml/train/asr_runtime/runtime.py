@@ -4,14 +4,20 @@ This module is intentionally isolated from the API process.  Importing it never 
 PyTorch, Transformers, PEFT, or patient media.  A real training run is reachable only after
 all of these gates pass:
 
-* a cryptographically verified, time-bounded governance receipt explicitly authorises the
-  single-patient CTC-LoRA purpose;
+* a time-bounded governance receipt, signed with Ed25519 by a key whose public half is
+  pinned in this package, explicitly authorises the single-patient CTC-LoRA purpose;
 * the receipt is bound to the exact archive, patient UUID, language, and local base-model
   tree by SHA-256;
 * the existing non-extracting Awaaz archive verifier accepts every member;
 * duplicate-audio groups and exact normalised phrases form disjoint train/validation/test
   components; and
 * the local-only ML runtime and a Wav2Vec2 CTC checkpoint are present.
+
+The approval boundary is asymmetric on purpose.  This module can verify a receipt and
+cannot produce one: it holds no private key, ships no signing helper, and reads its trust
+root only from the tracked ``governance_public_keys.json`` beside this file -- never from an
+environment variable, a command-line argument, or any other operator-supplied channel.  A
+trust root the training operator can nominate is not an approval boundary at all.
 
 The synthetic smoke command exercises deterministic splitting and private manifest writing.
 It deliberately creates no model and reports no metric.  The real trainer performs an
@@ -61,9 +67,24 @@ MMS_LANGUAGE_CODES = {"en": "eng", "hi": "hin", "pa": "pan"}
 DEFAULT_TARGET_MODULES = ("q_proj", "v_proj")
 MANIFEST_NAME = "manifest.json"
 MAX_RECEIPT_BYTES = 256_000
-MAX_KEY_BYTES = 4_096
 MAX_RECEIPT_VALIDITY = timedelta(hours=24)
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+# Governance trust root.
+#
+# Receipts are signed offline with Ed25519 by the clinical approver.  Only the public halves
+# live here, in a file tracked in the repository and located by this MODULE CONSTANT.  The
+# constant is the whole point: while the fingerprint came from an environment variable and
+# the key itself from a `--receipt-key-file` path, the runtime compared the operator's own
+# key against the operator's own declaration of what that key should be, which always agrees
+# for whoever controls both.  Anyone able to change the pinned file is already able to change
+# this module, so the trust root is now exactly as strong as code review of the repository.
+GOVERNANCE_PUBLIC_KEYS_PATH = Path(__file__).resolve().with_name("governance_public_keys.json")
+GOVERNANCE_KEYS_SCHEMA_VERSION = 1
+SIGNATURE_ALGORITHM = "Ed25519"
+MAX_GOVERNANCE_KEYS_BYTES = 64_000
+GOVERNANCE_KEY_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+ED25519_PUBLIC_KEY_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+ED25519_SIGNATURE_PATTERN = re.compile(r"^[0-9a-f]{128}$")
 TARGET_FRACTIONS = {"train": 0.70, "validation": 0.15, "test": 0.15}
 SPLIT_NAMES = tuple(TARGET_FRACTIONS)
 HARD_MINIMUM_PAIRS = 50
@@ -94,6 +115,9 @@ PINNED_DEPENDENCY_VERSIONS = {
     "peft": "0.12.0",
     "accelerate": "0.34.2",
     "safetensors": "0.4.5",
+    # Ed25519 receipt verification.  Imported lazily inside `_verify_ed25519_signature`, so
+    # a host without it fails closed on `signature_runtime_missing` rather than importing.
+    "cryptography": "43.0.1",
 }
 
 
@@ -126,8 +150,6 @@ class RuntimeConfig:
     receipt_path: Path = field(repr=False)
     base_model_path: Path = field(repr=False)
     output_dir: Path = field(repr=False)
-    governance_key_id: str = ""
-    governance_key_sha256: str = ""
     language: str = "en"
     seed: int = 42
     epochs: int = 1
@@ -198,6 +220,18 @@ class VerifiedGovernanceReceipt:
     language: str
     key_id: str
     patient_id: uuid.UUID = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class PinnedGovernanceKey:
+    """One Ed25519 public key committed to this repository as a governance trust root."""
+
+    key_id: str
+    algorithm: str
+    public_key: bytes = field(repr=False)
+    not_before: datetime
+    not_after: datetime
+    holder: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,8 +324,11 @@ def _canonical_receipt_bytes(receipt: dict[str, Any]) -> bytes:
     unsigned = dict(receipt)
     signature = unsigned.get("signature")
     if isinstance(signature, dict):
+        # Everything except the signature value itself is covered, so the algorithm and the
+        # key identifier are signed: an attacker cannot downgrade the algorithm or re-point
+        # a receipt at a different pinned key without invalidating the signature.
         unsigned["signature"] = {
-            key: value for key, value in signature.items() if key != "digest"
+            key: value for key, value in signature.items() if key != "signature"
         }
     try:
         return json.dumps(
@@ -305,18 +342,10 @@ def _canonical_receipt_bytes(receipt: dict[str, Any]) -> bytes:
         raise PreflightError("receipt_invalid", "The governance receipt is not canonical JSON.") from None
 
 
-def governance_receipt_signature(receipt: dict[str, Any], key: bytes) -> str:
-    """Return the HMAC digest used by the external governance receipt issuer.
-
-    This helper makes the canonicalisation contract testable.  Possession and protection of
-    the signing key remain an operational governance responsibility; the trainer never
-    creates or amends receipts.
-    """
-    if not isinstance(key, bytes) or not 32 <= len(key) <= MAX_KEY_BYTES:
-        raise PreflightError(
-            "receipt_key_invalid", "The governance verification key has an invalid length."
-        )
-    return hmac.new(key, _canonical_receipt_bytes(receipt), hashlib.sha256).hexdigest()
+# There is deliberately no signing helper in this module.  Verification and minting used to
+# share one HMAC key, so anything that could check an approval could also write one.  The
+# private half of the Ed25519 key now lives offline with the clinical approver and never
+# touches a training host; see docs/GOVERNANCE_KEYS.md.
 
 
 def _parse_aware_timestamp(value: Any, *, field_name: str) -> datetime:
@@ -360,9 +389,160 @@ def _read_json_object(path: Path, *, maximum_bytes: int, error_code: str) -> tup
     return parsed, raw
 
 
+def _parse_pinned_governance_key(entry: Any) -> PinnedGovernanceKey:
+    """Parse one entry of the tracked trust-root file, refusing anything not exactly right.
+
+    A malformed entry is a refusal for the whole file rather than a skipped row: silently
+    ignoring an entry someone believed was live is how a rotated key stops being enforced.
+    """
+    invalid = PreflightError(
+        "governance_trust_root_invalid", "A pinned governance key entry is not usable."
+    )
+    if not isinstance(entry, dict):
+        raise invalid
+    required = ("key_id", "algorithm", "public_key", "not_before", "not_after", "holder")
+    if not all(isinstance(entry.get(name), str) and entry[name].strip() for name in required):
+        raise invalid
+    if entry["algorithm"] != SIGNATURE_ALGORITHM:
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "A pinned governance key declares an unsupported signature algorithm.",
+        )
+    if GOVERNANCE_KEY_ID_PATTERN.fullmatch(entry["key_id"]) is None:
+        raise invalid
+    if ED25519_PUBLIC_KEY_PATTERN.fullmatch(entry["public_key"]) is None:
+        raise invalid
+    try:
+        not_before = _parse_aware_timestamp(entry["not_before"], field_name="key.not_before")
+        not_after = _parse_aware_timestamp(entry["not_after"], field_name="key.not_after")
+    except PreflightError:
+        raise invalid from None
+    if not_after <= not_before:
+        raise invalid
+    return PinnedGovernanceKey(
+        key_id=entry["key_id"],
+        algorithm=SIGNATURE_ALGORITHM,
+        public_key=bytes.fromhex(entry["public_key"]),
+        not_before=not_before,
+        not_after=not_after,
+        holder=entry["holder"],
+    )
+
+
+def _load_pinned_governance_keys() -> dict[str, PinnedGovernanceKey]:
+    """Read the trust root from the tracked file named by a module constant.
+
+    No argument, no environment variable, and no command-line path reaches this function.
+    An empty key list is the shipped state and is a refusal, not a permissive default.
+    """
+    path = Path(GOVERNANCE_PUBLIC_KEYS_PATH)
+    try:
+        metadata = path.lstat()
+    except OSError:
+        raise PreflightError(
+            "governance_trust_root_missing",
+            "The pinned governance public keys are not present in this build.",
+        ) from None
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "The pinned governance public keys must be a regular tracked file.",
+        )
+    # Public keys are not secret, but they are integrity-critical: an account that can
+    # rewrite this file can nominate its own approver.
+    if stat.S_IMODE(metadata.st_mode) & 0o022:
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "The pinned governance public keys are writable outside the owner.",
+        )
+    document, _raw = _read_json_object(
+        path,
+        maximum_bytes=MAX_GOVERNANCE_KEYS_BYTES,
+        error_code="governance_trust_root_invalid",
+    )
+    if document.get("schema_version") != GOVERNANCE_KEYS_SCHEMA_VERSION:
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "The pinned governance public key document schema is unsupported.",
+        )
+    entries = document.get("keys")
+    if not isinstance(entries, list):
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "The pinned governance public key document has no key list.",
+        )
+    keys: dict[str, PinnedGovernanceKey] = {}
+    for entry in entries:
+        pinned = _parse_pinned_governance_key(entry)
+        if pinned.key_id in keys:
+            raise PreflightError(
+                "governance_trust_root_invalid",
+                "A pinned governance key identifier is declared more than once.",
+            )
+        keys[pinned.key_id] = pinned
+    if not keys:
+        raise PreflightError(
+            "governance_trust_root_missing",
+            "No governance approval key is pinned in this build.",
+        )
+    return keys
+
+
+def _resolve_pinned_governance_key(key_id: str, *, now: datetime) -> PinnedGovernanceKey:
+    pinned = _load_pinned_governance_keys().get(key_id)
+    if pinned is None:
+        raise PreflightError(
+            "governance_key_not_pinned",
+            "The governance receipt names a key this build does not trust.",
+        )
+    if now < pinned.not_before or now > pinned.not_after:
+        raise PreflightError(
+            "governance_key_not_valid_now",
+            "The pinned governance key is outside its declared validity window.",
+        )
+    return pinned
+
+
+def _verify_ed25519_signature(
+    public_key: bytes, signature: bytes, message: bytes
+) -> None:
+    """Verify detached Ed25519, importing `cryptography` only at the moment of use.
+
+    The import is lazy for the same reason the ML stack's is: importing this module must
+    stay free of optional dependencies.  Its absence is a refusal code, never a traceback.
+    """
+    try:
+        ed25519 = importlib.import_module(
+            "cryptography.hazmat.primitives.asymmetric.ed25519"
+        )
+        cryptography_exceptions = importlib.import_module("cryptography.exceptions")
+    except Exception:
+        raise PreflightError(
+            "signature_runtime_missing",
+            "The Ed25519 verification library required to check approvals is unavailable.",
+        ) from None
+    try:
+        verifier = ed25519.Ed25519PublicKey.from_public_bytes(public_key)
+    except Exception:
+        raise PreflightError(
+            "governance_trust_root_invalid",
+            "A pinned governance public key could not be loaded.",
+        ) from None
+    try:
+        verifier.verify(signature, message)
+    except cryptography_exceptions.InvalidSignature:
+        raise PreflightError(
+            "receipt_signature_invalid", "The governance receipt signature did not verify."
+        ) from None
+    except Exception:
+        raise PreflightError(
+            "receipt_signature_invalid",
+            "The governance receipt signature could not be verified.",
+        ) from None
+
+
 def verify_governance_receipt(
     path: Path,
-    key: bytes,
     *,
     expected_archive_sha256: str | None,
     expected_base_model_sha256: str | None,
@@ -370,30 +550,39 @@ def verify_governance_receipt(
     expected_language: str,
     now: datetime | None = None,
 ) -> VerifiedGovernanceReceipt:
-    """Verify authenticity, expiry, scope, and exact input/subject binding."""
+    """Verify authenticity, expiry, scope, and exact input/subject binding.
+
+    Authenticity is an Ed25519 signature by a key whose public half is pinned in this
+    package.  Nothing the caller supplies can introduce a key, so a valid signature is
+    evidence that the named clinical approver signed, not merely that somebody signed.
+    """
     receipt, raw = _read_json_object(
         Path(path), maximum_bytes=MAX_RECEIPT_BYTES, error_code="receipt_invalid"
     )
-    if not isinstance(key, bytes) or not 32 <= len(key) <= MAX_KEY_BYTES:
-        raise PreflightError(
-            "receipt_key_invalid", "The governance verification key has an invalid length."
-        )
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
 
     signature = receipt.get("signature")
     if not isinstance(signature, dict):
         raise PreflightError("receipt_signature_invalid", "The governance receipt has no valid signature.")
+    key_id = signature.get("key_id")
     if (
-        signature.get("algorithm") != "HMAC-SHA256"
-        or not isinstance(signature.get("key_id"), str)
-        or not signature["key_id"].strip()
+        signature.get("algorithm") != SIGNATURE_ALGORITHM
+        or not isinstance(key_id, str)
+        or GOVERNANCE_KEY_ID_PATTERN.fullmatch(key_id) is None
     ):
         raise PreflightError("receipt_signature_invalid", "The governance receipt signature is unsupported.")
-    supplied_digest = signature.get("digest")
-    if not isinstance(supplied_digest, str) or SHA256_PATTERN.fullmatch(supplied_digest) is None:
+    supplied_signature = signature.get("signature")
+    if (
+        not isinstance(supplied_signature, str)
+        or ED25519_SIGNATURE_PATTERN.fullmatch(supplied_signature) is None
+    ):
         raise PreflightError("receipt_signature_invalid", "The governance receipt signature is malformed.")
-    expected_digest = governance_receipt_signature(receipt, key)
-    if not hmac.compare_digest(supplied_digest, expected_digest):
-        raise PreflightError("receipt_signature_invalid", "The governance receipt signature did not verify.")
+    pinned = _resolve_pinned_governance_key(key_id, now=current)
+    _verify_ed25519_signature(
+        pinned.public_key,
+        bytes.fromhex(supplied_signature),
+        _canonical_receipt_bytes(receipt),
+    )
 
     if receipt.get("schema_version") != RECEIPT_SCHEMA_VERSION or receipt.get("receipt_type") != RECEIPT_TYPE:
         raise PreflightError("receipt_schema_unsupported", "The governance receipt schema is unsupported.")
@@ -466,7 +655,6 @@ def verify_governance_receipt(
     ):
         raise PreflightError("governance_not_approved", "The governance approval references are incomplete.")
 
-    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     approved_at = _parse_aware_timestamp(receipt.get("approved_at"), field_name="approved_at")
     expires_at = _parse_aware_timestamp(receipt.get("expires_at"), field_name="expires_at")
     consent_at = _parse_aware_timestamp(consent.get("recorded_at"), field_name="consent.recorded_at")
@@ -501,7 +689,7 @@ def verify_governance_receipt(
         archive_sha256=archive_digest,
         base_model_sha256=model_digest,
         language=expected_language,
-        key_id=signature["key_id"],
+        key_id=key_id,
         patient_id=receipt_patient,
     )
 
@@ -715,14 +903,9 @@ def _validate_config(config: RuntimeConfig) -> None:
         )
     if config.language not in SUPPORTED_LANGUAGES:
         raise PreflightError("config_invalid", "The selected language is not supported.")
-    if (
-        not config.governance_key_id.strip()
-        or SHA256_PATTERN.fullmatch(config.governance_key_sha256) is None
-    ):
-        raise PreflightError(
-            "governance_trust_root_missing",
-            "A pinned governance key identifier and SHA-256 fingerprint are required.",
-        )
+    # Load the tracked trust root before any receipt or patient media is opened.  A build
+    # with no pinned approval key can never authorise training, and must say so first.
+    _load_pinned_governance_keys()
     if sys.version_info[:2] != (3, 11):
         raise PreflightError("python_runtime_unsupported", "Real ASR training requires Python 3.11.")
     integer_values = (
@@ -1068,34 +1251,21 @@ def _check_dependencies() -> DependencyReport:
 
 def _preflight_real_training_impl(
     config: RuntimeConfig,
-    key: bytes,
     *,
     now: datetime | None = None,
 ) -> PreparedRun:
     """Perform every non-ML gate before any heavy optional dependency is imported."""
     _validate_config(config)
-    if not hmac.compare_digest(
-        hashlib.sha256(key).hexdigest(), config.governance_key_sha256
-    ):
-        raise PreflightError(
-            "governance_trust_root_mismatch",
-            "The governance verification key does not match the pinned trust root.",
-        )
-    # Authenticate and authorise the receipt before opening or hashing patient media.
+    # Authenticate and authorise the receipt before opening or hashing patient media.  The
+    # key that authenticates it is resolved from the tracked trust root, not from `config`.
     receipt = verify_governance_receipt(
         config.receipt_path,
-        key,
         expected_archive_sha256=None,
         expected_base_model_sha256=None,
         expected_patient_id=None,
         expected_language=config.language,
         now=now,
     )
-    if not hmac.compare_digest(receipt.key_id, config.governance_key_id):
-        raise PreflightError(
-            "governance_trust_root_mismatch",
-            "The receipt key identifier does not match the pinned trust root.",
-        )
     archive, archive_sha256 = _stable_verify_archive(
         config.archive_path,
         expected_sha256=receipt.archive_sha256,
@@ -1167,13 +1337,12 @@ def _preflight_real_training_impl(
 
 def preflight_real_training(
     config: RuntimeConfig,
-    key: bytes,
     *,
     now: datetime | None = None,
 ) -> PreparedRun:
     """Run preflight while ensuring unexpected failures cannot disclose private paths."""
     try:
-        return _preflight_real_training_impl(config, key, now=now)
+        return _preflight_real_training_impl(config, now=now)
     except PrivacySafeRuntimeError:
         raise
     except Exception:
@@ -1186,8 +1355,6 @@ def _private_configuration_payload(config: RuntimeConfig) -> dict[str, Any]:
     """Return reproducibility fields that contain no source or destination paths."""
     return {
         "language": config.language,
-        "governance_key_id": config.governance_key_id,
-        "governance_key_sha256": config.governance_key_sha256,
         "seed": config.seed,
         "epochs": config.epochs,
         "batch_size": config.batch_size,
@@ -1244,6 +1411,12 @@ def _preflight_manifest(prepared: PreparedRun) -> dict[str, Any]:
         "claims": _claims(model_trained=False),
         "inputs": {
             "governance_receipt_verified": True,
+            # Recorded from the verified receipt, not from operator configuration.  The
+            # identifier is a public, committed label; the key itself is asymmetric and its
+            # private half never existed on this host.
+            "governance_signature_algorithm": SIGNATURE_ALGORITHM,
+            "governance_key_id": prepared.receipt.key_id,
+            "governance_trust_root": "pinned_in_tracked_package_file",
             "archive_strictly_verified": True,
             "archive_sha256": prepared.receipt.archive_sha256,
             "governance_receipt_sha256": prepared.receipt.receipt_sha256,
@@ -1506,19 +1679,17 @@ def run_synthetic_smoke(output_dir: Path, *, seed: int = 42) -> Path:
 
 def run_preflight(
     config: RuntimeConfig,
-    key: bytes,
     *,
     now: datetime | None = None,
 ) -> Path:
     """Verify all real-run gates and publish a no-training manifest."""
-    prepared = preflight_real_training(config, key, now=now)
-    _assert_inputs_unchanged(prepared, key, now=now)
+    prepared = preflight_real_training(config, now=now)
+    _assert_inputs_unchanged(prepared, now=now)
     return _write_manifest_directory(config.output_dir, _preflight_manifest(prepared))
 
 
 def _assert_inputs_unchanged(
     prepared: PreparedRun,
-    key: bytes,
     *,
     now: datetime | None = None,
 ) -> None:
@@ -1538,7 +1709,6 @@ def _assert_inputs_unchanged(
         raise PreflightError("input_changed", "An approved input changed after preflight.")
     verify_governance_receipt(
         prepared.config.receipt_path,
-        key,
         expected_archive_sha256=archive_hash,
         expected_base_model_sha256=model_hash,
         expected_patient_id=prepared.archive.patient_id,
@@ -2146,13 +2316,12 @@ def _training_manifest(
 
 def run_training(
     config: RuntimeConfig,
-    key: bytes,
     *,
     now: datetime | None = None,
 ) -> Path:
     """Run actual local CTC-LoRA optimisation after a fresh, complete preflight."""
-    prepared = preflight_real_training(config, key, now=now)
-    _assert_inputs_unchanged(prepared, key, now=now)
+    prepared = preflight_real_training(config, now=now)
+    _assert_inputs_unchanged(prepared, now=now)
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     numpy, torch, transformers, peft = _load_ml_runtime()
     _seed_runtime(config.seed, numpy, torch)
@@ -2160,7 +2329,7 @@ def run_training(
     processor, base_model, private_model_snapshot = _load_local_processor_and_model(
         prepared, transformers
     )
-    _assert_inputs_unchanged(prepared, key, now=now)
+    _assert_inputs_unchanged(prepared, now=now)
     model, trainable_parameters = _apply_lora(base_model, config, peft)
     staging = _create_staging_directory(config.output_dir)
     published = False
@@ -2206,39 +2375,14 @@ def run_training(
             shutil.rmtree(staging, ignore_errors=True)
 
 
-def _read_verification_key(path: Path) -> bytes:
-    candidate = Path(path)
-    try:
-        metadata = candidate.lstat()
-        if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
-            raise PreflightError("receipt_key_invalid", "The governance key must be a regular file.")
-        if stat.S_IMODE(metadata.st_mode) & 0o077:
-            raise PreflightError(
-                "receipt_key_permissions",
-                "The governance key file must not be accessible by group or others.",
-            )
-        if not 32 <= metadata.st_size <= MAX_KEY_BYTES:
-            raise PreflightError(
-                "receipt_key_invalid", "The governance verification key has an invalid length."
-            )
-        return candidate.read_bytes()
-    except PreflightError:
-        raise
-    except OSError:
-        raise PreflightError(
-            "receipt_key_missing", "The governance verification key cannot be read."
-        ) from None
+# There is deliberately no `--receipt-key-file` and no verification-key reader.  The key
+# that authenticates an approval is resolved from `GOVERNANCE_PUBLIC_KEYS_PATH`; a key the
+# operator can point at on the command line is a key the operator can generate.
 
 
 def _add_real_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
-    parser.add_argument(
-        "--receipt-key-file",
-        type=Path,
-        required=True,
-        help="Dedicated governance HMAC verification key file; never pass key material directly.",
-    )
     parser.add_argument("--base-model", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--language", choices=sorted(SUPPORTED_LANGUAGES), default="en")
@@ -2250,8 +2394,6 @@ def _config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         receipt_path=args.receipt,
         base_model_path=args.base_model,
         output_dir=args.output_dir,
-        governance_key_id=os.environ.get("AWAAZ_GOVERNANCE_KEY_ID", ""),
-        governance_key_sha256=os.environ.get("AWAAZ_GOVERNANCE_KEY_SHA256", ""),
         language=args.language,
         epochs=getattr(args, "epochs", 1),
         batch_size=getattr(args, "batch_size", 2),
@@ -2267,8 +2409,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m app.ml.train.asr_runtime",
         description="Fail-closed local MMS/Wav2Vec2-CTC LoRA training runtime.",
         epilog=(
-            "Real commands also require AWAAZ_GOVERNANCE_KEY_ID and the pinned "
-            "AWAAZ_GOVERNANCE_KEY_SHA256 fingerprint in the trusted process environment."
+            "Real commands additionally require a governance receipt signed with the "
+            "Ed25519 key pinned in this package. No environment variable or command-line "
+            "argument can nominate, add, or override that key."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2307,13 +2450,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "metrics_reported=false"
             )
             return 0
-        key = _read_verification_key(args.receipt_key_file)
         config = _config_from_args(args)
         if args.command == "preflight":
-            run_preflight(config, key)
+            run_preflight(config)
             print("preflight passed; model_trained=false; evaluation_run=false; metrics_reported=false")
             return 0
-        run_training(config, key)
+        run_training(config)
         print(
             "LoRA optimisation complete; evaluation_run=false; clinical_metrics=false; "
             "deployment_ready=false"

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -24,7 +26,6 @@ from app.ml.train.asr_runtime import (
     TrainingRuntimeError,
     build_group_phrase_disjoint_split,
     build_phrase_disjoint_split,
-    governance_receipt_signature,
     preflight_real_training,
     run_preflight,
     run_synthetic_smoke,
@@ -37,9 +38,76 @@ from app.ml.train.asr_runtime import (
 
 NOW = datetime(2026, 8, 31, 6, 0, tzinfo=timezone.utc)
 PATIENT_ID = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-KEY = b"dedicated-awaaz-governance-key!" * 2
 KEY_ID = "awaaz-governance-test"
-KEY_SHA256 = hashlib.sha256(KEY).hexdigest()
+
+CRYPTOGRAPHY_INSTALLED = importlib.util.find_spec("cryptography") is not None
+requires_cryptography = pytest.mark.skipif(
+    not CRYPTOGRAPHY_INSTALLED,
+    reason="cryptography is not installed here; Ed25519 receipts cannot be signed or checked",
+)
+# Stand-in used only where no signature is ever produced or checked, so that key-resolution
+# and refusal paths stay testable in an environment that has no Ed25519 implementation.
+UNVERIFIABLE_PUBLIC_KEY = "11" * 32
+
+
+@functools.lru_cache(maxsize=1)
+def _test_signing_key():
+    """TEST-ONLY governance signing key.
+
+    The shipped package cannot sign: `governance_receipt_signature` was removed with the
+    HMAC scheme, because a verifier that can also mint is not an approval boundary. Tests
+    still need authentic receipts, so they generate a throwaway Ed25519 private key in
+    memory, for this process only. It is never written to disk and never committed; the
+    real private key belongs to the clinical approver and lives offline.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    private_key = ed25519.Ed25519PrivateKey.generate()
+    from cryptography.hazmat.primitives import serialization
+
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return private_key, public_bytes.hex()
+
+
+def _test_public_key() -> str:
+    return _test_signing_key()[1] if CRYPTOGRAPHY_INSTALLED else UNVERIFIABLE_PUBLIC_KEY
+
+
+def _pinned_key_entry(**overrides) -> dict:
+    """The shape the tracked trust-root file declares; any field may be overridden."""
+    entry = {
+        "key_id": KEY_ID,
+        "algorithm": "Ed25519",
+        "public_key": _test_public_key(),
+        "not_before": "2020-01-01T00:00:00+00:00",
+        "not_after": "2099-01-01T00:00:00+00:00",
+        "holder": "Test clinical approver",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _write_pinned_keys(path: Path, entries: list[dict]) -> Path:
+    path.write_text(json.dumps({"schema_version": 1, "keys": entries}, indent=2) + "\n")
+    os.chmod(path, 0o644)
+    return path
+
+
+@pytest.fixture(autouse=True)
+def pinned_governance_trust_root(tmp_path_factory, monkeypatch) -> Path:
+    """Point the module-constant trust root at a temporary file holding the test key.
+
+    The shipped `governance_public_keys.json` is empty on purpose, so without this every
+    test would stop at `governance_trust_root_missing`. Tests that want that refusal
+    overwrite this file themselves.
+    """
+    path = tmp_path_factory.mktemp("trust-root") / "governance_public_keys.json"
+    _write_pinned_keys(path, [_pinned_key_entry()])
+    monkeypatch.setattr(runtime, "GOVERNANCE_PUBLIC_KEYS_PATH", path)
+    return path
 
 
 @dataclass(frozen=True)
@@ -170,13 +238,15 @@ def _receipt_body(
     }
 
 
-def _sign_receipt(body: dict, path: Path, *, key: bytes = KEY) -> dict:
+def _sign_receipt(body: dict, path: Path, *, key_id: str = KEY_ID, private_key=None) -> dict:
+    """TEST-ONLY receipt minting. Nothing in `app/` can do this; see `_test_signing_key`."""
+    signer = private_key if private_key is not None else _test_signing_key()[0]
     receipt = copy.deepcopy(body)
-    receipt["signature"] = {
-        "algorithm": "HMAC-SHA256",
-        "key_id": KEY_ID,
-    }
-    receipt["signature"]["digest"] = governance_receipt_signature(receipt, key)
+    receipt.pop("signature", None)
+    receipt["signature"] = {"algorithm": "Ed25519", "key_id": key_id}
+    receipt["signature"]["signature"] = signer.sign(
+        runtime._canonical_receipt_bytes(receipt)
+    ).hex()
     path.write_text(json.dumps(receipt, indent=2) + "\n")
     os.chmod(path, 0o600)
     return receipt
@@ -195,8 +265,6 @@ def _fixture(tmp_path: Path, **archive_options):
         receipt_path=receipt_path,
         base_model_path=base_model_path,
         output_dir=output_dir,
-        governance_key_id=KEY_ID,
-        governance_key_sha256=KEY_SHA256,
     )
     return SimpleNamespace(
         archive=archive_path,
@@ -219,6 +287,7 @@ def _fake_dependencies() -> runtime.DependencyReport:
             "peft": "0.12.0",
             "accelerate": "0.34.2",
             "safetensors": "0.4.5",
+            "cryptography": "43.0.1",
         }
     )
 
@@ -350,6 +419,7 @@ def test_group_phrase_split_uses_transitive_components_and_is_order_independent(
     assert any({0, 1}.issubset(set(getattr(phrase_plan, name))) for name in ("train", "validation", "test"))
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "mutation, expected_code",
     [
@@ -384,7 +454,6 @@ def test_governance_receipt_fails_closed_on_mutated_claims(
     with pytest.raises(PreflightError, match=expected_code):
         verify_governance_receipt(
             fixture.receipt_path,
-            KEY,
             expected_archive_sha256=sha256_file(fixture.archive),
             expected_base_model_sha256=sha256_directory(fixture.base),
             expected_patient_id=PATIENT_ID,
@@ -393,14 +462,18 @@ def test_governance_receipt_fails_closed_on_mutated_claims(
         )
 
 
-def test_receipt_rejects_bad_signature_duplicate_keys_and_short_key(tmp_path):
+@requires_cryptography
+def test_receipt_rejects_an_unpinned_key_a_bad_signature_and_duplicate_keys(tmp_path):
     fixture = _fixture(tmp_path)
+    # The key identifier is covered by the signature, so editing it in place both breaks
+    # the signature and names a key the trust root does not carry. The unpinned-key refusal
+    # is reached first, and is the stronger statement: this build would not trust that key
+    # even if the signature under it were perfect.
     fixture.receipt["signature"]["key_id"] = "unauthenticated-key-id-change"
     fixture.receipt_path.write_text(json.dumps(fixture.receipt))
-    with pytest.raises(PreflightError, match="receipt_signature_invalid"):
+    with pytest.raises(PreflightError, match="governance_key_not_pinned"):
         verify_governance_receipt(
             fixture.receipt_path,
-            KEY,
             expected_archive_sha256=sha256_file(fixture.archive),
             expected_base_model_sha256=sha256_directory(fixture.base),
             expected_patient_id=PATIENT_ID,
@@ -411,12 +484,11 @@ def test_receipt_rejects_bad_signature_duplicate_keys_and_short_key(tmp_path):
     fixture.receipt = _sign_receipt(
         _receipt_body(fixture.archive, fixture.base), fixture.receipt_path
     )
-    fixture.receipt["signature"]["digest"] = "0" * 64
+    fixture.receipt["signature"]["signature"] = "0" * 128
     fixture.receipt_path.write_text(json.dumps(fixture.receipt))
     with pytest.raises(PreflightError, match="receipt_signature_invalid"):
         verify_governance_receipt(
             fixture.receipt_path,
-            KEY,
             expected_archive_sha256=sha256_file(fixture.archive),
             expected_base_model_sha256=sha256_directory(fixture.base),
             expected_patient_id=PATIENT_ID,
@@ -429,7 +501,6 @@ def test_receipt_rejects_bad_signature_duplicate_keys_and_short_key(tmp_path):
     with pytest.raises(PreflightError, match="receipt_invalid"):
         verify_governance_receipt(
             fixture.receipt_path,
-            KEY,
             expected_archive_sha256=sha256_file(fixture.archive),
             expected_base_model_sha256=sha256_directory(fixture.base),
             expected_patient_id=PATIENT_ID,
@@ -437,16 +508,14 @@ def test_receipt_rejects_bad_signature_duplicate_keys_and_short_key(tmp_path):
             now=NOW,
         )
 
-    with pytest.raises(PreflightError, match="receipt_key_invalid"):
-        governance_receipt_signature({}, b"short")
 
-
+@requires_cryptography
 def test_preflight_verifies_receipt_pcm_split_and_dependencies_without_private_output(
     tmp_path, monkeypatch,
 ):
     fixture = _fixture(tmp_path)
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
     representation = repr(prepared)
     assert str(PATIENT_ID) not in representation
     assert str(fixture.archive) not in representation
@@ -455,7 +524,7 @@ def test_preflight_verifies_receipt_pcm_split_and_dependencies_without_private_o
     assert prepared.component_count == 10
     assert prepared.split.as_manifest()["invariants"]["speaker_disjoint"] is False
 
-    manifest_path = run_preflight(fixture.config, KEY, now=NOW)
+    manifest_path = run_preflight(fixture.config, now=NOW)
     payload = json.loads(manifest_path.read_text())
     encoded = json.dumps(payload)
     assert payload["status"] == "preflight_passed_training_not_started"
@@ -469,6 +538,7 @@ def test_preflight_verifies_receipt_pcm_split_and_dependencies_without_private_o
     assert all(digest not in encoded for digest in fixture.audio_hashes)
 
 
+@requires_cryptography
 @pytest.mark.parametrize(
     "options, expected_code",
     [
@@ -491,16 +561,17 @@ def test_real_preflight_rejects_unusable_archive_before_heavy_import(
 
     monkeypatch.setattr(runtime, "_check_dependencies", should_not_import)
     with pytest.raises(PreflightError, match=expected_code):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     assert imported is False
     assert not fixture.output.exists()
 
 
+@requires_cryptography
 def test_bad_receipt_blocks_before_archive_verifier_and_redacts_private_values(
     tmp_path, monkeypatch, capsys, caplog,
 ):
     fixture = _fixture(tmp_path)
-    fixture.receipt["signature"]["digest"] = "0" * 64
+    fixture.receipt["signature"]["signature"] = "0" * 128
     fixture.receipt_path.write_text(json.dumps(fixture.receipt))
     archive_verified = False
     archive_hashed = False
@@ -521,7 +592,7 @@ def test_bad_receipt_blocks_before_archive_verifier_and_redacts_private_values(
     monkeypatch.setattr(runtime, "verify_awaaz_training_archive", forbidden_archive_verify)
     monkeypatch.setattr(runtime, "sha256_file", guarded_hash)
     with pytest.raises(PreflightError) as caught:
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
     assert archive_verified is False
     assert archive_hashed is False
     captured = capsys.readouterr()
@@ -530,26 +601,28 @@ def test_bad_receipt_blocks_before_archive_verifier_and_redacts_private_values(
     assert str(fixture.archive) not in public
     assert fixture.phrases[0] not in public
     assert fixture.audio_hashes[0] not in public
-    assert KEY.hex() not in public
     assert not fixture.output.exists()
 
 
-def test_hard_corpus_floors_and_pinned_trust_root_cannot_be_weakened(tmp_path):
+@requires_cryptography
+def test_hard_corpus_floors_and_pinned_trust_root_cannot_be_weakened(
+    tmp_path, pinned_governance_trust_root,
+):
     fixture = _fixture(tmp_path)
     with pytest.raises(PreflightError, match="config_invalid"):
         preflight_real_training(
             replace(fixture.config, minimum_pairs=1, minimum_components=1),
-            KEY,
             now=NOW,
         )
-    with pytest.raises(PreflightError, match="governance_trust_root_mismatch"):
-        preflight_real_training(
-            replace(fixture.config, governance_key_sha256="0" * 64),
-            KEY,
-            now=NOW,
-        )
+    # `RuntimeConfig` carries no trust-root field to weaken any more: the key identifier
+    # and fingerprint used to be read from the operator's own environment. Emptying the
+    # tracked file is now the only way to reach the refusal, and it is a code change.
+    _write_pinned_keys(pinned_governance_trust_root, [])
+    with pytest.raises(PreflightError, match="governance_trust_root_missing"):
+        preflight_real_training(fixture.config, now=NOW)
 
 
+@requires_cryptography
 def test_checkpoint_index_cannot_escape_hash_tree_or_use_pickle_weights(tmp_path):
     fixture = _fixture(tmp_path)
     outside = tmp_path / "outside.safetensors"
@@ -561,7 +634,7 @@ def test_checkpoint_index_cannot_escape_hash_tree_or_use_pickle_weights(tmp_path
         _receipt_body(fixture.archive, fixture.base), fixture.receipt_path
     )
     with pytest.raises(PreflightError, match="base_weights_unsafe"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
 
     (fixture.base / "model.safetensors.index.json").write_text(
         json.dumps({"weight_map": {"encoder.weight": "model.bin"}})
@@ -571,7 +644,7 @@ def test_checkpoint_index_cannot_escape_hash_tree_or_use_pickle_weights(tmp_path
         _receipt_body(fixture.archive, fixture.base), fixture.receipt_path
     )
     with pytest.raises(PreflightError, match="unsafe_weight_format"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
 
 
 def test_publish_reservation_never_overwrites_a_racing_destination(tmp_path, monkeypatch):
@@ -590,23 +663,22 @@ def test_publish_reservation_never_overwrites_a_racing_destination(tmp_path, mon
     assert not list(tmp_path.glob(".asr-runtime-*"))
 
 
+@requires_cryptography
 def test_output_is_no_overwrite_not_stageable_and_not_inside_base_model(tmp_path, monkeypatch):
     fixture = _fixture(tmp_path)
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
     fixture.output.mkdir()
     with pytest.raises(PreflightError, match="output_exists"):
-        preflight_real_training(fixture.config, KEY, now=NOW)
+        preflight_real_training(fixture.config, now=NOW)
 
     nested_config = RuntimeConfig(
         archive_path=fixture.archive,
         receipt_path=fixture.receipt_path,
         base_model_path=fixture.base,
         output_dir=fixture.base / "private-adapter",
-        governance_key_id=KEY_ID,
-        governance_key_sha256=KEY_SHA256,
     )
     with pytest.raises(PreflightError, match="unsafe_output_location"):
-        preflight_real_training(nested_config, KEY, now=NOW)
+        preflight_real_training(nested_config, now=NOW)
 
     repo_output = Path(__file__).resolve().parents[1] / "app" / "unsafe-private-adapter"
     repo_config = RuntimeConfig(
@@ -614,17 +686,16 @@ def test_output_is_no_overwrite_not_stageable_and_not_inside_base_model(tmp_path
         receipt_path=fixture.receipt_path,
         base_model_path=fixture.base,
         output_dir=repo_output,
-        governance_key_id=KEY_ID,
-        governance_key_sha256=KEY_SHA256,
     )
     with pytest.raises(PreflightError, match="unsafe_output_location"):
-        preflight_real_training(repo_config, KEY, now=NOW)
+        preflight_real_training(repo_config, now=NOW)
 
 
+@requires_cryptography
 def test_training_orchestration_hashes_artifacts_and_sanitizes_paths(tmp_path, monkeypatch):
     fixture = _fixture(tmp_path)
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
 
     class FakeModel:
         def save_pretrained(self, destination, **_kwargs):
@@ -650,7 +721,7 @@ def test_training_orchestration_hashes_artifacts_and_sanitizes_paths(tmp_path, m
         lambda *_args: {"optimizer_steps": 3, "examples_seen": 30, "epochs_completed": 1},
     )
 
-    manifest_path = run_training(fixture.config, KEY, now=NOW)
+    manifest_path = run_training(fixture.config, now=NOW)
     payload = json.loads(manifest_path.read_text())
     assert payload["status"] == "trained_not_evaluated"
     assert payload["claims"]["model_trained"] is True
@@ -671,10 +742,11 @@ def test_training_orchestration_hashes_artifacts_and_sanitizes_paths(tmp_path, m
         assert stat.S_IMODE(artifact.stat().st_mode) == 0o600
 
 
+@requires_cryptography
 def test_training_save_failure_leaves_no_completed_or_partial_output(tmp_path, monkeypatch):
     fixture = _fixture(tmp_path)
     monkeypatch.setattr(runtime, "_check_dependencies", _fake_dependencies)
-    prepared = preflight_real_training(fixture.config, KEY, now=NOW)
+    prepared = preflight_real_training(fixture.config, now=NOW)
 
     class BrokenModel:
         def save_pretrained(self, destination, **_kwargs):
@@ -698,6 +770,6 @@ def test_training_save_failure_leaves_no_completed_or_partial_output(tmp_path, m
         lambda *_args: {"optimizer_steps": 1, "examples_seen": 10, "epochs_completed": 1},
     )
     with pytest.raises(TrainingRuntimeError, match="adapter_save_failed"):
-        run_training(fixture.config, KEY, now=NOW)
+        run_training(fixture.config, now=NOW)
     assert not fixture.output.exists()
     assert not list(tmp_path.glob(".asr-runtime-*"))

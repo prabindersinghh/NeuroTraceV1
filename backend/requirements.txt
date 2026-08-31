@@ -50,6 +50,14 @@ opencv-python==4.10.0.84
 mediapipe==0.10.14
 protobuf==4.25.3
 
+# ---------------------------------------------------------------- governance crypto
+# Ed25519 verification of ASR training approval receipts. This is a SAFETY gate, not part
+# of the training stack, so it belongs here rather than in requirements-train.txt: without
+# it every governance test skips, and a default `pytest` run reports green while exercising
+# none of the approval boundary. Small, pure-verification use -- no signing happens in this
+# repository at all.
+cryptography==43.0.1
+
 # ---------------------------------------------------------------- tests
 pytest==8.3.4
 pytest-asyncio==0.25.0
