@@ -67,6 +67,16 @@ import { StepTapping } from "./StepTapping";
 
 type Quality = { ok: boolean; reason?: string };
 
+/** Tasks whose step component renders its own skip control, so the runner must not add a
+ *  second one. Keyed on `task` because that is what the render below branches on. */
+const STEPS_WITH_OWN_SKIP = new Set([
+  "simple_and_choice_rt",     // StepAttention
+  "sustained_ddk_sentence",   // StepSpeech
+  "facial_battery",           // StepFace
+  "finger_tapping",           // StepTapping
+  "phq2", "medication_confirm", // StepQuestions
+]);
+
 /** Capture-failure reason → the sentence the patient sees. Anything unmapped falls back
  *  to the generic retake line — a reason must never surface as a raw code. */
 const QUALITY_MESSAGE: Record<string, StringKey> = {
@@ -532,8 +542,12 @@ export function ProtocolRunner({ practice = false }: Props) {
             className="min-h-11 rounded-lg border border-line px-4 text-base">
             {t("pause")}
           </button>
+          {/* No aria-label. It used to carry "Stop this check-in" while the button read
+              "Exit", so the accessible name did not contain the visible one — WCAG 2.5.3,
+              and a real failure rather than a technicality: a voice-control user saying
+              what is written on the button would not activate it. The visible text is the
+              accessible name, and the confirmation step supplies the detail. */}
           <button type="button" onClick={() => setConfirmExit(true)}
-            aria-label={t("exitLabel")}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base">
             <X className="h-5 w-5" aria-hidden />
             {t("exitShort")}
@@ -699,10 +713,17 @@ export function ProtocolRunner({ practice = false }: Props) {
           }} />
       )}
 
-      <button type="button" onClick={advance}
-        className="mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
-        {t("skipStep")}
-      </button>
+      {/* Only for steps that do NOT provide their own skip. Five of them do — M10, M4,
+          M1, M7 and the questionnaire — and this generic one rendered underneath, so a
+          patient on those steps saw TWO identical "Skip this step" buttons stacked, doing
+          exactly the same thing. Found by driving the app, not by any test: both buttons
+          are individually correct and only the pair is wrong. */}
+      {!STEPS_WITH_OWN_SKIP.has(viewedStep.task) && (
+        <button type="button" onClick={advance}
+          className="mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
+          {t("skipStep")}
+        </button>
+      )}
       </>)}
     </Frame>
   );

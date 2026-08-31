@@ -116,3 +116,28 @@ describe("untranslated copy does not hide behind a duplicate", () => {
     expect(run).not.toBeNull();
   });
 });
+
+describe("controls shown side by side never share a label", () => {
+  /**
+   * Pairs that appear TOGETHER on one screen. Distinct English words are not enough:
+   * "Pause" and "Stop" are obviously different, and both translated to रोकें / ਰੋਕੋ, so a
+   * Hindi or Punjabi patient saw two adjacent buttons with the same word — one pausing
+   * recoverably, one ending the session and marking it incomplete.
+   *
+   * Found by driving the app in Punjabi, not by any check that existed at the time.
+   */
+  const ADJACENT: [keyof typeof STRINGS, keyof typeof STRINGS, string][] = [
+    ["pause", "exitShort", "the exam header: pause and exit sit next to each other"],
+    ["exitCancel", "exitConfirm", "the exit dialog's two choices"],
+    ["stepBack", "stepForward", "the review navigation"],
+    ["tourNext", "tourSkip", "the tour's two controls"],
+  ];
+
+  it.each(ADJACENT)("%s and %s differ in every language", (a, b, why) => {
+    for (const lang of LANGS) {
+      const first = (STRINGS[a] as Record<string, string>)[lang];
+      const second = (STRINGS[b] as Record<string, string>)[lang];
+      expect(first, `${String(a)} vs ${String(b)} in ${lang} — ${why}`).not.toBe(second);
+    }
+  });
+});

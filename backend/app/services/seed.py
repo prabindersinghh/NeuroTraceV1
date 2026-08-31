@@ -26,14 +26,18 @@ from ..models import (
     BaselineState,
     Adherence,
     AuditLog,
+    ClinicianRole,
+    ConsentType,
     ExamSession,
     ModuleResult,
     Patient,
+    PatientClinicianLink,
     Role,
     SessionType,
     StrokeSide,
     User,
 )
+from .consent import set_consent
 from .session_pipeline import compute_session
 from .synthetic import DEMO_PLAN, make_rng, synthetic_session
 
@@ -100,6 +104,33 @@ async def seed_demo(db: AsyncSession) -> dict:
         education_band="primary",
     )
     db.add(patient)
+    await db.flush()
+
+    # Link the demo clinician to the demo patient, and grant C3 — WITHOUT THIS THE DEMO
+    # DOCTOR SEES AN EMPTY ROSTER.
+    #
+    # `patients.clinician_id` above is the legacy column that Part 3.2 superseded; nothing
+    # reads it for authorisation any more. Access needs a row here AND current
+    # CLINICIAN_SHARING consent (Part 4, D-049). The seed was written before either
+    # existed, so when link-scoping landed the demo clinician silently lost every patient
+    # — the account still worked, the roster was just empty, and the whole
+    # doctor-in-the-loop story became undemonstrable from the demo login.
+    #
+    # Written the same way `POST /clinician/links` writes it, consent_ref included, so the
+    # demo exercises the real path rather than a shortcut around it.
+    link = PatientClinicianLink(
+        patient_id=patient.id,
+        clinician_id=clinician.id,
+        clinician_role=ClinicianRole.TREATING_PHYSICIAN,
+        linked_by=caregiver.id,
+    )
+    db.add(link)
+    await db.flush()
+    consent = await set_consent(
+        db, patient, ConsentType.CLINICIAN_SHARING, True, caregiver.id,
+        device_context="demo seed",
+    )
+    link.consent_ref = str(consent.id) if consent is not None else None
     await db.commit()
 
     first_day = now - timedelta(days=len(DEMO_PLAN) - 1)

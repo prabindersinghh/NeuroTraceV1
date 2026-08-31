@@ -15,15 +15,19 @@ import type { Lang } from "./types";
 /** Exported so behavioural tests can assert on the copy the app actually renders,
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
+  orDivider: { en: "or", hi: "या", pa: "ਜਾਂ" },
   languageLabel: { en: "Language", hi: "भाषा", pa: "ਭਾਸ਼ਾ" },
   // ---- first-run tour (Part 3) ----
   tourNext: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
   tourDone: { en: "Done", hi: "हो गया", pa: "ਹੋ ਗਿਆ" },
   tourSkip: { en: "Skip", hi: "छोड़ें", pa: "ਛੱਡੋ" },
   tourPatientStart: {
-    en: "Tap here each morning to start your check-in. It takes about three minutes.",
-    hi: "हर सुबह अपनी जाँच शुरू करने के लिए यहाँ दबाएँ। इसमें लगभग तीन मिनट लगते हैं।",
-    pa: "ਹਰ ਸਵੇਰ ਆਪਣੀ ਜਾਂਚ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਇੱਥੇ ਦਬਾਓ। ਇਸ ਵਿੱਚ ਲਗਭਗ ਤਿੰਨ ਮਿੰਟ ਲੱਗਦੇ ਹਨ।",
+    // No duration here on purpose. The card above this button already shows today's,
+    // read from the server — and today may be the long session. A number typed into copy
+    // is how the app came to disagree with itself about how long Daily Pulse takes (D-045).
+    en: "Tap here each morning to start your check-in.",
+    hi: "हर सुबह अपनी जाँच शुरू करने के लिए यहाँ दबाएँ।",
+    pa: "ਹਰ ਸਵੇਰ ਆਪਣੀ ਜਾਂਚ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਇੱਥੇ ਦਬਾਓ।",
   },
   tourPatientEmergency: {
     en: "If something feels suddenly wrong, this button is always here.",
@@ -56,7 +60,11 @@ export const STRINGS = {
   // that IS the measurement, so the instruction and the label disagreed.
   cameraPreview: { en: "Camera preview", hi: "कैमरा दृश्य", pa: "ਕੈਮਰਾ ਦ੍ਰਿਸ਼" },
   svvLineAngle: { en: "Line angle", hi: "रेखा का कोण", pa: "ਰੇਖਾ ਦਾ ਕੋਣ" },
-  exitShort: { en: "Stop", hi: "रोकें", pa: "ਰੋਕੋ" },
+  // MUST stay distinct from `pause` in every language, and that is not automatic:
+  // "Stop" and "Pause" are different words in English but both rendered as रोकें / ਰੋਕੋ,
+  // so a Hindi or Punjabi patient saw two adjacent buttons with the SAME label — one
+  // pausing recoverably, one ending the session. Pinned by a test.
+  exitShort: { en: "Exit", hi: "बाहर निकलें", pa: "ਬਾਹਰ ਨਿਕਲੋ" },
   exitLabel: {
     en: "Stop this check-in",
     hi: "यह जाँच रोकें",
