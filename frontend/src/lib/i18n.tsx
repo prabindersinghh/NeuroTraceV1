@@ -9,11 +9,47 @@
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
+import { readLang, writeLang } from "./langStorage";
 import type { Lang } from "./types";
 
 /** Exported so behavioural tests can assert on the copy the app actually renders,
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
+  languageLabel: { en: "Language", hi: "भाषा", pa: "ਭਾਸ਼ਾ" },
+  // ---- first-run tour (Part 3) ----
+  tourNext: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
+  tourDone: { en: "Done", hi: "हो गया", pa: "ਹੋ ਗਿਆ" },
+  tourSkip: { en: "Skip", hi: "छोड़ें", pa: "ਛੱਡੋ" },
+  tourPatientStart: {
+    en: "Tap here each morning to start your check-in. It takes about three minutes.",
+    hi: "हर सुबह अपनी जाँच शुरू करने के लिए यहाँ दबाएँ। इसमें लगभग तीन मिनट लगते हैं।",
+    pa: "ਹਰ ਸਵੇਰ ਆਪਣੀ ਜਾਂਚ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਇੱਥੇ ਦਬਾਓ। ਇਸ ਵਿੱਚ ਲਗਭਗ ਤਿੰਨ ਮਿੰਟ ਲੱਗਦੇ ਹਨ।",
+  },
+  tourPatientEmergency: {
+    en: "If something feels suddenly wrong, this button is always here.",
+    hi: "अगर अचानक कुछ ठीक न लगे, तो यह बटन हमेशा यहाँ है।",
+    pa: "ਜੇ ਅਚਾਨਕ ਕੁਝ ਠੀਕ ਨਾ ਲੱਗੇ, ਤਾਂ ਇਹ ਬਟਨ ਹਮੇਸ਼ਾ ਇੱਥੇ ਹੈ।",
+  },
+  tourCaregiverList: {
+    en: "Everyone you look after appears here, with how their week has gone.",
+    hi: "आप जिनकी देखभाल करते हैं वे सब यहाँ दिखते हैं, उनके सप्ताह के साथ।",
+    pa: "ਤੁਸੀਂ ਜਿਨ੍ਹਾਂ ਦੀ ਦੇਖਭਾਲ ਕਰਦੇ ਹੋ ਉਹ ਸਾਰੇ ਇੱਥੇ ਦਿਖਦੇ ਹਨ, ਉਨ੍ਹਾਂ ਦੇ ਹਫ਼ਤੇ ਦੇ ਨਾਲ।",
+  },
+  tourCaregiverAdd: {
+    en: "Add the person you care for here to begin.",
+    hi: "शुरू करने के लिए जिनकी आप देखभाल करते हैं उन्हें यहाँ जोड़ें।",
+    pa: "ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਜਿਨ੍ਹਾਂ ਦੀ ਤੁਸੀਂ ਦੇਖਭਾਲ ਕਰਦੇ ਹੋ ਉਨ੍ਹਾਂ ਨੂੰ ਇੱਥੇ ਜੋੜੋ।",
+  },
+  tourClinicianRoster: {
+    en: "Your linked patients, ordered by what changed most recently.",
+    hi: "आपके जुड़े मरीज़, हाल में सबसे अधिक बदलाव के क्रम में।",
+    pa: "ਤੁਹਾਡੇ ਜੁੜੇ ਮਰੀਜ਼, ਹਾਲ ਵਿੱਚ ਸਭ ਤੋਂ ਵੱਧ ਬਦਲਾਅ ਦੇ ਕ੍ਰਮ ਵਿੱਚ।",
+  },
+  tourClinicianReview: {
+    en: "Baselines waiting for your confirmation appear here.",
+    hi: "आपकी पुष्टि की प्रतीक्षा कर रहे बेसलाइन यहाँ दिखते हैं।",
+    pa: "ਤੁਹਾਡੀ ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ ਕਰ ਰਹੇ ਬੇਸਲਾਈਨ ਇੱਥੇ ਦਿਖਦੇ ਹਨ।",
+  },
   // ---- leaving a session part-way, and looking back at it (Part 1) ----
   // Accessible names for two controls that had hardcoded English ones. A screen-reader
   // user on the Punjabi build heard "line angle" in English on the SVV slider — a control
@@ -587,34 +623,10 @@ interface I18nValue {
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
-const LANG_KEY = "neurotrace.lang";
-
-/**
- * Has a human actually picked a language yet?
- *
- * The absence of the key is the signal — which is why the default below must NOT write
- * "en" on first read. "Nobody has chosen" and "somebody chose English" have to stay
- * distinguishable, or the language screen could never be shown to the people who most need
- * it: an English default that silently becomes a choice is exactly how a Punjabi-speaking
- * household ends up using an English app without ever being offered anything else.
- */
-export function hasChosenLang(): boolean {
-  try {
-    return localStorage.getItem(LANG_KEY) !== null;
-  } catch {
-    // Private mode, or storage disabled. Treat as "not chosen": showing the picker again
-    // is a small cost, and assuming English would be the wrong way to fail.
-    return false;
-  }
-}
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(LANG_KEY);
-    } catch { /* storage unavailable — fall through to the default */ }
-    const initial = (stored as Lang | null) ?? "en";
+    const initial = readLang() ?? "en";
     // Set on first paint, not only on change. Without this the document carries no `lang`
     // until someone switches language, so a screen reader announces Hindi and Punjabi
     // content with an English voice on the very screens that most need to be spoken.
@@ -624,9 +636,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
-    try {
-      localStorage.setItem(LANG_KEY, next);
-    } catch { /* the choice still applies for this session */ }
+    writeLang(next);
     document.documentElement.lang = next;
   }, []);
 

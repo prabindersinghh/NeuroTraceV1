@@ -160,3 +160,15 @@
     @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
   }
 }
+
+@layer components {
+  /* The tour's highlight. An outline, never an overlay: the page stays interactive while
+     the tour runs, which is what keeps the FAST and emergency paths reachable. Uses the
+     ring token so it cannot drift from the palette, and respects reduced motion via the
+     global backstop. */
+  :where([data-tour-active]) {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+    border-radius: var(--radius);
+  }
+}

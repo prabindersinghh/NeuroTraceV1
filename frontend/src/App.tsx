@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { LanguageGate } from "@/components/LanguageGate";
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
-import { hasChosenLang } from "@/lib/i18n";
+import { hasChosenLang } from "@/lib/langStorage";
 import Landing from "@/routes/Landing";
 import { Login } from "@/routes/Login";
 

@@ -15,6 +15,8 @@ import { HeartPulse, MessageSquareText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
+import { EmergencyButton } from "@/components/EmergencyButton";
+import { Tour } from "@/components/Tour";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
@@ -102,6 +104,7 @@ export function PatientHome() {
             )}
 
             <Link
+              data-tour="start-check-in"
               to={`/exam/${me.id}`}
               className={cn(buttonVariants({ variant: "accent", size: "touch" }), "max-w-sm")}
             >
@@ -116,6 +119,15 @@ export function PatientHome() {
               <MessageSquareText className="mr-2 h-6 w-6" aria-hidden />
               {t("awaazOpen")}
             </Link>
+            {/* The patient's OWN screen had no emergency control. It was on the
+                caregiver, family and dashboard surfaces but not here — so the person most
+                likely to be having a second stroke was the one person who could not reach
+                it from their home screen. Same size and prominence as the other two
+                actions, never behind a menu. */}
+            <div data-tour="emergency" className="w-full max-w-sm">
+              <EmergencyButton patientId={me.id} />
+            </div>
+            <Tour role="patient" />
           </>
         ) : (
           <EmptyState>{t("noData")}</EmptyState>
