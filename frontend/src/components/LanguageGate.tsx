@@ -47,10 +47,9 @@ export function LanguageGate({ onChosen }: { onChosen: () => void }) {
               type="button"
               lang={lang}
               onClick={() => { setLang(lang); onChosen(); }}
-              className="flex min-h-16 w-full items-center justify-center rounded-2xl
-                         border-2 border-line bg-surface px-6 text-2xl font-medium
-                         focus-visible:outline focus-visible:outline-2
-                         focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="focus-ring flex min-h-16 w-full items-center justify-center
+                         rounded-2xl border-2 border-line bg-surface px-6 text-2xl
+                         font-medium"
             >
               {/* The visible label is the native name; the accessible name adds the
                   English exonym so a screen reader set to English still announces

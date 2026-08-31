@@ -508,7 +508,7 @@ export function ProtocolRunner({ practice = false }: Props) {
               {t("exitCancel")}
             </Button>
             <button type="button" onClick={() => void exitSession()}
-              className="min-h-16 rounded-xl border-2 border-line px-4 text-lg font-medium">
+              className="focus-ring min-h-16 rounded-xl border-2 border-line px-4 text-lg font-medium">
               {t("exitConfirm")}
             </button>
           </div>
@@ -539,7 +539,7 @@ export function ProtocolRunner({ practice = false }: Props) {
           {/* Both always visible, never behind a menu — the same rule pause has always
               had. Someone who wants to stop should not have to hunt for how. */}
           <button type="button" onClick={togglePause}
-            className="min-h-11 rounded-lg border border-line px-4 text-base">
+            className="focus-ring min-h-11 rounded-lg border border-line px-4 text-base">
             {t("pause")}
           </button>
           {/* No aria-label. It used to carry "Stop this check-in" while the button read
@@ -548,7 +548,7 @@ export function ProtocolRunner({ practice = false }: Props) {
               what is written on the button would not activate it. The visible text is the
               accessible name, and the confirmation step supplies the detail. */}
           <button type="button" onClick={() => setConfirmExit(true)}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base">
+            className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base">
             <X className="h-5 w-5" aria-hidden />
             {t("exitShort")}
           </button>
@@ -561,7 +561,7 @@ export function ProtocolRunner({ practice = false }: Props) {
           <button type="button"
             onClick={() => setViewIndex((v) => stepBack(v))}
             disabled={!canGoBack(view.index)}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
+            className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
             <ArrowLeft className="h-5 w-5" aria-hidden />
             {t("stepBack")}
           </button>
@@ -569,7 +569,7 @@ export function ProtocolRunner({ practice = false }: Props) {
             <button type="button"
               onClick={() => setViewIndex((v) => stepForward(v, index))}
               disabled={!canGoForward(view.index, index)}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
+              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
               {t("stepForward")}
               <ArrowRight className="h-5 w-5" aria-hidden />
             </button>
@@ -720,7 +720,7 @@ export function ProtocolRunner({ practice = false }: Props) {
           are individually correct and only the pair is wrong. */}
       {!STEPS_WITH_OWN_SKIP.has(viewedStep.task) && (
         <button type="button" onClick={advance}
-          className="mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
+          className="focus-ring mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
           {t("skipStep")}
         </button>
       )}

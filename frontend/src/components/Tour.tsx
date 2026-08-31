@@ -129,14 +129,14 @@ export function Tour({ role }: { role: Role }) {
             <button
               type="button"
               onClick={finish}
-              className="min-h-11 rounded-lg px-4 text-base underline"
+              className="focus-ring min-h-11 rounded-lg px-4 text-base underline"
             >
               {t("tourSkip")}
             </button>
             <button
               type="button"
               onClick={() => (last ? finish() : setIndex((i) => i + 1))}
-              className="min-h-11 rounded-lg bg-primary px-5 text-base font-medium text-primary-foreground"
+              className="focus-ring min-h-11 rounded-lg bg-primary px-5 text-base font-medium text-primary-foreground"
             >
               {last ? t("tourDone") : t("tourNext")}
             </button>
