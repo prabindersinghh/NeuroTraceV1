@@ -300,9 +300,20 @@
   .tactile {
     transition: transform var(--dur-instant) var(--ease-spring),
                 background-color var(--dur-fast) var(--ease-in-out),
-                border-color var(--dur-fast) var(--ease-in-out);
+                border-color var(--dur-fast) var(--ease-in-out),
+                opacity var(--dur-fast) var(--ease-in-out);
   }
-  .tactile:active { transform: scale(0.985); }
+  /* Deeper on a real press than on a card hover — the control should feel like it takes
+   * the weight. Transform only, so it never repaints, and the global reduced-motion rule
+   * already collapses it. */
+  .tactile:active { transform: scale(0.97); }
+
+  /* An interactive CARD lifts rather than presses: this product has no shadows, so the
+   * lift is carried by the border warming to the accent instead of an elevation change. */
+  a:hover > .tactile,
+  .tactile-lift:hover {
+    border-color: hsl(var(--accent) / 0.45);
+  }
 
   /* The severity swatch bonded to a card's leading edge — DESIGN_LANGUAGE §3, "Cards".
    * A 3px rule, not a shadow: it carries a state without adding a second badge, and

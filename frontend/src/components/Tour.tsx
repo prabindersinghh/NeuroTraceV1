@@ -22,7 +22,7 @@
  * (Also worth knowing if this is revisited: v3 removed the default export, so most Joyride
  * examples in circulation are v2 and will not compile against it.)
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n, type StringKey } from "@/lib/i18n";
 import type { Role } from "@/lib/types";
@@ -90,6 +90,7 @@ export function Tour({ role }: { role: Role }) {
   const steps = useMemo(() => TOURS[role] ?? [], [role]);
   const [index, setIndex] = useState(0);
   const [open, setOpen] = useState(() => steps.length > 0 && !alreadySeen(role));
+  const barRef = useRef<HTMLDivElement>(null);
 
   const finish = useCallback(() => {
     markSeen(role);
@@ -106,6 +107,29 @@ export function Tour({ role }: { role: Role }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, finish]);
 
+  /**
+   * Reserve the bar's own height at the bottom of the page while it is open.
+   *
+   * Without this a FIXED bar simply covers whatever is at the end of the document —
+   * on the patient home it was sitting on top of the emergency button, cutting it in
+   * half. A tour that hides a control is worse than no tour, and this one hiding THAT
+   * control is the exact thing the non-blocking design was chosen to avoid.
+   */
+  useEffect(() => {
+    if (!open) return undefined;
+    const bar = barRef.current;
+    const apply = () => {
+      const h = bar?.getBoundingClientRect().height ?? 0;
+      document.body.style.paddingBottom = `${Math.ceil(h)}px`;
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.body.style.paddingBottom = "";
+    };
+  }, [open, index]);
+
   if (!step) return null;
   const last = index === steps.length - 1;
 
@@ -115,13 +139,14 @@ export function Tour({ role }: { role: Role }) {
     // it is not. Bottom-anchored, and the emergency control is deliberately never placed
     // in this band on any patient surface.
     <div
+      ref={barRef}
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-line bg-surface px-5 py-4"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-sm"
     >
-      <div className="mx-auto flex max-w-xl flex-col gap-3">
-        <p className="text-lg leading-snug">{t(step.body)}</p>
-        <div className="flex items-center justify-between gap-3">
+      <div className="container flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <p className="text-sm leading-snug text-muted-foreground">{t(step.body)}</p>
+        <div className="ms-auto flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
             {index + 1} / {steps.length}
           </span>
@@ -129,14 +154,14 @@ export function Tour({ role }: { role: Role }) {
             <button
               type="button"
               onClick={finish}
-              className="focus-ring min-h-11 rounded-lg px-4 text-base underline"
+              className="focus-ring min-h-9 rounded-lg px-3 text-sm underline"
             >
               {t("tourSkip")}
             </button>
             <button
               type="button"
               onClick={() => (last ? finish() : setIndex((i) => i + 1))}
-              className="focus-ring min-h-11 rounded-lg bg-primary px-5 text-base font-medium text-primary-foreground"
+              className="focus-ring tactile min-h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
             >
               {last ? t("tourDone") : t("tourNext")}
             </button>

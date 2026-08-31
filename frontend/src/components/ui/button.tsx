@@ -3,7 +3,10 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium focus-ring disabled:pointer-events-none disabled:opacity-50 transition-[background-color,border-color,color,transform] duration-200 ease-out active:scale-[0.985] motion-reduce:active:scale-100",
+  // `tactile` is the press: a spring scale on :active. It lived in index.css and was
+  // applied to two CARDS and to no button at all, which is why every click felt dead.
+  // DESIGN_LANGUAGE §1.7 — "everything clickable gives weight back".
+  "tactile inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium focus-ring disabled:pointer-events-none disabled:opacity-50 transition-[background-color,border-color,color,transform] duration-200 ease-out active:scale-[0.985] motion-reduce:active:scale-100",
   {
     variants: {
       variant: {
