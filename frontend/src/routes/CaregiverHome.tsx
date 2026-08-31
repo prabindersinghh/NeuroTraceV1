@@ -8,28 +8,31 @@
  * The form says so plainly rather than letting the server reject it silently.
  */
 import { ChevronRight, Plus, Users } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
 import { EmergencyButton } from "@/components/EmergencyButton";
+import { WeekStrip } from "@/components/WeekStrip";
 import { Tour } from "@/components/Tour";
 import { PageHeader } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Select } from "@/components/ui/field";
+import { Metric } from "@/components/ui/metric";
 import { EmptyState, ErrorState, LoadingState, Spinner } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import type { Lang, Patient } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import type { ExamSession, Lang, Patient } from "@/lib/types";
+import { cn, formatDateTime } from "@/lib/utils";
 
 export function CaregiverHome() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const { user } = useAuth();
   const [patients, setPatients] = useState<Patient[] | null>(null);
+  const [history, setHistory] = useState<Record<string, ExamSession[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -45,6 +48,44 @@ export function CaregiverHome() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Check-in history per patient, fetched after the roster and deliberately NON-FATAL:
+   * the list of people you look after is the page, and a failed history request should
+   * cost a "last check-in" line, not the roster. `/sessions/{id}/history` carries no
+   * band or score — see the endpoint's own comment — so nothing clinical is being
+   * fetched here, only whether the check-ins happened.
+   */
+  useEffect(() => {
+    if (!patients?.length) return;
+    let cancelled = false;
+    void Promise.all(
+      patients.map(async (p) => {
+        try {
+          return [p.id, await api.sessionHistory(p.id, 30)] as const;
+        } catch {
+          return [p.id, [] as ExamSession[]] as const;
+        }
+      }),
+    ).then((pairs) => {
+      if (!cancelled) setHistory(Object.fromEntries(pairs));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [patients]);
+
+  /** The roster's shape before the roster — DESIGN_LANGUAGE §1.4. Adherence only. */
+  const summary = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+    const thisWeek = Object.values(history)
+      .flat()
+      .filter((s) => s.completed && new Date(s.ts).getTime() >= weekAgo).length;
+    return {
+      thisWeek,
+      setupPending: (patients ?? []).filter((p) => !p.onboarding_complete).length,
+    };
+  }, [history, patients]);
 
   const canAdd = user?.role === "caregiver";
 
@@ -84,9 +125,26 @@ export function CaregiverHome() {
       {!error && patients === null && <LoadingState />}
       {!error && patients?.length === 0 && !adding && <EmptyState>{t("noPatients")}</EmptyState>}
 
+      {!!patients?.length && (
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <Metric label={t("yourPatients")} value={patients.length}
+                  context={t("carePeopleContext")} />
+          <Metric label={t("careWeekLabel")} value={summary.thisWeek}
+                  context={t("careWeekContext")} />
+          <Metric
+            label={t("careSetupLabel")}
+            value={summary.setupPending}
+            // Watch only when something is actually waiting. A permanent amber zero is
+            // the kind of decoration that teaches people to stop reading the colour.
+            tone={summary.setupPending > 0 ? "watch" : "neutral"}
+            context={t("careSetupContext")}
+          />
+        </div>
+      )}
+
       <div data-tour="patient-list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {patients?.map((patient) => (
-          <PatientCard key={patient.id} patient={patient} />
+          <PatientCard key={patient.id} patient={patient} sessions={history[patient.id] ?? []} />
         ))}
       </div>
       <Tour role="caregiver" />
@@ -94,8 +152,10 @@ export function CaregiverHome() {
   );
 }
 
-function PatientCard({ patient }: { patient: Patient }) {
-  const { t } = useI18n();
+function PatientCard({ patient, sessions }: { patient: Patient; sessions: ExamSession[] }) {
+  const { t, lang } = useI18n();
+  const locale = lang === "hi" ? "hi-IN" : lang === "pa" ? "pa-IN" : "en-IN";
+  const last = sessions.find((s) => s.completed);
   // Setup first, then the daily job. Exactly ONE action carries the accent at a time:
   // before this the card offered "Finish setup" AND "Start check-in" both in accent, so
   // the screen shouted two different next steps at a caregiver who wanted one.
@@ -135,6 +195,17 @@ function PatientCard({ patient }: { patient: Patient }) {
       </CardHeader>
 
       <CardContent className="mt-auto flex flex-col gap-2">
+        {/* How the week has gone, above the actions — the question a caregiver opens
+            this screen with, answered before they have to click into anything. */}
+        <div className="mb-1">
+          <WeekStrip sessions={sessions} />
+          <p className="mt-2 text-sm text-muted-foreground">
+            {last
+              ? t("lastCheckin").replace("{when}", formatDateTime(last.ts, locale))
+              : t("noCheckinsYet")}
+          </p>
+        </div>
+
         {setupPending ? (
           <Link
             to={`/onboarding/${patient.id}`}

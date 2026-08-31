@@ -28,6 +28,7 @@ import { api, ApiError } from "../lib/api";
 import type { AshaHousehold } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { PageHeader } from "../components/ui/page";
 
 const QUEUE_KEY = "neurotrace.asha.queue";
 
@@ -175,9 +176,11 @@ export default function AshaHome() {
 
   return (
     <div className="w-full space-y-4 p-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-title-fluid">My households</h1>
-        <span
+      <PageHeader
+        className="mb-6"
+        eyebrow="Field visits"
+        title="My households"
+        actions={<span
           className={[
             "rounded-full px-3 py-1 text-sm font-medium",
             // Connectivity is NOT a clinical status, so it must not borrow the band
@@ -193,8 +196,8 @@ export default function AshaHome() {
           ].join(" ")}
         >
           {online ? "Online" : "No connection — visits are saved"}
-        </span>
-      </header>
+        </span>}
+      />
 
       {pending.length > 0 && (
         <Card>

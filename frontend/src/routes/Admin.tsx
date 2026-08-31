@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { Metric } from "@/components/ui/metric";
+import { PageHeader } from "@/components/ui/page";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 
@@ -42,14 +44,10 @@ interface IdentityHealth {
 
 interface AuditEntry { ts: string; action: string; actor_id: string | null; patient_ref: string | null }
 
+/** Thin wrapper over the shared Metric. This page had its own hand-rolled stat card with
+ *  a different number size and label treatment from every other dashboard in the app. */
 function Stat({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-line p-5">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
+  return <Metric label={label} value={value} context={hint} />;
 }
 
 function Distribution({ title, data }: { title: string; data: Record<string, number> }) {
@@ -57,7 +55,7 @@ function Distribution({ title, data }: { title: string; data: Record<string, num
   const total = entries.reduce((n, [, v]) => n + v, 0) || 1;
   return (
     <div className="rounded-2xl border border-line p-5">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="text-label text-muted-foreground">{title}</p>
       {entries.length === 0 ? (
         <p className="mt-2 text-sm text-muted-foreground">Nothing yet.</p>
       ) : (
@@ -108,14 +106,14 @@ export default function Admin() {
   return (
     <AppShell>
       <div className="flex w-full flex-col gap-6">
-        <header>
-          <h1 className="text-title-fluid">Operations</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Counts, system health and the audit trail. No patient records appear on this
-            page by design — reading one patient's data is a clinician's path, not an
-            operator's.
-          </p>
-        </header>
+        <PageHeader
+          className="mb-0"
+          eyebrow="System"
+          title="Operations"
+          subtitle="Counts, system health and the audit trail. No patient records appear on
+                    this page by design — reading one patient's data is a clinician's path,
+                    not an operator's."
+        />
 
         {/* The honesty banner. An operator asking "can I trust these numbers" gets the
             answer before the numbers, not in a footnote. */}
@@ -135,7 +133,7 @@ export default function Admin() {
 
         {/* The gate funnel — the one view that says whether the engine is behaving. */}
         <section className="rounded-2xl border border-line p-5">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          <p className="text-label text-muted-foreground">
             Gate funnel · all three must pass for an ALERT
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-4">
@@ -146,9 +144,9 @@ export default function Admin() {
               ["3 · Laterality", g.gate3_laterality, pct(g.gate3_laterality)],
             ].map(([label, value, share]) => (
               <div key={String(label)}>
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-2xl font-semibold tabular-nums">{value}</p>
-                {share ? <p className="text-xs text-muted-foreground">{share} of scored</p> : null}
+                <p className="text-label text-muted-foreground">{label}</p>
+                <p className="mt-1.5 text-metric text-foreground">{value}</p>
+                {share ? <p className="mt-1 text-sm text-muted-foreground">{share} of scored</p> : null}
               </div>
             ))}
           </div>
@@ -162,21 +160,21 @@ export default function Admin() {
 
         {identity && (
           <section className="rounded-2xl border border-line p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            <p className="text-label text-muted-foreground">
               Same-person check
             </p>
             <div className="mt-3 grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-2xl font-semibold tabular-nums">{identity.patients_enrolled}</p>
-                <p className="text-sm text-muted-foreground">patients enrolled</p>
+                <p className="text-metric text-foreground">{identity.patients_enrolled}</p>
+                <p className="mt-1 text-sm text-muted-foreground">patients enrolled</p>
               </div>
               <div>
-                <p className="text-2xl font-semibold tabular-nums">{identity.sessions_scored}</p>
-                <p className="text-sm text-muted-foreground">sessions checked</p>
+                <p className="text-metric text-foreground">{identity.sessions_scored}</p>
+                <p className="mt-1 text-sm text-muted-foreground">sessions checked</p>
               </div>
               <div>
-                <p className="text-2xl font-semibold tabular-nums">{identity.sessions_flagged}</p>
-                <p className="text-sm text-muted-foreground">flagged as uncertain</p>
+                <p className="text-metric text-foreground">{identity.sessions_flagged}</p>
+                <p className="mt-1 text-sm text-muted-foreground">flagged as uncertain</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">{identity.note}</p>
@@ -184,7 +182,7 @@ export default function Admin() {
         )}
 
         <section className="rounded-2xl border border-line p-5">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          <p className="text-label text-muted-foreground">
             Audit trail · append-only
           </p>
           {!audit?.length ? (

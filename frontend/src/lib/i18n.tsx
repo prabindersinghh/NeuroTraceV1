@@ -48,6 +48,25 @@ export const STRINGS = {
   },
   signInEyebrow: { en: "Secure sign-in", hi: "सुरक्षित साइन-इन", pa: "ਸੁਰੱਖਿਅਤ ਸਾਈਨ-ਇਨ" },
   clinicEyebrow: { en: "Clinician", hi: "चिकित्सक", pa: "ਡਾਕਟਰ" },
+  // ---- the caregiver roster's own instrumentation. Adherence only: how much has been
+  // done, never how it scored. Bands belong on the patient dashboard, behind a click. ----
+  careWeekLabel: { en: "Check-ins this week", hi: "इस हफ़्ते की जाँचें", pa: "ਇਸ ਹਫ਼ਤੇ ਦੀਆਂ ਜਾਂਚਾਂ" },
+  careWeekContext: {
+    en: "Across everyone you look after",
+    hi: "जिनकी आप देखभाल करते हैं, सबकी",
+    pa: "ਜਿਨ੍ਹਾਂ ਦੀ ਤੁਸੀਂ ਦੇਖਭਾਲ ਕਰਦੇ ਹੋ, ਸਭ ਦੀਆਂ",
+  },
+  careSetupLabel: { en: "Setup pending", hi: "सेटअप बाकी", pa: "ਸੈੱਟਅੱਪ ਬਾਕੀ" },
+  careSetupContext: {
+    en: "Finish before the first check-in",
+    hi: "पहली जाँच से पहले पूरा करें",
+    pa: "ਪਹਿਲੀ ਜਾਂਚ ਤੋਂ ਪਹਿਲਾਂ ਪੂਰਾ ਕਰੋ",
+  },
+  carePeopleContext: { en: "In your care", hi: "आपकी देखभाल में", pa: "ਤੁਹਾਡੀ ਦੇਖਭਾਲ ਵਿੱਚ" },
+  lastCheckin: { en: "Last check-in {when}", hi: "पिछली जाँच {when}", pa: "ਪਿਛਲੀ ਜਾਂਚ {when}" },
+  noCheckinsYet: { en: "No check-ins yet", hi: "अभी कोई जाँच नहीं", pa: "ਹਾਲੇ ਕੋਈ ਜਾਂਚ ਨਹੀਂ" },
+  last7days: { en: "Last 7 days", hi: "पिछले 7 दिन", pa: "ਪਿਛਲੇ 7 ਦਿਨ" },
+  dashEyebrow: { en: "Patient dashboard", hi: "मरीज़ डैशबोर्ड", pa: "ਮਰੀਜ਼ ਡੈਸ਼ਬੋਰਡ" },
   caregiverEyebrow: { en: "Care at home", hi: "घर पर देखभाल", pa: "ਘਰ ਵਿੱਚ ਦੇਖਭਾਲ" },
   patientEyebrow: { en: "Today", hi: "आज", pa: "ਅੱਜ" },
   alerts: { en: "Alerts", hi: "अलर्ट", pa: "ਅਲਰਟ" },
@@ -607,6 +626,18 @@ export const STRINGS = {
   acuteSubmit: { en: "Get help now", hi: "अभी मदद लें", pa: "ਹੁਣੇ ਮਦਦ ਲਵੋ" },
 
   // --- dashboard ---
+  // ---- the caregiver dashboard's instrumentation row. ----
+  metricCheckins: { en: "Check-ins recorded", hi: "दर्ज जाँचें", pa: "ਦਰਜ ਜਾਂਚਾਂ" },
+  metricCheckinsContext: { en: "Sessions on record", hi: "रिकॉर्ड में जाँचें", pa: "ਰਿਕਾਰਡ ਵਿੱਚ ਜਾਂਚਾਂ" },
+  metricLastCheckin: { en: "Last check-in", hi: "पिछली जाँच", pa: "ਪਿਛਲੀ ਜਾਂਚ" },
+  metricMedContext: {
+    en: "{pct}% of the last 30 days",
+    hi: "पिछले 30 दिनों का {pct}%",
+    pa: "ਪਿਛਲੇ 30 ਦਿਨਾਂ ਦਾ {pct}%",
+  },
+  metricBaselineLabel: { en: "Personal baseline", hi: "निजी सामान्य स्तर", pa: "ਨਿੱਜੀ ਆਮ ਪੱਧਰ" },
+  metricBaselineReady: { en: "Ready", hi: "तैयार", pa: "ਤਿਆਰ" },
+  metricNone: { en: "—", hi: "—", pa: "—" },
   status: { en: "Status", hi: "स्थिति", pa: "ਸਥਿਤੀ" },
   bandStable: { en: "As usual", hi: "रोज़ जैसा", pa: "ਰੋਜ਼ ਵਾਂਗ" },
   bandWatch: { en: "Worth watching", hi: "ध्यान देने योग्य", pa: "ਧਿਆਨ ਦੇਣ ਯੋਗ" },

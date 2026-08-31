@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
@@ -33,6 +34,7 @@ interface ReviewItem {
 }
 
 const COPY = {
+  eyebrow: { en: "Speech review", hi: "बोली की जाँच", pa: "ਬੋਲੀ ਦੀ ਜਾਂਚ" },
   title: { en: "This evening's review", hi: "आज शाम की जाँच", pa: "ਅੱਜ ਸ਼ਾਮ ਦੀ ਜਾਂਚ" },
   intro: {
     en: "We were unsure about these. Correcting one teaches the app their voice — nothing else can.",
@@ -90,10 +92,12 @@ export default function ReviewQueue() {
   return (
     <AppShell>
       <div className="flex w-full flex-col gap-5">
-        <header>
-          <h1 className="text-title-fluid">{COPY.title[lang]}</h1>
-          <p className="mt-1 text-muted-foreground">{COPY.intro[lang]}</p>
-        </header>
+        <PageHeader
+          className="mb-0"
+          eyebrow={COPY.eyebrow[lang]}
+          title={COPY.title[lang]}
+          subtitle={COPY.intro[lang]}
+        />
 
         {savedCount > 0 && (
           <p className="rounded-xl border border-stable/40 bg-stable-soft p-4 text-sm">

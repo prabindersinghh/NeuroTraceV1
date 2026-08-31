@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Select } from "@/components/ui/field";
@@ -73,13 +74,14 @@ export function FamilyAccess() {
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-title-fluid">
-          <Users className="h-6 w-6 text-accent" aria-hidden />
-          {t("familyAccessTitle")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("familyAccessSubtitle")}</p>
-      </div>
+      <PageHeader
+        eyebrow={<span className="inline-flex items-center gap-2">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          {t("caregiverEyebrow")}
+        </span>}
+        title={t("familyAccessTitle")}
+        subtitle={t("familyAccessSubtitle")}
+      />
 
       {/* Stated before the form, not after it. */}
       <p className="mb-6 rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">

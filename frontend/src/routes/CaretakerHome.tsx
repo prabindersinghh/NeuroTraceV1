@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/ui/page";
 import { EmergencyButton } from "@/components/EmergencyButton";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,19 +64,18 @@ export function CaretakerHome() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-title-fluid">
-            <Users className="h-6 w-6 text-accent" aria-hidden />
-            {t("familyTitle")}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("familySubtitle")}</p>
-        </div>
-        {/* Emergency stays reachable from every signed-in surface, family included — one of
-            the three safety guarantees, and the person in the house is often the one who
-            needs it. */}
-        {patients[0] && <EmergencyButton patientId={patients[0].id} />}
-      </div>
+      <PageHeader
+        eyebrow={<span className="inline-flex items-center gap-2">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          {t("caregiverEyebrow")}
+        </span>}
+        title={t("familyTitle")}
+        subtitle={t("familySubtitle")}
+        /* Emergency stays reachable from every signed-in surface, family included — one of
+           the three safety guarantees, and the person in the house is often the one who
+           needs it. */
+        actions={patients[0] && <EmergencyButton patientId={patients[0].id} />}
+      />
 
       {patients.length === 0 ? (
         <EmptyState>{t("familyNoPatients")}</EmptyState>

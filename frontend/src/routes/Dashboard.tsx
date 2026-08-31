@@ -19,7 +19,6 @@ import {
   BellRing,
   Eye,
   GitBranch,
-  Pill,
   ShieldCheck,
   Stethoscope,
   type LucideIcon,
@@ -30,6 +29,8 @@ import { Link, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { CcgComparison } from "@/components/CcgComparison";
 import { DomainChart } from "@/components/DomainChart";
+import { Metric } from "@/components/ui/metric";
+import { PageHeader } from "@/components/ui/page";
 import { EmergencyButton } from "@/components/EmergencyButton";
 import { FastCard } from "@/components/FastCard";
 import { buttonVariants } from "@/components/ui/button";
@@ -184,10 +185,11 @@ export function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-title-fluid">{data.patient.name}</h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        eyebrow={t("dashEyebrow")}
+        title={data.patient.name}
+        subtitle={
+          <span>
             {[data.patient.age, data.patient.sex].filter(Boolean).join(" · ")}
             {readOnly && (
               <span className="ml-2 inline-flex items-center gap-1">
@@ -195,17 +197,17 @@ export function Dashboard() {
                 {t("readOnly")}
               </span>
             )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+          </span>
+        }
+        actions={<>
           <EmergencyButton patientId={patientId} />
           {!readOnly && (
             <Link to={`/exam/${patientId}`} className={cn(buttonVariants({ variant: "accent" }))}>
               {t("startCheckin")}
             </Link>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* What actually needs this family's attention, above everything else on the page.
           Rules live in `lib/notify.ts` and are unit-tested; WATCH is deliberately absent.
@@ -232,6 +234,39 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* The instrumentation row, above the narrative. A caregiver opening this wants four
+          facts before they read a sentence: has it been happening, when was the last one,
+          are the medicines being taken, and is the personal baseline ready yet. Each
+          number says what it is measured against — DESIGN_LANGUAGE §1.4. */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label={t("metricCheckins")} value={data.history.length}
+                context={t("metricCheckinsContext")} />
+        <Metric
+          label={t("metricLastCheckin")}
+          value={data.history[0] ? formatDate(data.history[0].date, locale) : t("metricNone")}
+        />
+        <Metric
+          label={t("adherence")}
+          value={`${data.adherence_streak} ${t("dayStreak")}`}
+          context={t("metricMedContext").replace(
+            "{pct}", String(Math.round((data.adherence_rate_30d ?? 0) * 100)),
+          )}
+        />
+        <Metric
+          // "Learning their normal" is the wrong label once it is locked, and "Ready" is
+          // the wrong value while it is still learning. One neutral label, two states.
+          label={t("metricBaselineLabel")}
+          value={
+            data.baseline.state === "LOCKED"
+              ? t("metricBaselineReady")
+              : `${data.baseline.min_sessions} / ${data.baseline.required_sessions}`
+          }
+          // Amber only while it is still learning: once locked this is simply a fact.
+          tone={data.baseline.state === "LOCKED" ? "neutral" : "watch"}
+          context={data.baseline.state === "LOCKED" ? undefined : t("sessionsRecorded")}
+        />
+      </div>
 
       {data.baseline.state !== "LOCKED" && (
         <Card className="mb-6 border-accent/30 bg-accent/5">
@@ -296,13 +331,6 @@ export function Dashboard() {
         </section>
       ) : (
         <EmptyState>{t("noData")}</EmptyState>
-      )}
-
-      {data.adherence_streak > 0 && (
-        <p className="mt-4 inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
-          <Pill className="h-4 w-4" aria-hidden />
-          {t("adherence")}: {data.adherence_streak} {t("dayStreak")}
-        </p>
       )}
 
       {domains.length > 0 && (
