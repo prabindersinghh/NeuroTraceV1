@@ -210,7 +210,7 @@ validation.
 | AWA-FR-011 | Patient-adapted ASR | Train a real Wav2Vec2/MMS CTC LoRA adapter only from a consented verified archive | BLOCKED |
 | AWA-FR-012 | On-device inference | Signed approved adapter runs without raw-audio cloud transfer and meets device targets | PLANNED |
 | AWA-FR-013 | Confirmation loop | Candidate, reject, correction, fallback, and speak actions work with switch/keyboard access | PARTIAL |
-| AWA-FR-014 | Privacy-safe policy events | Opaque IDs, full slate, action, propensity, policy version, confirmation outcome; no text/audio/identity | Synthetic scaffold only |
+| AWA-FR-014 | Privacy-safe policy events | Opaque IDs, full slate, action, propensity, policy version, confirmation outcome; no text/audio/identity | PR BRANCH contract — `awaaz_policy_events` and two endpoints exist (consent is checked at the decision endpoint; the outcome endpoint can only close a decision that passed it); **nothing calls them and no event has ever been logged** |
 | AWA-FR-015 | Deletion propagation | Media, adapter, backup, export, and restored-copy deletion are evidenced end to end | PLANNED/BLOCKED |
 | AWA-FR-016 | Voice output | Stock voice works first; cloned voice requires separate consent, provenance, watermark/risk review, and deletion | PLANNED |
 
@@ -306,7 +306,7 @@ intelligibility number for Awaaz ASR exists anywhere in this repository.
 | Exported training archive | User-controlled local path | User-controlled; prominently warned | Human-controlled training handoff |
 | Training private manifest | Isolated training host | Run retention policy | Reproducibility without transcript/identity logs |
 | LoRA adapter | Encrypted model registry/device | Versioned; deletable | Patient-specific recognition |
-| Policy event | Backend analytics | Minimum necessary | Offline evaluation; no text/audio/identity |
+| Policy event | Backend analytics | Minimum necessary — `logged_on` is a DATE so a retention sweep is possible; **no such job exists yet** | Offline evaluation; no text/audio/identity, no patient column and no foreign key (D-062) |
 
 ### 10.2 Consent boundaries
 
@@ -353,19 +353,43 @@ Real training remains blocked until every item below has named ownership and evi
 ## 11. Offline policy optimization / “RL” plan
 
 The current work is **not online RL** and must not be described as autonomous learning from
-patients. It is an offline contextual-policy evaluation scaffold under
-`backend/app/ml/rl/`.
+patients. It is offline contextual-policy evaluation under `backend/app/ml/rl/`, plus the
+production logging contract that feeds it. Nothing reads a logged row at runtime, no model is
+fitted from one, and no ranking adapts from feedback.
 
-It currently supports synthetic, privacy-safe events, inverse-propensity diagnostics,
-self-normalized IPS, deterministic bootstrap intervals, and hard safety gates. It forbids
-online exploration, emergency events, generated text, changes to confirmation policy,
-speech triggering, caregiver feedback as patient reward, deployment, and clinical claims.
+The estimator supports privacy-safe events, inverse-propensity diagnostics, self-normalized
+IPS, deterministic bootstrap intervals, and hard safety gates with absolute stringency floors.
+It forbids online exploration, emergency events, generated text, changes to confirmation
+policy, speech triggering, caregiver feedback as patient reward, deployment, and clinical
+claims — the last three as read-only properties that cannot be set.
 
-Before any real offline evaluation, product logging must capture the full offered candidate
-slate, chosen action, known logging propensity, policy version, and patient confirmation or
-fallback outcome. Existing interaction logs that lack propensity cannot support causal
-off-policy claims. Doubly robust estimators may be added only after a separately validated
-outcome model exists.
+The logging precondition in the paragraph that used to stand here is now met **in schema**.
+`awaaz_policy_events` captures the full offered slate, the chosen action, the propensity the
+behaviour policy assigned to the action it actually logged, the policy version, and the
+confirmation or fallback outcome. It is met in schema only: nothing calls the two endpoints,
+so no product event has been logged and no estimate has ever been produced from real data.
+
+Propensities come from real, bounded randomisation, because a deterministic logger makes IPS
+and SNIPS unidentifiable and the estimator refuses such a log outright. The randomisation is
+confined to candidates within 0.05 of the best score, at most two alternatives at a flat 0.08
+each with the top keeping at least 0.84, and only on the confirmation path where the person
+still chooses; reordering something spoken without confirmation would be exploration on a
+patient's mouth and is refused (D-063). The emergency flow is never ranked.
+
+**Doubly robust estimators may be added only after a separately validated outcome model
+exists.** That deferral is now enforced structurally rather than stated: the doubly-robust
+path is reachable only through a `ValidatedOutcomeModel` that cannot be constructed without a
+six-field validation record with no defaults, a request without a model blocks the entire
+comparison instead of quietly serving SNIPS under a DR heading, a model without a request
+blocks too, and SNIPS remains the headline through a read-only property (D-066).
+
+Known limits that a reader of any future estimate must carry with it: the interval assumes
+independent events while Awaaz events cluster by speaker, so the true interval is wider and
+the error favours "candidate better" (D-064); support deficiency is reported as a provable
+lower bound, so a zero means "nothing provable" rather than "nothing there"; and
+`MINIMUM_EFFECT_FLOOR = 0.02` promises about ten times more resolution than the sample floors
+deliver, which is an open calibration question. See `docs/PLAN_RL.md` and
+`docs/RESEARCH_OPE.md`.
 
 ## 12. Evaluation plan
 
@@ -463,6 +487,8 @@ model change control, human-factors evaluation, and a signed intended-use decisi
 - Leakage-safe cohort planning and archive verifier.
 - Governance-gated ASR LoRA runtime.
 - Synthetic offline policy-evaluation scaffold.
+- Privacy-safe policy-event logging contract and bounded near-tie randomisation on the
+  confirmation path — schema and endpoints only, with no event ever logged.
 - Truthful synthetic model artifacts and recovery plan.
 
 **Exit:** branch tests pass, security/privacy review findings are resolved, and PR is merged.
@@ -607,7 +633,9 @@ repurposed for Awaaz: their populations, consent, purpose, modalities, and licen
 | Device performance gap | Conversation becomes unusable | Quantization/parity/device matrix; <1 s target; phrase-board fallback |
 | Public-dataset bias | Poor target-cohort performance | No transfer claim; collect and report a clinically characterized local cohort |
 | Synthetic scaffold mistaken for evidence | False product/clinical claim | Required `synthetic` fields, model-card consistency tests, blocked claim flags |
-| Online policy experiment harms patient | Unsafe change to candidate/confirmation behaviour | Offline-only policy work; no exploration/deployment capability |
+| Online policy experiment harms patient | Unsafe change to candidate/confirmation behaviour | Offline-only policy work; nothing reads a logged row at runtime and no ranking adapts from feedback, so there is no learning loop to run online. The bounded near-tie randomisation is a fixed presentation draw for logging, not an adaptive policy; deployment, online experiment and clinical claim are read-only false |
+| Logging randomisation shows a worse candidate first | Patient works harder to say what they meant | Only candidates within 0.05 of the best score are explorable and a worse one gets probability zero; top keeps ≥0.84; confirmation path only, where a tap overrides the order; never on a spoken-without-confirmation path or an emergency |
+| Policy log becomes re-identifiable by join | Per-person record of what a patient tried to say | No patient column, no foreign key, `logged_on` a DATE not a timestamp, audit rows omit event and candidate ids (D-062) |
 
 ## 21. Open decisions and blockers
 
@@ -626,6 +654,13 @@ repurposed for Awaaz: their populations, consent, purpose, modalities, and licen
    simpler permissive feature pipeline?
 10. Is voice cloning necessary for the clinical/product outcome, or should it remain out of
     scope until after a successful stock-voice pilot?
+11. How often do real Awaaz slates contain a clear winner? Above a 10% rate of unrandomised
+    events the whole policy log is refused as deterministic, and this has never been
+    measured. It should be the first quantity read off the log.
+12. What retention period applies to `awaaz_policy_events`, and who owns the deletion job?
+    `logged_on` was made a DATE to support one; none exists.
+13. What preregistration, privacy review, and independent review must precede the first real
+    offline comparison? None of the four exists today.
 
 ## 22. Definition of done
 

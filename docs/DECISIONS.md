@@ -645,3 +645,176 @@ hand-written between `<!-- hand-written: purpose -->` markers and carried throug
 a card missing the markers fails closed rather than being regenerated without its prose. The
 honest statement is therefore narrower than the one it replaces: the generated body cannot
 drift, and the Purpose section still can, because nothing generates it.
+
+**D-062 · 2026-08-31 · The policy-event log has no patient column and no foreign key.**
+`awaaz_policy_events` is the first table in this schema that does not hang off `patients.id`.
+That is the decision, not an omission. A row that can be joined to a patient is a per-person
+record of what that person tried to say and which of the machine's guesses they refused, and
+an offline UX estimate does not justify keeping one. The cost is real and is stated wherever
+the table is described: without a patient column there is no patient-level split before
+fitting, so the repeated-speaker dependence in `offline.LIMITATIONS` cannot be addressed from
+this log, and cohort or subgroup work on this table is not possible at all.
+
+The same reasoning fixes the time column. `logged_on` is a DATE rather than a timestamp
+because a microsecond timestamp would join effectively one-to-one onto `audit_log.ts` and
+`utterance_log.ts`, both of which do carry `patient_id`; the join would hand back the exact
+identifier the table was built without, and no column of this table would have had to name a
+patient for that to happen. A day is the coarsest granularity that still supports a retention
+or deletion sweep, and it is indexed for that purpose only. For the same reason the two audit
+rows the router writes record the actor, the patient, the policy id and the consent fact but
+deliberately omit the event id and every candidate id, so the audit trail stays a many-to-many
+neighbour of the log rather than an exact join key into it.
+
+The table is append-only (INV-8): the sampled decision waits in process memory until the
+interaction finishes, so the outcome is known before the single INSERT and no code path
+updates or deletes a row. A restart drops pending decisions and those events are never
+logged, which is the correct direction to fail — losing an observation is recoverable,
+inventing one is not. The decision endpoint refuses without a purpose-specific
+`policy_logging_consent` flag per PRD §10.2, and the outcome endpoint carries no consent field
+of its own because it can only close a decision that already passed that check; both are
+idempotent in either direction.
+
+One merge hazard is recorded here rather than discovered later. The migration's revision id
+is the descriptive `0014_awaaz_policy_events` rather than `0014`, because `main` already
+carries a different migration claiming revision `0014`, and this branch and `main` have
+independently used 0012, 0013 and 0014 for unrelated changes. Two revisions sharing an id do
+not merge; alembic resolves one and silently loses the other's ordering. A unique id makes
+this a branch point that can be told to merge instead of a collision nothing can see. The
+overlapping ids on the other three numbers are still unresolved and will need attention when
+this branch meets `main`.
+
+**D-063 · 2026-08-31 · Randomisation is bounded to near-ties and confined to confirmation.**
+IPS and SNIPS are unidentifiable under a deterministic logger, and `compare_policies` refuses
+such a log outright (D-057). Refusing bad logs is not the same as being able to produce good
+ones, so the ranker now samples which near-tied candidate it shows first and records the
+probability of the action it actually showed. That is the only way a product event can ever
+carry a usable denominator, and it is a change to what a patient sees, so it is bounded three
+ways rather than tuned.
+
+A candidate is explorable only when its score is within `NEAR_TIE_MARGIN` (0.05) of the best
+score. A clearly-better candidate is therefore never displaced — not rarely, never, because a
+worse candidate is assigned probability zero and cannot be drawn. Each of at most two
+alternatives carries a flat `EXPLORATION_EPSILON` of 0.08 and the top-ranked candidate keeps
+the remainder, so it holds at least 0.84 in the widest configuration the bound permits and
+`ExplorationBound` refuses any configuration leaving it below 0.75. Flat-per-alternative
+rather than epsilon-split-k is deliberate: a split shrinks as the slate grows and would push
+propensities under the estimator's own `MIN_LOGGED_PROBABILITY_FLOOR`, where a single event
+becomes a hundredfold weight.
+
+The third bound is where the safety argument actually lives. The decision endpoint refuses to
+randomise unless the caller declares the slate goes to the confirmation loop. Reordering
+options a person is about to read and choose between is a presentation change they override
+with a tap; reordering something that will be spoken without confirmation would be
+exploration on a disabled person's mouth, which INV-9 forbids and which no offline estimate
+is worth. The emergency flow is never ranked and never reaches this code.
+
+This is not online learning and must not be described as such. Nothing reads the logged rows
+at runtime, no model is fitted from them, and no ranking adapts from feedback. The
+distribution is a fixed function of scores the ranker already produced, and the rows exist so
+that a human can later run an offline comparison.
+
+**D-064 · 2026-08-31 · No cluster key is added; the clustering bias is made unmissable.**
+The reported interval comes from an event-level i.i.d. bootstrap, and Awaaz events are not
+i.i.d.: one speaker contributes many correlated events, so under positive intra-cluster
+correlation the true interval is wider than the printed one and the error runs in the
+optimistic direction — towards declaring the candidate better, which is the one direction
+this package exists to prevent. The textbook repair is a cluster bootstrap, which needs a
+per-speaker key. `docs/RESEARCH_OPE.md` §3.2 makes the case for one.
+
+We are not adding one, and the reason is not convenience. A grouping id that is stable across
+one speaker's events IS a pseudonymous patient identifier. The property that makes it useful
+for clustering — that all of one person's events collide — is exactly the property that makes
+it a re-identification handle, and no hashing, salting or truncation separates the two, since
+a per-event salt would destroy the very collisions the cluster bootstrap exists to exploit.
+"Opaque but stable per person" is a distinction of presentation, not of function, and INV-11
+is about function.
+
+So the limitation is not repaired; it is made impossible to skip. It is the FIRST entry of
+`offline.LIMITATIONS`, it names the direction of the bias rather than hedging, it is repeated
+in `IMPROVEMENT_DOES_NOT_GUARANTEE` so it travels on the decision object a reviewer reads,
+`UNCERTAINTY_BASIS` states the resampling scheme on every result, and
+`clustered_uncertainty_available` is a read-only property that is permanently false. A reader
+cannot obtain the verdict without the terms. Correcting this properly is a logging-contract
+and governance decision — `PLAN_RL.md` steps 3 to 5 — and not a change the estimator may make
+on its own authority.
+
+**D-065 · 2026-08-31 · The phrase board is a safety fallback, not the worst reward available.**
+`rewards.score_logged_action` charged the repair cost for a `phrase_board_fallback` on top of
+the negative preference the fallback already earned, so a fallback scored −1.0 while a plain
+rejection scored −0.8. Using the phrase board was therefore the single most negative outcome
+the reward function could assign. The phrase board is the designed safety route: PRD §20
+lists it as the mitigation for the device-performance risk and §22 makes offline phrase-board
+operation a condition of done. The reward function was pointing the ranker at keeping a
+patient wrestling with poor candidates rather than letting them reach the board that exists
+to protect them — optimising against the product's own safety design.
+
+Repair cost now applies only to a correction, where the patient engaged with the candidate
+and then had to fix it, which is real interaction cost that the reward should see. Fallback
+and rejection both score −0.8. This is a correctness fix, not a weight change: no tuning of
+`RewardConfig` could have removed the inversion, because both terms fired on the same event.
+
+It is recorded as a decision rather than a bugfix line because of how it was found. Nothing
+optimises this reward today, so nothing had exploited it and no test failed. It surfaced only
+from writing the literature brief in `docs/RESEARCH_OPE.md` and tracing the reward by hand
+for each outcome value (§7.4). A reward function nobody is currently optimising is exactly
+the kind of code that is never read adversarially, and that is the argument for reading it
+adversarially before something does.
+
+**D-066 · 2026-08-31 · Doubly robust is opt-in in both directions and never the headline.**
+PRD §11 defers doubly-robust estimation until a separately validated outcome model exists.
+That deferral is now enforced by the type system rather than by prose. The doubly-robust path
+accepts an outcome model only as a `ValidatedOutcomeModel`, which cannot be constructed
+without an `OutcomeModelValidation` whose six fields all lack defaults, so
+`OutcomeModelValidation()` is not a sentence anyone can write by accident; the gate then
+refuses a non-grouped split, a model fitted on the evaluation events, a holdout below fifty
+events, and a calibration error above 0.25, and those two constants take no configuration
+because there is no reviewer who may reasonably demand less evidence before a reward model is
+allowed to stand in for observed rewards.
+
+The request is symmetric and a mismatch blocks the whole comparison. Asking for doubly robust
+without a model must not quietly return a SNIPS number under a DR heading, and supplying a
+model without asking must not switch the estimator underneath a caller who did not request
+it; neither confusion has a safe default, so neither gets one. SNIPS stays the headline
+structurally rather than by convention: `headline_estimator` is a read-only property
+returning `snips` and the diagnostic's `role` is a read-only `secondary_diagnostic_only`.
+Neither is a constructor parameter, so no caller and no `dataclasses.replace` can promote the
+diagnostic. If the two numbers disagree, that disagreement is the finding, and the response
+is to improve the outcome model and re-review rather than to relabel which number was
+primary.
+
+Two related tightenings landed under the same reasoning. Support deficiency is now detected
+rather than assumed absent — `overlap_rate` measures whether the candidate covers the logger,
+which is the opposite question, so a separate quantity flags candidate mass sitting where the
+log provably could not have looked, gated at 2% by default under a 10% ceiling. What it
+computes is a provable lower bound on support deficiency, not a measurement of it: a zero
+means "nothing provable", never "nothing there", and the exact quantity needs slate-wide
+propensities the contract does not yet record. And the improvement criterion is no longer the
+single inequality `lower > minimum_effect`. It now requires the interval's lower bound to
+clear the minimum effect, the point estimate to clear it too, and the improvement to survive
+deleting the single most influential logged event — because a self-normalised ratio with one
+dominant weight is that event's reward with extra steps, and a bootstrap that redraws that
+event in most replicates carries its influence in the body of the distribution rather than in
+the tail where anyone would look for it.
+
+**D-067 · 2026-08-31 · Supersedes D-059: the governance receipt is Ed25519, not an HMAC.**
+D-059 recorded that training was gated on a receipt that did not actually prove governance,
+because the scheme was a symmetric HMAC, the signing function shipped with the package that
+verified it, and the pinned trust root arrived in environment variables the training operator
+set. It closed by saying no receipt should be described anywhere as evidence of approval
+until that changed. It has now changed, and D-059 is superseded rather than edited.
+
+Receipts are Ed25519. Verifying no longer confers the ability to sign, and
+`governance_receipt_signature` is gone from the shipped package entirely — the thing that
+checks an approval no longer carries the thing that mints one. The public halves live in a
+tracked `governance_public_keys.json` located by a module constant, never an environment
+variable and never a command-line argument, so the trust root cannot be swapped without a
+reviewed commit. Both halves were necessary: Ed25519 alone would have left the operator free
+to generate a keypair and point the runtime at their own public key, which is the same bypass
+in a better algorithm.
+
+The file ships with no keys, so the runtime refuses every real command with
+`governance_trust_root_missing`. That is the correct state and not a placeholder to be
+cleared casually: adding a key is a governance act, and whoever can run training must not be
+the person who commits it, or the boundary the file exists to create is defeated. The
+procedure for a clinical owner to generate a keypair offline and publish only the public half
+is in `docs/GOVERNANCE_KEYS.md`. What remains open is custody, not code.

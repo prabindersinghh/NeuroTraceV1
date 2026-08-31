@@ -86,7 +86,28 @@ heavy packages are lazily imported, so the API process never needs the GPU stack
 | `phrase_cards` | the patient's phrase board |
 | `voice_samples` | voice-clone **metadata only**; the audio never enters this database |
 | `utterance_log` | what was spoken, whether confirmed; optional local-audio UUID/duration/integrity/consent/deletion receipt, never media |
+| `awaaz_policy_events` | one candidate-ranking decision, its logged action and that action's propensity — **no patient column and no foreign key** |
 | `audit_log` | append-only |
+
+`awaaz_policy_events` is the one table that does not hang off `patients.id`, deliberately
+(D-062). It exists so that a candidate ranker can be compared against the logged behaviour
+policy offline, and a row that could be joined to a patient would be a per-person record of
+what that person tried to say and which guesses they refused. `logged_on` is a DATE rather
+than a timestamp for the same reason: a microsecond timestamp would join effectively
+one-to-one onto `audit_log.ts` and `utterance_log.ts`, both of which do carry `patient_id`.
+The audit rows written alongside a policy event record the actor, patient, policy id and
+consent fact but deliberately omit the event id and every candidate id. The table is
+append-only under INV-8, and it holds no transcript, candidate text, audio, hash, latency,
+dwell time or clinical outcome.
+
+The cost of that design is real and belongs next to it: with no patient column there is no
+patient-level split before fitting, so repeated-speaker dependence in the offline estimator
+cannot be corrected from this log, and cohort or subgroup analysis on this table is not
+possible. Note also that the INV-11 test suite does not cover this table — INV-11 is tested
+against tracked repository content, not against schema shape — so the absence of a patient
+column here is held by review, by `test_awaaz_policy_logging.py`'s forbidden-field scan over
+a serialised row, and by the migration containing no foreign key, rather than by an invariant
+test named INV-11.
 
 **Face identity lives in `patients.calibration_json["identity"]`** — six ratios between
 bone-structure landmarks plus their spreads, computed on device at enrolment. No image, no

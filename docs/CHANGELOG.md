@@ -4,6 +4,100 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-08-31 — Awaaz counterfactual logging, bounded near-tie randomisation, reward fix
+
+Awaaz now produces events an offline policy comparison can actually use. `app/ml/rl/` could
+compare candidate-ranking policies for a while and not one production event was eligible: the
+product recorded no slate, no policy version, no propensity and no confirmation outcome, so
+every importance weight had an unknown denominator. The new `awaaz_policy_events` table is
+the missing half — append-only, one row per candidate-ranking decision, holding the opaque
+event id (which doubles as the idempotency key), the behaviour policy id, the full offered
+slate as opaque ids in rank order, the logged action, the probability the policy assigned to
+the action it actually logged, the top-ranked action, a `randomised` flag, the coarse speech
+profile, the three INV-9 confirmation booleans, the emergency flag, the feedback actor, the
+outcome enum, the selected and rejected actions, and `logged_on` as a DATE. Two endpoints write
+it, both idempotent in either direction; the decision endpoint refuses without a
+purpose-specific `policy_logging_consent`, and the outcome endpoint can only close a decision
+that already passed that check. D-062.
+
+The table has no patient column and no foreign key of any kind, and `logged_on` is a day
+rather than a timestamp because a microsecond timestamp joins one-to-one onto `audit_log.ts`
+and `utterance_log.ts`, which do carry `patient_id`. The cost is stated rather than absorbed:
+without a patient column there is no patient-level split before fitting, the repeated-speaker
+dependence in `offline.LIMITATIONS` stays unaddressed, and cohort work on this table is not
+possible. The audit rows the router writes omit the event id and every candidate id for the
+same reason. The migration's revision id is `0014_awaaz_policy_events` rather than `0014`
+because `main` already carries a different migration claiming `0014`; this branch and `main`
+have independently used 0012, 0013 and 0014, and two revisions sharing an id do not merge.
+That collision is an open merge hazard, not a resolved one.
+
+The ranker now randomises, because IPS and SNIPS are unidentifiable under a deterministic
+logger and refusing such logs (D-057) does not by itself produce good ones. Only candidates
+scoring within 0.05 of the best are explorable, so a clearly-better candidate is never
+displaced — a worse one is assigned probability zero and cannot be drawn. At most two
+alternatives carry a flat 0.08 each and the top keeps at least 0.84. It is confined to the
+confirmation path: reordering options a person reads and taps is a presentation change they
+override, while reordering something spoken without confirmation would be exploration on a
+disabled person's mouth. This is not online learning — nothing reads these rows at runtime,
+no model is fitted from them, and no ranking adapts. D-063.
+
+A reward-function bug was found by writing `docs/RESEARCH_OPE.md` and fixed. `score_logged_action`
+charged repair cost for a `phrase_board_fallback` on top of the negative preference it already
+earned, scoring the fallback at −1.0 against a plain rejection's −0.8 — so reaching the phrase
+board was the most negative outcome the reward could assign, and the phrase board is the
+designed safety fallback that PRD §20 names as a mitigation and §22 makes a condition of done.
+The reward function was training the ranker to keep a patient wrestling with poor candidates
+rather than let them reach the board that protects them. Repair cost now applies only to a
+correction, where the patient engaged and then had to fix the result; fallback and rejection
+both score −0.8. Nothing optimises this reward today and no test failed, which is why it took
+a hand-trace to find. D-065.
+
+Three estimator changes landed with it. Doubly-robust estimation is reachable only through a
+`ValidatedOutcomeModel`, which cannot exist without an `OutcomeModelValidation` whose six
+fields have no defaults; requesting DR without a model blocks the entire comparison rather
+than serving SNIPS under a DR heading, and supplying a model without requesting DR blocks too.
+SNIPS stays the headline structurally — `headline_estimator` is a read-only property and the
+diagnostic's `role` is read-only `secondary_diagnostic_only`, neither a constructor parameter.
+Support deficiency is now detected where `overlap_rate` cannot, since overlap measures whether
+the candidate covers the logger and deficiency is the opposite question; it is gated at 2% by
+default under a 10% ceiling and what it computes is a provable lower bound, so a zero means
+"nothing provable" and never "nothing there". And the improvement criterion replaces a bare
+`lower > minimum_effect` with three conditions: interval lower bound over the minimum effect,
+point estimate over it too, and survival of deleting the single most influential logged event.
+D-066.
+
+Clustering was resolved by deliberately not fixing it. A grouping id stable across a speaker's
+events is a pseudonymous patient identifier — the collisions that make it useful for a cluster
+bootstrap are exactly what makes it a re-identification handle, and no salting separates the
+two. So the bias is made unmissable instead: it is the first entry of `LIMITATIONS`, it names
+its direction (the true interval is wider and the error runs toward a false "candidate
+better"), it repeats in `does_not_guarantee`, and `clustered_uncertainty_available` is a
+permanently-false read-only property. D-064.
+
+What is still not true: nothing calls the new endpoints, so the frontend confirmation loop must
+still mint event ids and report outcomes before a single row exists. No real product event has
+ever been logged, no policy is authorised for anything, and deployment, online experiment and
+clinical claim remain permanently false. `max_deterministic_event_rate` defaults to 0.10, which
+means the whole log is refused if the ranker produces a clear winner more than a tenth of the
+time, and nobody has measured how often real Awaaz slates are near-tied — that number needs
+watching from the first day of logging. `no_explicit_signal` rows are logged but cannot become
+feedback, so the skip rate is a figure a reviewer must inspect before believing any estimate.
+There is no preregistration, no privacy review, no retention or deletion job for `logged_on`,
+and no independent review. The literature supplies no fixed minimum event count — the governing
+quantity is effective sample size — and `MINIMUM_EFFECT_FLOOR = 0.02` still advertises roughly
+ten times more resolution than the sample floors deliver, since at ESS 25 the smallest
+adjudicable delta is about 0.18. That is an open calibration question, not a solved one.
+
+Verified: `backend/tests/test_awaaz_policy_logging.py` carries 24 tests and
+`backend/tests/test_awaaz_offline_rl.py` 76, counted from their definitions. The full backend suite
+after this work reports **1191 collected / 1188 passed / 3 expected skips / 0 failed**, exit
+code 0; the frontend reports **51 tests passed** across 8 files with `tsc -b` and
+`npm run build` both exiting 0. The claims above
+about columns, gates, properties, bounds and reward values were read out of
+`backend/app/models.py`, `backend/app/routers/awaaz.py`, `backend/app/ml/rl/*.py` and
+`backend/alembic/versions/0014_awaaz_policy_events.py` rather than taken from a summary.
+
+
 ## 2026-08-31 — Governance-gated ASR training runtime and offline policy evaluation
 
 Awaaz personalised ASR now has a real training runtime and still has no trained model.

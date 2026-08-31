@@ -6,7 +6,8 @@ We will be asked this, and the honest answer is better than a good-looking one. 
 published their word error rate and won on it.
 
 **Last verified:** 2026-08-31, including the Awaaz archive, single-patient corpus-readiness,
-multi-patient cohort-readiness boundaries, and the untrained ASR training runtime.
+multi-patient cohort-readiness boundaries, the untrained ASR training runtime, and the Awaaz
+policy-event logging contract that has never recorded an event.
 The face identity check was added the same day and is listed here for the same reason
 everything else is: it makes a decision about a patient off a threshold, and the threshold
 is not calibrated on real data.
@@ -52,6 +53,29 @@ boundary across separately verified patient archives: it assigns whole connected
 speaker/phrase components, blocks when shared board prompts leave fewer than three clean
 components, and discloses neither patient identity nor phrase text. It does not pool media,
 and the local export receipt does not establish consent for a pooled study.
+
+### The Awaaz ranking policy is not a model either, and there is no estimate
+
+`backend/app/ml/rl/` compares a candidate ranker against a logged behaviour policy offline.
+There is no model in the table above for it because nothing is trained: the package scores
+logged explicit feedback and computes a self-normalised inverse-propensity estimate, and its
+behaviour policy is a fixed function of scores the ranker already produced.
+
+As of 2026-08-31 the production logging contract exists — `awaaz_policy_events`, append-only,
+one row per candidate-ranking decision, holding the propensity of the action actually logged
+and no patient column. **No row has ever been written.** Nothing calls the two endpoints, no
+offline comparison has been run against real data, and every number produced by the package
+so far comes from `app.ml.rl.simulate` on synthetic events. `deployment_allowed`,
+`online_experiment_allowed` and `clinical_claim_allowed` are read-only properties that always
+return false.
+
+Three limits belong beside any future estimate from it. The interval assumes independent
+events while Awaaz events cluster by speaker, so the true interval is wider and the error runs
+toward "candidate better" (D-064). Support deficiency is reported as a provable lower bound,
+so a zero means "nothing provable" rather than "nothing there". And `MINIMUM_EFFECT_FLOOR =
+0.02` promises roughly ten times more resolution than the sample floors deliver — at an
+effective sample size of 25 the smallest adjudicable delta is about 0.18 — which is an open
+calibration question, not a solved one.
 
 ### The identity check is not a model, and is listed anyway
 

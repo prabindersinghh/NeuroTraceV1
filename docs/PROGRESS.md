@@ -2,7 +2,46 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-08-31 · Awaaz personalised ASR now has a real training runtime that
+**Last updated:** 2026-08-31 · Awaaz now records the events an offline policy comparison
+needs, and has never recorded one. The new append-only `awaaz_policy_events` table stores one
+row per candidate-ranking decision — opaque event id (also the idempotency key), behaviour
+policy id, the full offered slate as opaque ids in rank order, the logged action, the
+probability the policy assigned to the action it actually logged, the top-ranked action, a
+`randomised` flag, the coarse speech profile, the three INV-9 confirmation booleans, the
+emergency flag, the feedback actor, the outcome enum, the selected and rejected actions, and
+`logged_on` as a DATE. It has no patient column and no foreign key at all, and the date is a
+day rather than a timestamp because a microsecond timestamp would join one-to-one onto
+`audit_log.ts` and `utterance_log.ts`, which do carry `patient_id`. The cost is real: no
+patient-level split before fitting is possible, so repeated-speaker dependence stays
+unaddressed and cohort work on this table cannot be done. The ranker now randomises among
+candidates within 0.05 of the best score — at most two alternatives at a flat 0.08 each, top
+keeps at least 0.84, confirmation path only — because IPS and SNIPS are unidentifiable under a
+deterministic logger. It is not online learning: nothing reads these rows at runtime and no
+ranking adapts. Nothing calls the two endpoints yet — the decision endpoint refuses without a
+purpose-specific logging consent and the outcome endpoint only closes a decision that passed
+it — so the frontend confirmation
+loop must still mint event ids and report outcomes before any row exists; no real product event
+has ever been logged and no policy is authorised for anything. A reward bug found by writing
+`docs/RESEARCH_OPE.md` is fixed: `phrase_board_fallback` was charged repair cost on top of its
+negative preference and scored −1.0 against a plain rejection's −0.8, making the designed
+safety fallback the worst outcome the reward could assign; repair cost now applies only to a
+correction and both score −0.8. Doubly-robust estimation is reachable only through a validated
+outcome model and blocks the whole comparison on a mismatch in either direction, with SNIPS
+kept as the headline by read-only property; support deficiency is detected as a provable lower
+bound gated at 2%; and the improvement criterion now needs the interval lower bound, the point
+estimate, and survival of deleting the most influential event. Clustering was resolved by
+deliberately not adding a cluster key — a grouping id stable across a speaker's events is a
+pseudonymous patient identifier — so the bias is instead the first entry of `LIMITATIONS`,
+names its direction (the true interval is wider, the error favours "candidate better"), and
+`clustered_uncertainty_available` is permanently false. Still open:
+`max_deterministic_event_rate` defaults to 0.10 and nobody has measured how often real slates
+are near-tied, so the whole log
+could be refused from day one; `no_explicit_signal` rows are logged but cannot become feedback
+and their skip rate must be inspected; there is no preregistration, privacy review, retention
+or deletion job for `logged_on`, or independent review; and `MINIMUM_EFFECT_FLOOR = 0.02`
+promises about ten times more resolution than the sample floors deliver, since at ESS 25 the
+smallest adjudicable delta is roughly 0.18. ·
+2026-08-31 · Awaaz personalised ASR now has a real training runtime that
 has trained nothing. `backend/app/ml/train/asr_runtime/` implements fail-closed,
 governance-gated LoRA/PEFT fine-tuning of an MMS / Wav2Vec2 CTC base
 (`SUPPORTED_MODEL_TYPES = {"wav2vec2"}`), and no adapter, WER, or intelligibility number

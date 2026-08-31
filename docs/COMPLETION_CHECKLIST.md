@@ -23,15 +23,15 @@ that checked no files, and a stale `.pyc` that made an invariant fail for the wr
 | 10 | Caregiver dashboard complete | **LIVE** | Exercised over HTTP against the seeded demo |
 | 11 | Clinician dashboard: audit log + PDF export | **TEST** | Roster, typed cards, drift lane, audit table live. `/report/:patientId` print view added - browser Save-as-PDF, not server-rendered (D-032) |
 | 12 | ASHA interface complete | **TEST** | `AshaHome.tsx` — offline queue, idempotent sync, task-level due lists |
-| 13 | Awaaz D1–D5 complete | **PARTIAL** | Localized personal phrase management, a user-bound cached board for honest offline phrase-tile access, INV-9 confirmation, localized/revocable listener capability, consented local card/audio and caregiver-reviewed repeat pairs, integrity-checked local training export + fail-closed single-patient and leakage-safe cohort readiness planners, 0.5–4.0 s endpointing, offline emergency WAV, long-press, opt-in location, explicit 108 dialer action, and a configured-only SMTP adapter exist. Missing: patient-speech ASR/original conversational audio, real adapter training/deployment, pooled-study consent/data, provider credentials/field test, and a consented caregiver phone/contact contract |
+| 13 | Awaaz D1–D5 complete | **PARTIAL** | Localized personal phrase management, a user-bound cached board for honest offline phrase-tile access, INV-9 confirmation, localized/revocable listener capability, consented local card/audio and caregiver-reviewed repeat pairs, integrity-checked local training export + fail-closed single-patient and leakage-safe cohort readiness planners, 0.5–4.0 s endpointing, offline emergency WAV, long-press, opt-in location, explicit 108 dialer action, and a configured-only SMTP adapter exist. D5 adds a privacy-safe policy-event logging contract and bounded near-tie randomisation on the confirmation path — schema and endpoints only, with no event ever logged and no caller. Missing: patient-speech ASR/original conversational audio, real adapter training/deployment, pooled-study consent/data, provider credentials/field test, and a consented caregiver phone/contact contract |
 | 14 | SVV module live in `posterior_vestibular` | **LIVE** | M21 registered; reproduces all three printed reference averages exactly |
 | 15 | E3 audiometry self-report built | **TEST** | `score_hearing_change`; unilateral loss escalates |
 | 16 | Model cards written; ML_STATUS states real vs synthetic | **LIVE** | 5 cards rendered by `render_model_cards.py` **from `artifacts/*.metrics.json`**; `--check` exits 1 on a stale card and a test re-renders each byte-for-byte, so the generated body cannot drift. The hand-written `## Purpose` section, delimited by `<!-- hand-written: purpose -->`, is carried through untouched and is the one part that can still drift |
 | 17 | Deployed on Railway + Neon; demo reproduces on public URL | **LIVE** | Railway + Vercel deployed; `verify_deploy.sh` **7/7** — identical band sequence on the public URL. Neon still to swap in (SQLite bridge until then) |
 | 18 | EN / HI / PA throughout | **PARTIAL** | Awaaz board, review, emergency, and public listener shell are trilingual, including listener loading/error/expired/privacy states and server coaching. Full physical-device language QA across every non-Awaaz route is still pending |
-| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 product invariants plus speaker/phrase split, offline-cache authorization, and ASR-runtime governance boundaries; backend: 1085 collected / 1082 passed / 3 expected skips / 0 failed; frontend: 8 files / 51 passed, `tsc -b` and `npm run build` both exit 0 |
+| 19 | All invariants pinned; suite green by exit code | **TEST** | 12 product invariants plus speaker/phrase split, offline-cache authorization, ASR-runtime governance boundaries, and the policy-event forbidden-field scan; backend: 1191 collected / 1188 passed / 3 expected skips / 0 failed, exit 0 — **measured before the policy-logging and offline-evaluation work landed; the post-change total is not yet recorded**. `test_awaaz_offline_rl.py` now carries 76 tests and `test_awaaz_policy_logging.py` 24. Frontend: 8 files / 51 passed, `tsc -b` and `npm run build` both exit 0 |
 | 20 | Privacy invariant passing; PR open | **TEST** | INV-11 is covered by tests. The portable pre-push hook runs on the Awaaz branch; PR #1 is open against upstream `main` |
-| 21 | Living docs current | **LIVE** | 23 docs + 5 model cards |
+| 21 | Living docs current | **LIVE** | 25 docs + 5 model cards, counted in `docs/` |
 
 ---
 
@@ -74,10 +74,43 @@ two files, and one dependency upgrade from publishing patient phrases. (7) The b
 snapshot still uses `tempfile.mkdtemp` with no `dir=`, copying a multi-gigabyte checkpoint
 into shared temp — not patient data, but left behind on SIGKILL.
 
-**Offline policy evaluation is a scaffold with no eligible input.** `backend/app/ml/rl/` can
-compare a candidate ranker against a logged behaviour policy offline, on synthetic logs
-only. The production Awaaz schema records no slate, policy version, logged propensity, or
-outcome, so no current product event is eligible. See `docs/PLAN_RL.md`.
+**Offline policy evaluation now has a logging contract and still has no input.**
+`backend/app/ml/rl/` can compare a candidate ranker against a logged behaviour policy
+offline. The schema gap is closed: `awaaz_policy_events` is an append-only table recording
+the offered slate, the logged action, the propensity of *that* action, the policy version and
+the confirmation outcome, with no patient column and no foreign key (D-062), and the ranker
+randomises among near-ties on the confirmation path so the log is identifiable at all (D-063).
+
+What is still not done, stated plainly:
+
+- **Nothing calls the two endpoints.** The frontend confirmation loop must mint event ids and
+  report outcomes. No real product event has ever been logged, so every number the package
+  has produced remains synthetic.
+- **The near-tie rate is unmeasured.** `max_deterministic_event_rate` defaults to 0.10; if a
+  real ranker produces a clear winner more than a tenth of the time, the entire log is
+  refused as deterministic. This should be watched from the first day of logging.
+- **`no_explicit_signal` rows cannot become feedback.** They are logged on purpose, so that
+  the log is not a sample selected on the outcome, but the skip rate is a number a reviewer
+  must inspect before believing any estimate.
+- **No preregistration, no privacy review, no retention or deletion job for `logged_on`, and
+  no independent review.** `logged_on` was made a DATE specifically so a retention sweep is
+  possible; none exists.
+- **The minimum effect is not calibrated.** `MINIMUM_EFFECT_FLOOR = 0.02` promises about ten
+  times the resolution the sample floors deliver — at an effective sample size of 25 the
+  smallest adjudicable delta is roughly 0.18. Open question, not a solved one.
+- **Repeated-speaker clustering is uncorrected by decision (D-064).** The interval is
+  anti-conservative in the direction that favours the candidate.
+- **Migration revision ids collide with `main`.** This branch and `main` have independently
+  used 0012, 0013 and 0014; the new migration uses a descriptive id to avoid a fourth
+  collision, but the first three are an open merge hazard.
+
+Deployment, online experimentation and clinical claims remain permanently false, as read-only
+properties rather than defaults. See `docs/PLAN_RL.md` and `docs/RESEARCH_OPE.md`.
+
+**A reward-function bug was found and fixed (D-065).** `phrase_board_fallback` was charged a
+repair cost on top of the negative preference it already earned, scoring the designed safety
+fallback at −1.0 against a plain rejection's −0.8. Nothing optimises this reward yet and no
+test failed; it was found by hand-tracing the reward while writing `docs/RESEARCH_OPE.md`.
 
 **Nothing has run on a physical phone.** Camera framing, pose scaling at 1.5 m, and the
 handset-tilt path in SVV are all verified in a desktop browser only. This is the largest

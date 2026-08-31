@@ -69,7 +69,7 @@ Each has a test. If one fails, that is the finding — do not route around it.
 ## Verifying your work
 
 ```bash
-cd backend && .venv/bin/python -m pytest -q      # 1085 tests
+cd backend && .venv/bin/python -m pytest -q      # 1191 tests
 cd frontend && npx vitest run && npx tsc -b && npm run build
 ./scripts/verify_deploy.sh                                 # against the live instance
 ```
