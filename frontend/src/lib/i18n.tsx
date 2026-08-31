@@ -16,6 +16,23 @@ import type { Lang } from "./types";
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
   orDivider: { en: "or", hi: "या", pa: "ਜਾਂ" },
+  // Clinician roster summary: the metrics row above the list.
+  linkedToYou: {
+    en: "Linked to you, with consent in force",
+    hi: "आपसे जुड़े, सहमति लागू है",
+    pa: "ਤੁਹਾਡੇ ਨਾਲ ਜੁੜੇ, ਸਹਿਮਤੀ ਲਾਗੂ ਹੈ",
+  },
+  alerts: { en: "Alerts", hi: "अलर्ट", pa: "ਅਲਰਟ" },
+  unacknowledged: {
+    en: "Not yet acknowledged",
+    hi: "अभी तक स्वीकार नहीं किया",
+    pa: "ਹਾਲੇ ਤੱਕ ਸਵੀਕਾਰ ਨਹੀਂ ਕੀਤਾ",
+  },
+  awaitingReview: {
+    en: "Waiting for your baseline review",
+    hi: "आपकी बेसलाइन समीक्षा की प्रतीक्षा में",
+    pa: "ਤੁਹਾਡੀ ਬੇਸਲਾਈਨ ਸਮੀਖਿਆ ਦੀ ਉਡੀਕ ਵਿੱਚ",
+  },
   languageLabel: { en: "Language", hi: "भाषा", pa: "ਭਾਸ਼ਾ" },
   // ---- first-run tour (Part 3) ----
   tourNext: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
