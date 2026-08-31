@@ -165,7 +165,7 @@ export default function Onboarding() {
             />
           ))}
         </div>
-        <h1 className="text-2xl font-semibold">{TITLES[step][lang]}</h1>
+        <h1 className="text-title-2">{TITLES[step][lang]}</h1>
       </header>
 
       <div className="flex-1 space-y-4">

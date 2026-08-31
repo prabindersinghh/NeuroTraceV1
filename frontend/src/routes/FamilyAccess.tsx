@@ -74,7 +74,7 @@ export function FamilyAccess() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 text-title-2">
           <Users className="h-6 w-6 text-accent" aria-hidden />
           {t("familyAccessTitle")}
         </h1>

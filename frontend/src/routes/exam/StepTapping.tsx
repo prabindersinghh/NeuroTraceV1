@@ -81,7 +81,7 @@ export function StepTapping({ onDone, onSkip }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-2xl font-semibold">{t("handTitle")}</h2>
+      <h2 className="text-title-2">{t("handTitle")}</h2>
 
       {active && (
         <p className="text-2xl font-medium text-accent" aria-live="polite">

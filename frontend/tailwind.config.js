@@ -37,6 +37,24 @@ export default {
         alert: { DEFAULT: "hsl(var(--alert))", soft: "hsl(var(--alert-soft))" },
         atypical: { DEFAULT: "hsl(var(--atypical))", soft: "hsl(var(--atypical-soft))" },
       },
+      /* ------------------------------------------------------------------ type scale
+       * DESIGN_LANGUAGE.md §2.2. Size, line-height, weight and tracking are baked into
+       * each token so headings stay consistent without per-callsite tuning — which is
+       * exactly what had drifted here: screens picked text-lg / text-2xl / text-3xl
+       * ad hoc, so nothing established a hierarchy and everything read the same weight.
+       *
+       * Deviation from the reference, on purpose: body is 1rem, not 0.875rem. This
+       * product's patient surfaces have a hard 20px floor (`.patient-scale`) and its
+       * readers are 55-75 with post-stroke visual change, so a 14px base would be a
+       * regression on every clinician screen too. */
+      fontSize: {
+        display:   ["2.75rem", { lineHeight: "1.05", fontWeight: "800", letterSpacing: "-0.03em" }],
+        "title-1": ["2rem",    { lineHeight: "1.15", fontWeight: "700", letterSpacing: "-0.02em" }],
+        "title-2": ["1.5rem",  { lineHeight: "1.2",  fontWeight: "700", letterSpacing: "-0.018em" }],
+        "title-3": ["1.125rem",{ lineHeight: "1.3",  fontWeight: "600", letterSpacing: "-0.01em" }],
+        metric:    ["2.25rem", { lineHeight: "1",    fontWeight: "700", letterSpacing: "-0.02em" }],
+        label:     ["0.6875rem",{ lineHeight: "1.2", fontWeight: "600", letterSpacing: "0.08em" }],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

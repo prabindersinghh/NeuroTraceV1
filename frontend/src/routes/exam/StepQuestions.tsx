@@ -62,7 +62,7 @@ export function StepQuestions({ onDone, onSkip }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <h2 className="text-2xl font-semibold">{askingMeds ? t("medsTitle") : t("moodTitle")}</h2>
+      <h2 className="text-title-2">{askingMeds ? t("medsTitle") : t("moodTitle")}</h2>
 
       {askingMeds ? (
         <>

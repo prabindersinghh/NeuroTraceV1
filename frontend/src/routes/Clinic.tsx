@@ -68,7 +68,7 @@ export function Clinic() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 text-title-1">
           <Stethoscope className="h-6 w-6" aria-hidden />
           {t("clinicTitle")}
         </h1>
@@ -83,7 +83,7 @@ export function Clinic() {
             <Card key={row.patient_id}>
               <CardContent className="flex flex-wrap items-center gap-4 p-5">
                 <div className="min-w-40 flex-1">
-                  <p className="text-lg font-semibold">{row.name}</p>
+                  <p className="text-title-3">{row.name}</p>
                   <p className="text-sm text-muted-foreground">
                     {row.age ? `${row.age} · ` : ""}
                     {row.baseline_state === "LOCKED"

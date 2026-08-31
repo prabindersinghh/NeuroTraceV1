@@ -1,9 +1,10 @@
-import { Activity, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "./ui/button";
+import { LogoMark } from "./brand/Logo";
 import { LanguageToggle } from "./LanguageToggle";
 import { SyncStatus } from "./ui/SyncStatus";
 
@@ -16,11 +17,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b border-border bg-card/85 backdrop-blur">
         <div className="container flex h-16 items-center justify-between gap-4">
+          {/* The real mark, not a generic activity glyph. See components/brand/Logo.tsx —
+              inline SVG because INV-11 forbids a tracked image, and because a geometric
+              mark holds its shape at header size. */}
           <Link to="/" className="flex items-center gap-2.5 focus-ring rounded-lg">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Activity className="h-5 w-5" aria-hidden />
-            </span>
-            <span className="text-lg font-semibold tracking-tight text-primary">{t("appName")}</span>
+            <LogoMark className="h-8 w-8 shrink-0 text-primary" />
+            <span className="text-title-3 text-primary">{t("appName")}</span>
           </Link>
 
           <div className="flex items-center gap-3">

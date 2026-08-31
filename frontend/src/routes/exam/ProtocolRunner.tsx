@@ -435,7 +435,7 @@ export function ProtocolRunner({ practice = false }: Props) {
       <Frame patientId={patientId}>
         <div className="flex flex-col items-center gap-6 py-8 text-center">
           <CheckCircle2 className="h-24 w-24 text-stable" aria-hidden />
-          <h2 className="text-4xl font-semibold">{t("allDone")}</h2>
+          <h2 className="text-display">{t("allDone")}</h2>
           {practice && <p className="text-lg text-muted-foreground">{t("practiceDone")}</p>}
           {queuedOffline && (
             <p className="inline-flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
@@ -496,7 +496,7 @@ export function ProtocolRunner({ practice = false }: Props) {
             stopping is discouraged. */}
         <div role="dialog" aria-modal="true" aria-labelledby="exit-title"
              className="flex flex-col items-center gap-6 py-12 text-center">
-          <h2 id="exit-title" className="text-3xl font-semibold">{t("exitTitle")}</h2>
+          <h2 id="exit-title" className="text-title-1">{t("exitTitle")}</h2>
           <p className="text-xl" aria-live="polite">
             {t("exitProgress")
               .replace("{done}", String(summary.completed))

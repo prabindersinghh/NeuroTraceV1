@@ -91,7 +91,7 @@ export default function ReviewQueue() {
     <AppShell>
       <div className="mx-auto flex max-w-xl flex-col gap-5">
         <header>
-          <h1 className="text-2xl font-semibold">{COPY.title[lang]}</h1>
+          <h1 className="text-title-2">{COPY.title[lang]}</h1>
           <p className="mt-1 text-muted-foreground">{COPY.intro[lang]}</p>
         </header>
 

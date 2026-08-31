@@ -176,7 +176,7 @@ export function Dashboard() {
     <AppShell>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{data.patient.name}</h1>
+          <h1 className="text-title-2">{data.patient.name}</h1>
           <p className="text-sm text-muted-foreground">
             {[data.patient.age, data.patient.sex].filter(Boolean).join(" · ")}
             {readOnly && (

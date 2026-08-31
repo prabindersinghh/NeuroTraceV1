@@ -94,7 +94,7 @@ export default function Enrol() {
   return (
     <AppShell>
       <div className="mx-auto flex max-w-md flex-col gap-5">
-        <h1 className="text-2xl font-semibold">{COPY.title[lang]}</h1>
+        <h1 className="text-title-2">{COPY.title[lang]}</h1>
         <p className="text-muted-foreground">{COPY.body[lang]}</p>
 
         <div className="overflow-hidden rounded-2xl border border-line bg-black">

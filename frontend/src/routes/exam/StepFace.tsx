@@ -109,7 +109,7 @@ export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentit
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-2xl font-semibold">{t("faceTitle")}</h2>
+      <h2 className="text-title-2">{t("faceTitle")}</h2>
 
       {current && (
         <p className="text-2xl font-medium text-accent" aria-live="polite">

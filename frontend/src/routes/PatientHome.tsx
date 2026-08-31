@@ -82,7 +82,7 @@ export function PatientHome() {
         <HeartPulse className="h-20 w-20 text-accent" aria-hidden />
         {me ? (
           <>
-            <h1 className="text-3xl font-semibold">
+            <h1 className="text-title-1">
               {t("checkinTitle")}
               <span className="mt-2 block text-lg font-normal text-muted-foreground">{me.name}</span>
             </h1>

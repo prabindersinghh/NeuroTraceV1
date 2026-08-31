@@ -125,7 +125,7 @@ export function StepAttention({ onDone, onSkip }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-2xl font-semibold">{t("tapTitle")}</h2>
+      <h2 className="text-title-2">{t("tapTitle")}</h2>
 
       <button
         type="button"

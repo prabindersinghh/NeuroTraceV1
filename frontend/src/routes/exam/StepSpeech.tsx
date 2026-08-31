@@ -44,6 +44,8 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
   const { t, lang } = useI18n();
   const captureRef = useRef<AudioCapture | null>(null);
   const collected = useRef<DysarthriaInput>({});
+  /** When the current capture window closes. See the countdown effect below. */
+  const deadlineRef = useRef(0);
 
   const [index, setIndex] = useState(-1);
   const [remaining, setRemaining] = useState(0);
@@ -75,17 +77,34 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
         );
         return;
       }
+      deadlineRef.current = performance.now() + task.seconds * 1000;
       setRecording(true);
       setRemaining(task.seconds);
     },
     [lang, onError, t],
   );
 
-  // One countdown drives both the visible timer and the capture window.
+  /**
+   * One countdown drives both the visible timer and the capture window.
+   *
+   * Derived from a DEADLINE, not by subtracting from `remaining` on each tick. This step
+   * ticks four times a second so the level meter moves smoothly — every other step ticks
+   * once a second — and it was decrementing by a whole second on each of those ticks. So
+   * every capture window ran at 4x speed: the 6s tasks recorded 1.5s, the 8s sentence
+   * recorded 2s, and the whole 20s module finished in 5.
+   *
+   * That is not only why it appeared to "not wait" — it corrupted the measurement. M4's
+   * features were extracted from a fraction of the intended audio, and those features feed
+   * the patient's baseline. A window that short also captures the patient still reading the
+   * instruction, which is why it so often came back "we could not hear you".
+   *
+   * A deadline also survives what a decrementing counter does not: browsers throttle timers
+   * in a backgrounded tab, which would silently stretch the window instead of shortening it.
+   */
   useEffect(() => {
     if (!recording) return;
     const tick = window.setInterval(() => {
-      setRemaining((r) => r - 1);
+      setRemaining(Math.max(0, Math.ceil((deadlineRef.current - performance.now()) / 1000)));
       setLevel(captureRef.current?.level() ?? 0);
     }, 250);
     return () => window.clearInterval(tick);
@@ -119,7 +138,7 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <h2 className="text-2xl font-semibold">{t("speechTitle")}</h2>
+      <h2 className="text-title-2">{t("speechTitle")}</h2>
 
       {current && (
         <p className="text-2xl font-medium text-accent" aria-live="polite">

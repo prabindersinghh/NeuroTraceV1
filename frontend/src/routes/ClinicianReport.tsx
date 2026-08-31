@@ -85,7 +85,7 @@ export default function ClinicianReport() {
       </div>
 
       <header className="border-b border-line pb-4">
-        <h1 className="text-2xl font-semibold">NeuroTrace — monitoring report</h1>
+        <h1 className="text-title-2">NeuroTrace — monitoring report</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Generated {new Date().toLocaleString()} · covers the most recent{" "}
           {sessions.length} scored sessions

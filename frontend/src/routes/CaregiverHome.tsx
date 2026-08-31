@@ -51,7 +51,7 @@ export function CaregiverHome() {
     <AppShell>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("yourPatients")}</h1>
+          <h1 className="text-title-2">{t("yourPatients")}</h1>
           {user?.role === "clinician" && (
             <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <Stethoscope className="h-4 w-4" aria-hidden />

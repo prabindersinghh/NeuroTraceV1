@@ -229,3 +229,70 @@
     }
   }
 }
+
+@layer base {
+  /* ---------------------------------------------------- typographic base rules
+   * DESIGN_LANGUAGE.md §2.2. The type SCALE lives in tailwind.config.js; these are the
+   * rules that apply regardless of which token a callsite picks.
+   *
+   * `text-label` is uppercase by definition — the tracking in the token only reads
+   * correctly in caps, so binding the transform to the token stops it being half-applied. */
+  .text-label { text-transform: uppercase; }
+
+  /* Tabular figures wherever numbers are compared or change in place. Without this a
+   * counting metric jitters as glyph widths change, and a column of numbers fails to
+   * align — the two places a clinical dashboard most needs to look trustworthy. */
+  th, td, .tabular, .text-metric, [class*="tabular-nums"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Headings carry the scale's tracking even when a callsite uses a raw size. */
+  h1, h2, h3 { letter-spacing: -0.018em; }
+}
+
+@layer base {
+  :root {
+    /* ------------------------------------------------------ motion vocabulary
+     * DESIGN_LANGUAGE.md §2.3: one easing and duration vocabulary, nothing linear.
+     * The reduced-motion backstop already in this file collapses all of it. */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+    --dur-instant: 90ms;   /* a press */
+    --dur-fast: 150ms;
+    --dur-base: 240ms;
+    --dur-slow: 380ms;     /* route transitions */
+  }
+}
+
+@layer components {
+  /* Press feedback. DESIGN_LANGUAGE §1.7 — "everything clickable gives weight back".
+   * Transform and opacity only, so it never repaints, and it collapses under the global
+   * reduced-motion rule rather than needing its own guard. */
+  .tactile {
+    transition: transform var(--dur-instant) var(--ease-spring),
+                background-color var(--dur-fast) var(--ease-in-out),
+                border-color var(--dur-fast) var(--ease-in-out);
+  }
+  .tactile:active { transform: scale(0.985); }
+
+  /* The severity swatch bonded to a card's leading edge — DESIGN_LANGUAGE §3, "Cards".
+   * A 3px rule, not a shadow: it carries a state without adding a second badge, and
+   * without breaking this product's no-shadow rule. */
+  .chip-edge {
+    position: relative;
+    padding-inline-start: 1rem;
+  }
+  .chip-edge::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
+    background: var(--chip-edge-color, hsl(var(--border)));
+  }
+}

@@ -54,7 +54,7 @@ export default function Listen() {
   if (dead) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
-        <h1 className="text-2xl font-semibold">This link has expired</h1>
+        <h1 className="text-title-2">This link has expired</h1>
         <p className="text-muted-foreground">
           Listener links last a short time on purpose. Ask for a new one.
         </p>
@@ -79,7 +79,7 @@ export default function Listen() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
       <header>
         <p className="text-sm text-muted-foreground">You are listening with</p>
-        <h1 className="text-2xl font-semibold">{view.display_name}</h1>
+        <h1 className="text-title-2">{view.display_name}</h1>
       </header>
 
       {/* The single most useful thing to say right now. */}
