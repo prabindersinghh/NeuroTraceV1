@@ -175,7 +175,7 @@ export default function StepSvv({
   return (
     <div onPointerDownCapture={requestOrientationPermission} className="mx-auto flex max-w-md flex-col gap-4 p-4">
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold">{CONDITION_LABEL[condition][lang]}</h2>
+        <h2 className="text-title-2">{CONDITION_LABEL[condition][lang]}</h2>
         <div
           className="h-1.5 overflow-hidden rounded-full bg-muted"
           role="progressbar"

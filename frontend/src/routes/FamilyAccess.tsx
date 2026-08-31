@@ -103,7 +103,7 @@ export function FamilyAccess() {
       )}
 
       <section aria-labelledby="active-family">
-        <h2 id="active-family" className="mb-3 text-lg font-medium">
+        <h2 id="active-family" className="mb-3 text-title-2 font-medium">
           {t("familyActive")}
         </h2>
         {active.length === 0 ? (
@@ -119,7 +119,7 @@ export function FamilyAccess() {
 
       {past.length > 0 && (
         <section aria-labelledby="past-family" className="mt-8">
-          <h2 id="past-family" className="mb-1 text-lg font-medium">
+          <h2 id="past-family" className="mb-1 text-title-2 font-medium">
             {t("familyPast")}
           </h2>
           {/* The revoked rows are shown rather than hidden: "who could see this, and until

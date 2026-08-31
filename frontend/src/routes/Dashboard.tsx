@@ -68,19 +68,29 @@ const BAND_STYLE: Record<
   },
 };
 
+/**
+ * Per-domain trend colours — a CATEGORICAL ramp, kept inside the blue family.
+ *
+ * Two of these used to sit outside it and both were a problem on a screen that also
+ * carries status colour. `mood_fatigue_function` was green (hsl 152) and
+ * `posterior_vestibular` a green-teal (172): green is the one hue this product refuses for
+ * status, because a green "all clear" invites a family to stop looking, and a green trend
+ * line on the same page invites exactly that reading. `cognition` was hsl 28 — the same
+ * amber as the WATCH band, so a categorical colour and a status colour were identical.
+ *
+ * Eight hues from violet through indigo to cyan, separated by hue AND lightness so they
+ * stay distinguishable, and never colliding with WATCH amber or ALERT red. Colour is not
+ * the only carrier either way: every chart is titled with its domain name.
+ */
 const DOMAIN_COLOURS: Record<string, string> = {
-  cranial_nerves: "hsl(262 60% 48%)",
-  // motor_speech and language were one `speech_language` key before the domain split.
-  // Leaving the dead key here meant three domains all fell through to the default blue,
-  // which made a two-domain cross-modality finding look like one line on the chart.
-  motor_speech: "hsl(221 70% 40%)",
-  language: "hsl(205 72% 46%)",
-  posterior_vestibular: "hsl(172 60% 32%)",
-  motor: "hsl(190 75% 34%)",
-  cognition: "hsl(28 80% 45%)",
-  coordination_gait: "hsl(340 60% 45%)",
-  mood_fatigue_function: "hsl(152 50% 35%)",
-  vitals_prevention: "hsl(0 0% 40%)",
+  cranial_nerves: "hsl(262 60% 48%)",        /* violet */
+  motor_speech: "hsl(221 70% 40%)",          /* deep blue */
+  language: "hsl(205 72% 46%)",              /* blue */
+  posterior_vestibular: "hsl(194 70% 38%)",  /* cyan, no green cast */
+  motor: "hsl(238 55% 52%)",                 /* indigo */
+  cognition: "hsl(282 50% 50%)",             /* purple, was WATCH amber */
+  coordination_gait: "hsl(212 45% 30%)",     /* navy */
+  mood_fatigue_function: "hsl(250 40% 60%)", /* periwinkle, was green */
 };
 
 export function Dashboard() {
@@ -297,7 +307,7 @@ export function Dashboard() {
 
       {domains.length > 0 && (
         <>
-          <h2 className="mb-3 mt-8 text-lg font-semibold">{t("domainTrends")}</h2>
+          <h2 className="mb-3 mt-8 text-title-2">{t("domainTrends")}</h2>
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {domains.map((domain) => (
               <DomainChart

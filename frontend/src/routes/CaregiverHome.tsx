@@ -101,53 +101,81 @@ export function CaregiverHome() {
 
 function PatientCard({ patient }: { patient: Patient }) {
   const { t } = useI18n();
+  // Setup first, then the daily job. Exactly ONE action carries the accent at a time:
+  // before this the card offered "Finish setup" AND "Start check-in" both in accent, so
+  // the screen shouted two different next steps at a caregiver who wanted one.
+  const setupPending = !patient.onboarding_complete;
+  const learning = patient.baseline_state !== "LOCKED";
+
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-lg">{patient.name}</CardTitle>
-        <CardDescription>
-          {[
-            patient.age ? `${patient.age}` : null,
-            patient.sex,
-            patient.languages?.[0]?.toUpperCase(),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </CardDescription>
+    <Card
+      className="chip-edge tactile flex flex-col"
+      style={{
+        ["--chip-edge-color" as string]:
+          setupPending || learning ? "hsl(var(--watch))" : "hsl(var(--stable))",
+      }}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="text-title-3">{patient.name}</CardTitle>
+            <CardDescription>
+              {[
+                patient.age ? `${patient.age}` : null,
+                patient.sex,
+                patient.languages?.[0]?.toUpperCase(),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </CardDescription>
+          </div>
+          {/* The state belongs beside the name, where the eye already is — not stranded
+              between two buttons further down, which is where it used to sit. */}
+          {learning && (
+            <span className="shrink-0 rounded-full bg-watch-soft px-2.5 py-1 text-sm font-medium text-watch">
+              {t("buildingBaseline")}
+            </span>
+          )}
+        </div>
       </CardHeader>
+
       <CardContent className="mt-auto flex flex-col gap-2">
-        {!patient.onboarding_complete && (
+        {setupPending ? (
           <Link
             to={`/onboarding/${patient.id}`}
             className={cn(buttonVariants({ variant: "accent", size: "sm" }), "w-full")}
           >
             {t("finishSetup")}
           </Link>
+        ) : (
+          <Link
+            to={`/exam/${patient.id}`}
+            className={cn(buttonVariants({ variant: "accent", size: "sm" }), "w-full")}
+          >
+            {t("startCheckin")}
+          </Link>
         )}
-        {patient.baseline_state !== "LOCKED" && (
-          <span className="inline-flex w-fit items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-            {t("buildingBaseline")}
-          </span>
-        )}
-        <Link
-          to={`/dashboard/${patient.id}`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
-        >
-          {t("openDashboard")}
-          <ChevronRight className="h-4 w-4" aria-hidden />
-        </Link>
-        <Link
-          to={`/exam/${patient.id}`}
-          className={cn(
-            buttonVariants({
-              variant: patient.onboarding_complete ? "accent" : "outline",
-              size: "sm",
-            }),
-            "w-full",
+
+        <div className="flex gap-2">
+          <Link
+            to={`/dashboard/${patient.id}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
+          >
+            {t("openDashboard")}
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </Link>
+          {/* Still offered while setup is pending — a check-in is not blocked by it, and
+              hiding it would imply otherwise. */}
+          {setupPending && (
+            <Link
+              to={`/exam/${patient.id}`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
+            >
+              {t("startCheckin")}
+            </Link>
           )}
-        >
-          {t("startCheckin")}
-        </Link>
+        </div>
+
         {/* Family access lives on the patient card because it is a per-patient decision,
             not an account-wide one: a caregiver managing two parents shares each of them
             with a different set of relatives. Owning-caregiver only (D-054) — the server

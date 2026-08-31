@@ -115,7 +115,7 @@ export default function ClinicianReport() {
         </p>
       )}
 
-      <h2 className="mt-7 border-b border-line pb-1 text-lg font-semibold">Session history</h2>
+      <h2 className="mt-7 border-b border-line pb-1 text-title-2">Session history</h2>
       <table className="mt-3 w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line text-left">
@@ -154,7 +154,7 @@ export default function ClinicianReport() {
         </tbody>
       </table>
 
-      <h2 className="mt-7 border-b border-line pb-1 text-lg font-semibold">Baselines</h2>
+      <h2 className="mt-7 border-b border-line pb-1 text-title-2">Baselines</h2>
       <table className="mt-3 w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line text-left">
@@ -182,7 +182,7 @@ export default function ClinicianReport() {
         </tbody>
       </table>
 
-      <h2 className="mt-7 border-b border-line pb-1 text-lg font-semibold">Method</h2>
+      <h2 className="mt-7 border-b border-line pb-1 text-title-2">Method</h2>
       <p className="mt-2 text-sm leading-relaxed">{method_note}</p>
 
       <p className="mt-6 border-t border-line pt-3 text-xs text-muted-foreground">

@@ -23,7 +23,7 @@ export function FastCard({ card, className }: { card: FastCardData; className?: 
       className={cn("rounded-2xl border-2 border-alert/30 bg-alert-soft p-5", className)}
       aria-label={card.title}
     >
-      <h2 className="text-lg font-semibold text-alert">{card.title}</h2>
+      <h2 className="text-title-2 text-alert">{card.title}</h2>
 
       <ul className="mt-4 flex flex-col gap-3">
         {card.items.map((item) => (
