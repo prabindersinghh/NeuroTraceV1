@@ -116,3 +116,25 @@ def test_the_scanner_ignores_sqlalchemy_column_types():
     assert lines == [], "Python outside op.execute() must not be scanned at all"
     assert not SQLITE_ONLY.search("sa.DateTime(timezone=True)")
     assert SQLITE_ONLY.search("SELECT datetime('now')")
+
+
+# ------------------------------------------------------- what the ORM writes vs the DB
+def test_enum_columns_persist_member_values_not_names():
+    """The ORM must write what the migrations' CHECK constraints accept.
+
+    `sa.Enum` persists the member NAME by default. Every enum here has name == value
+    except SessionType (`daily_pulse = "DAILY_PULSE"`), so the ORM wrote 'comprehensive'
+    against a CHECK that migration 0012 had narrowed to the VALUES — every session insert
+    on a migrated Postgres failed. SQLite hid it: create_all built the CHECK from the same
+    names, so the schema agreed with itself and disagreed with production.
+    """
+    import sqlalchemy as sa
+    from app.db import Base
+
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            if isinstance(column.type, sa.Enum) and column.type.enum_class:
+                expected = [m.value for m in column.type.enum_class]
+                assert list(column.type.enums) == expected, (
+                    f"{table.name}.{column.name} persists names, not values"
+                )
