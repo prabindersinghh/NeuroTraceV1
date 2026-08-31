@@ -432,6 +432,52 @@ export interface AwaazSpeakResult {
   audio_pair_registered: boolean;
 }
 
+// --- candidate-ranking policy events (AWA-FR-014). Opaque ids and scores only: both
+// request models are `extra="forbid"` server-side precisely so no transcript, phrase text
+// or patient identifier can be smuggled onto this table. See `lib/awaazPolicyLog.ts`.
+export interface AwaazPolicyCandidatePayload {
+  candidate_id: string;
+  score: number;
+}
+
+export interface AwaazPolicyDecisionPayload {
+  /** Minted by the client when the slate was rendered; the server's idempotency key. */
+  event_id: string;
+  candidates: AwaazPolicyCandidatePayload[];
+  /** Only ever true. The server refuses to randomise anything off the confirmation path. */
+  requires_confirmation: true;
+  policy_logging_consent: true;
+}
+
+export interface AwaazPolicyDecision {
+  event_id: string;
+  behavior_policy_id: string;
+  /** Display order. Index 0 is the logged action. The client must not reorder this. */
+  offered_candidate_ids: string[];
+  logged_action_id: string;
+  logged_action_probability: number;
+  top_ranked_action_id: string;
+  randomised: boolean;
+  exploration_epsilon: number;
+  near_tie_margin: number;
+}
+
+export type AwaazPolicyOutcome =
+  | "selected"
+  | "rejected"
+  | "corrected"
+  | "phrase_board_fallback"
+  | "no_explicit_signal";
+
+export interface AwaazPolicyOutcomePayload {
+  event_id: string;
+  outcome: AwaazPolicyOutcome;
+  selected_action_id: string | null;
+  rejected_action_ids: string[];
+  confirmation_observed: boolean;
+  output_spoken: boolean;
+}
+
 export interface AwaazReviewLabelPayload {
   corrected_text: string;
   /** UUID of a caregiver-reviewed patient repeat held only in local IndexedDB. */

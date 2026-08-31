@@ -80,6 +80,20 @@ import {
   saveCachedAwaazBoard,
 } from "@/lib/awaazOfflineBoard";
 import {
+  correctedOutcome,
+  noExplicitSignalOutcome,
+  openPolicySlate,
+  phraseBoardFallbackOutcome,
+  readPolicyLoggingConsent,
+  rejectedOutcome,
+  reportPolicyOutcome,
+  scoredSlateFromSpeakResult,
+  selectedOutcome,
+  writePolicyLoggingConsent,
+  type PolicyOutcomeReport,
+  type PolicySlate,
+} from "@/lib/awaazPolicyLog";
+import {
   deleteLocalEmergencyAudio,
   getLocalEmergencyAudio,
   isEmergencyAudioCurrent,
@@ -208,6 +222,7 @@ export default function Awaaz() {
   const [emergencyLocation, setEmergencyLocation] = useState<EmergencyLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [longPressArmed, setLongPressArmed] = useState(false);
+  const [policyLoggingConsent, setPolicyLoggingConsent] = useState(false);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const emergencyRecorderRef = useRef<AudioRecorder | null>(null);
   const emergencyStopTimerRef = useRef<number | null>(null);
@@ -217,6 +232,12 @@ export default function Awaaz() {
   const emergencyStoppingRef = useRef(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressOriginRef = useRef<PointerPoint | null>(null);
+  // The open candidate-ranking event, if one was drawn. A ref rather than state because
+  // nothing about it is rendered and a re-render must never mint a second event id for one
+  // decision — that would make one decision two observations in every weighted sum.
+  const policySlateRef = useRef<PolicySlate | null>(null);
+  const policyConsentRef = useRef(false);
+  policyConsentRef.current = policyLoggingConsent;
 
   const currentBoard = board?.patient_id === patientId ? board : null;
   const currentEmergencyAudio = emergencyAudio?.patient_id === patientId
@@ -293,6 +314,9 @@ export default function Awaaz() {
     setShareEmergencyLocation(readEmergencyLocationConsent(patientId));
     setEmergencyLocation(null);
     setLocationStatus(null);
+    // A separate consent record per purpose (PRD_AWAAZ §10.2). Analytics logging does not
+    // ride on the consent given for anything else, and its default is off.
+    setPolicyLoggingConsent(readPolicyLoggingConsent(patientId));
   }, [patientId]);
 
   useEffect(() => {
@@ -413,8 +437,31 @@ export default function Awaaz() {
     setCaptureStatus(null);
   }, [pendingCapture]);
 
+  /**
+   * Close the open ranking event, if there is one. Fire-and-forget on purpose: a logging
+   * report may never delay a tap, hold up speech, or surface an error to a patient who is
+   * trying to say something. The ref is cleared first so exactly one outcome is reported.
+   */
+  const closePolicySlate = useCallback((report: PolicyOutcomeReport) => {
+    const slate = policySlateRef.current;
+    policySlateRef.current = null;
+    if (!slate) return;
+    void reportPolicyOutcome(api, patientId, slate, report);
+  }, [patientId]);
+
+  // Leaving the screen, or switching patient, having done none of the four is the
+  // `no_explicit_signal` case. It is reported rather than dropped, because a log that only
+  // exists when the patient reacted is a sample selected on the outcome.
+  useEffect(
+    () => () => closePolicySlate(noExplicitSignalOutcome()),
+    [closePolicySlate],
+  );
+
   const speakCard = useCallback(async (cardId: string, text: string, cardLang: string) => {
     setActionError(null);
+    // Reaching for the board while options are on screen is the designed safety route, and
+    // the one outcome the ranker most needs to see (D-065).
+    closePolicySlate(phraseBoardFallbackOutcome());
     voice(text, cardLang); // voiced immediately — the patient chose these exact words
     setLastSpoken(text);
     if (pendingCapture) {
@@ -478,7 +525,7 @@ export default function Awaaz() {
         setActionError(t("awaazNotSaved"));
       }
     }
-  }, [patientId, pendingCapture, t, usingOfflineBoard]);
+  }, [closePolicySlate, patientId, pendingCapture, t, usingOfflineBoard]);
 
   const saveEndpoint = useCallback(async () => {
     setActionError(null);
@@ -641,6 +688,8 @@ export default function Awaaz() {
     setBusy(true);
     setCandidates([]);
     setActionError(null);
+    // Typing again instead of choosing is a correction of what was on screen.
+    closePolicySlate(correctedOutcome());
     try {
       const res: AwaazSpeakResult = await api.awaazSpeak(patientId, {
         text: freeText.trim(), lang,
@@ -652,14 +701,28 @@ export default function Awaaz() {
         setFreeText("");
       } else if (res.requires_confirmation) {
         // Aphasia path — candidates only. NOTHING is voiced until a tap.
-        setCandidates(res.candidates.length ? res.candidates : [freeText.trim()]);
+        const offered = res.candidates.length ? res.candidates : [freeText.trim()];
+        const scored = scoredSlateFromSpeakResult(res);
+        if (!scored) {
+          setCandidates(offered);
+        } else {
+          // The server owns the randomisation. Whatever order comes back is the order the
+          // patient sees, because the propensity it recorded is the probability of exactly
+          // that. When it refuses, fails, or times out, `openPolicySlate` hands back the
+          // original order and no event exists — the loop is identical either way.
+          const opened = await openPolicySlate(api, patientId, scored, {
+            consent: policyConsentRef.current,
+          });
+          policySlateRef.current = opened.slate;
+          setCandidates(opened.texts);
+        }
       }
     } catch (e) {
       setActionError(e instanceof Error ? e.message : t("awaazNotSaved"));
     } finally {
       setBusy(false);
     }
-  }, [freeText, lang, patientId, t]);
+  }, [closePolicySlate, freeText, lang, patientId, t]);
 
   const confirmCandidate = useCallback(async (text: string) => {
     setBusy(true);
@@ -676,12 +739,15 @@ export default function Awaaz() {
       setLastSpoken(res.text);
       setCandidates([]);
       setFreeText("");
+      // Reported only here. `output_spoken` may not be claimed before the confirmation the
+      // server accepted, and a failed confirmation leaves the slate open for another tap.
+      closePolicySlate(selectedOutcome(text));
     } catch {
       setActionError(t("awaazConfirmFailed"));
     } finally {
       setBusy(false);
     }
-  }, [lang, patientId, t]);
+  }, [closePolicySlate, lang, patientId, t]);
 
   const addPersonalPhrase = useCallback(async () => {
     const boardLang = normaliseListenerLanguage(
@@ -726,6 +792,10 @@ export default function Awaaz() {
     // Start the on-device WAV before touching the network. A stock browser voice is only a
     // visible fallback and is never counted as offline-capable because browsers may fetch
     // voices from the network.
+    // The emergency flow is never ranked and never reaches the policy endpoints (D-063).
+    // An open slate is dropped outright rather than reported: nothing on this path may
+    // compete for the network with the alert that is going out.
+    policySlateRef.current = null;
     let offlineAudioPlayed = false;
     if (emergencyAudioReady && emergencyAudioUrl) {
       offlineAudioPlayed = await startEmergencyPlayback(new Audio(emergencyAudioUrl));
@@ -1223,7 +1293,11 @@ export default function Awaaz() {
                   {c}
                 </button>
               ))}
-              <button type="button" onClick={() => setCandidates([])}
+              <button type="button"
+                onClick={() => {
+                  closePolicySlate(rejectedOutcome(candidates));
+                  setCandidates([]);
+                }}
                 className="min-h-11 text-sm text-muted-foreground underline">
                 {t("awaazNone")}
               </button>
@@ -1238,6 +1312,26 @@ export default function Awaaz() {
             uses the top of this screen to speak, and a share button competing with the
             emergency card would be a design failure with real consequences. */}
         <section className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
+          {/* Off by default and consequence-free either way: with it off the confirmation
+              loop and the phrase board behave exactly as they do with it on. */}
+          <div className="rounded-xl border border-line p-3">
+            <p className="text-sm font-medium">{t("awaazPolicyLoggingTitle")}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {t("awaazPolicyLoggingHelp")}
+            </p>
+            <label className="mt-3 flex min-h-11 items-start gap-3 text-xs">
+              <input
+                type="checkbox"
+                checked={policyLoggingConsent}
+                onChange={(event) => {
+                  setPolicyLoggingConsent(event.target.checked);
+                  writePolicyLoggingConsent(patientId, event.target.checked);
+                }}
+                className="mt-0.5 h-5 w-5 accent-accent"
+              />
+              <span>{t("awaazPolicyLoggingConsent")}</span>
+            </label>
+          </div>
           <details className="rounded-xl border border-line p-3">
             <summary className="flex cursor-pointer list-none items-start gap-3">
               <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />

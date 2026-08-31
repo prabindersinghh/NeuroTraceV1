@@ -19,6 +19,9 @@ import type {
   AwaazCardCreatePayload,
   AwaazEmergencyResult,
   AwaazEmergencyPayload,
+  AwaazPolicyDecision,
+  AwaazPolicyDecisionPayload,
+  AwaazPolicyOutcomePayload,
   AwaazReviewLabelPayload,
   AwaazSpeakPayload,
   Battery,
@@ -275,6 +278,20 @@ export const api = {
     request<{ detail: string }>(`/awaaz/cards/${cardId}`, { method: "DELETE" }),
   awaazSpeak: (patientId: string, payload: AwaazSpeakPayload) =>
     request<import("./types").AwaazSpeakResult>(`/awaaz/${patientId}/speak`, {
+      method: "POST", json: payload,
+    }),
+  /**
+   * Candidate-ranking policy logging (AWA-FR-014). Opaque ids and scores only — never
+   * text. The decision endpoint answers 409 when `policy_logging_consent` is absent, which
+   * is an expected state and not an error the patient may ever be shown.
+   */
+  awaazPolicyDecision: (patientId: string, payload: AwaazPolicyDecisionPayload) =>
+    request<AwaazPolicyDecision>(`/awaaz/${patientId}/policy/decision`, {
+      method: "POST", json: payload,
+    }),
+  awaazPolicyOutcome: (patientId: string, payload: AwaazPolicyOutcomePayload) =>
+    // The response is the stored row; the client has no use for it beyond the ack.
+    request<unknown>(`/awaaz/${patientId}/policy/outcome`, {
       method: "POST", json: payload,
     }),
   awaazUpdateProfile: (patientId: string, payload: { endpoint_silence_seconds?: number }) =>
