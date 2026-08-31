@@ -55,24 +55,28 @@ GPU host, and a held-out human intelligibility evaluation — none of which exis
 optional GPU stack in `backend/requirements-train.txt` has never been installed or verified
 in this repository and is deliberately outside `requirements.lock.txt`.
 
-**Seven findings against `asr_runtime` are open, from an adversarial audit of that module.**
-They are recorded rather than fixed, and they are why the runtime must not be treated as
-production-ready even once a receipt exists. (1) Governance receipts use a symmetric HMAC
-and the trust root comes from environment variables the operator sets, so an operator can
-mint their own approval — it needs an asymmetric scheme with a public key pinned in tracked
-config. (2) `run_synthetic_smoke` bypasses the output-path guards, so `--output-dir` can
-write inside the tracked source tree against the module's own `data/`-only rule. (3) The
-split seeds the three largest components into train/validation/test with no floor or
-ceiling, so a fifty-pair corpus can yield a one-sample test split while the manifest
-advertises 70/15/15. (4) `epochs_completed` is incremented even when the optimiser-step cap
-broke out mid-epoch, so a manifest can claim a completed epoch that ran one batch of twenty.
-(5) A crash between publishing the adapter directory and publishing the manifest leaves
-patient-derived LoRA weights on disk with no manifest, no limitations, and no
-`deployment_ready: false`. (6) The adapter metadata sanitizer screens patient and capture
-UUIDs and audio hashes but not `target_text`; harmless only because PEFT currently writes
-two files, and one dependency upgrade from publishing patient phrases. (7) The base-model
-snapshot still uses `tempfile.mkdtemp` with no `dir=`, copying a multi-gigabyte checkpoint
-into shared temp — not patient data, but left behind on SIGKILL.
+**All seven findings against `asr_runtime` are fixed.** An adversarial audit of that module
+raised seven; each is now closed and pinned by a regression test verified to fail when the fix
+is reverted, checked by neutering the guard on a scratch copy rather than by inspection.
+(1) Governance receipts are Ed25519 with public halves pinned in a tracked
+`governance_public_keys.json` located by a module constant; the signing function no longer
+ships with the package, and the file is empty so the runtime refuses every real command
+(D-067, superseding D-059). (2) The containment guard moved into `_create_staging_directory`,
+the funnel every writing path uses, so `run_synthetic_smoke` can no longer write inside the
+tracked source tree. (3) Splits carry a relative size floor and ceiling with
+`split_too_small` / `split_unbalanced`, and the manifest publishes achieved fractions beside
+target ones. (4) `epochs_completed` counts only a genuinely exhausted epoch, and
+`training.status` distinguishes `truncated_before_completion`. (5) An `.incomplete` sentinel
+is written before the first move and cleared after the manifest lands, so a crash cannot leave
+patient-derived weights without provenance. (6) The sanitizer screens `target_text` —
+utterances of at least twelve characters and two words, with word-boundary matching, across
+more formats plus the safetensors header. (7) The base-model snapshot passes `dir=` and stays
+beside the approved tree.
+
+The runtime still must not be treated as production-ready, but the reasons are now governance
+and evidence rather than code: no clinical owner has committed a governance public key, no
+consented cohort or verified archive exists, no approved base checkpoint is present, and no
+held-out listener evaluation has been designed.
 
 **Offline policy evaluation now has a logging contract and still has no input.**
 `backend/app/ml/rl/` can compare a candidate ranker against a logged behaviour policy

@@ -211,39 +211,37 @@ D-013, applied to a different model.
    never auto-speak.
 3. **Emergency mode failing silently is worse than not having it.** Needs a visible
    self-test the caregiver can run.
-4. **The governance receipt does not prove governance.** `asr_runtime` signs receipts with a
-   symmetric HMAC, `governance_receipt_signature` is exported public API, and the "pinned
-   trust root" is read from environment variables that the same operator sets. An operator
-   can therefore mint their own approval: the signature proves possession of a key the
-   training host already holds, not that any reviewer approved anything. This has to become
-   an asymmetric scheme — Ed25519, with the public key pinned in tracked config — before a
-   receipt can be treated as evidence of approval by anyone other than the person running
-   the job. Found by audit, not fixed.
-5. **`run_synthetic_smoke` bypasses the output-path guards.** The module's own rule is that
-   runtime output lives only under `data/`, and the smoke path does not enforce it, so
-   `--output-dir` can write a manifest inside the tracked source tree. Found by audit, not
-   fixed.
-6. **The split has no floor or ceiling.** `build_group_phrase_disjoint_split` seeds the three
-   largest components into train, validation and test before load-balancing the rest, with no
-   minimum or maximum size on any split. A fifty-pair corpus can legally produce a
-   one-sample test split while the manifest advertises target fractions of 70/15/15. An
-   evaluation on one utterance is not an evaluation, and nothing currently says so.
-   Found by audit, not fixed.
-7. **`epochs_completed` can overstate what ran.** The counter is incremented after the inner
-   loop even when the optimiser-step cap broke out mid-epoch, so a manifest can read
-   `"status": "completed", "epochs_completed": 1` when one batch of twenty was optimised.
-   Found by audit, not fixed.
-8. **A crash between two publish steps leaves orphaned patient-derived weights.** The adapter
-   directory is published before the manifest. A process killed in between leaves LoRA
-   weights derived from a patient's speech on disk with no manifest, no limitations, and no
-   `deployment_ready: false` beside them — precisely the artifact this design exists to make
-   impossible to mistake for a shippable model. Found by audit, not fixed.
-9. **The adapter metadata sanitizer does not screen `target_text`.** It screens patient and
-   capture UUIDs and audio hashes. This is harmless today only because PEFT writes exactly
-   two files, neither containing transcripts; one dependency upgrade that starts recording
-   dataset metadata would publish the patient's own phrases into an exported artifact.
-   Found by audit, not fixed.
-10. **The base-model snapshot writes to shared temp.** It still uses `tempfile.mkdtemp` with
-    no `dir=`, copying a multi-gigabyte checkpoint into the system temp directory. This is
-    not patient data, but it is left behind on SIGKILL and it is the same shape of mistake as
-    the archive-snapshot bug that was fixed (INV-1). Found by audit, not fixed.
+4. **The governance receipt now proves approval — and nobody can issue one.** Receipts are
+   Ed25519, `governance_receipt_signature` no longer ships with the package, and the public
+   halves are pinned in a tracked `governance_public_keys.json` located by a module constant
+   rather than read from operator-set environment variables. Both changes were needed: an
+   asymmetric scheme alone would have left the operator free to pin their own public key,
+   which is the same bypass in better crypto. The file ships empty, so every real command
+   refuses with `governance_trust_root_missing`. What is open is custody, not code — see
+   `GOVERNANCE_KEYS.md`, and note that a key committed by the person who runs training
+   defeats the boundary entirely. D-067 supersedes D-059. FIXED.
+5. **`run_synthetic_smoke` bypassed the output-path guards.** Containment moved into
+   `_create_staging_directory`, the funnel every writing path goes through, and parent
+   directories are no longer created implicitly. FIXED.
+6. **The split had no floor or ceiling.** Partitions now fill to a relative floor before
+   load-balancing, `split_too_small` and `split_unbalanced` refuse what cannot be met, and the
+   manifest publishes achieved fractions beside the target ones so a reader is never quietly
+   misled. FIXED.
+7. **`epochs_completed` overstated what ran.** It now counts only a genuinely exhausted epoch,
+   with the honest exception of a step cap landing on the final batch, and `training.status`
+   distinguishes `truncated_before_completion`. A missing count reads as truncated. FIXED.
+8. **A crash between two publish steps could orphan patient-derived weights.** An
+   `.incomplete` sentinel is written and fsynced before the first move and unlinked only after
+   the manifest lands; `verify_published_artifact` refuses any directory still carrying it.
+   FIXED.
+9. **The adapter metadata sanitizer did not screen `target_text` at all** — not "some paths",
+   as this entry previously implied. Utterances of at least twelve characters and two words
+   are now screened with word-boundary matching, across more text formats plus the
+   safetensors JSON header. Short utterances are deliberately excluded and pinned by a test,
+   because a bare common word appears in tokenizer vocabularies and screening it would abort
+   every real run on a false positive. FIXED.
+10. **The base-model snapshot wrote to shared temp.** It now passes `dir=` and snapshots
+    beside the approved tree, matching the archive verifier's precedent. FIXED.
+
+Each of these is pinned by a regression test verified to fail when the fix is reverted, by
+neutering the guard on a scratch copy rather than by reading the code and believing it.

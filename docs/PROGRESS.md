@@ -325,13 +325,15 @@ so in the source. D-015, D-017.
   not be a model card for one until a governed run has happened and been reviewed. The
   optional GPU stack (`backend/requirements-train.txt`) has never been installed or verified
   here.
-- **Seven open findings against `asr_runtime`**, from an adversarial audit and deliberately
-  not fixed in this session: symmetric-HMAC governance receipts an operator can mint for
-  themselves, a synthetic-smoke path that escapes the output-path guard, a split with no
-  size floor or ceiling, an `epochs_completed` counter that can overstate a truncated epoch,
-  an orphan-adapter window between publishing weights and publishing the manifest, a
-  metadata sanitizer blind to `target_text`, and a base-model snapshot written to shared
-  temp. Each is stated in full in `COMPLETION_CHECKLIST.md` and `PLAN_AWAAZ.md`.
+- ~~**Seven open findings against `asr_runtime`**~~ — **ALL SEVEN FIXED.** Governance
+  receipts are Ed25519 with public halves pinned in tracked config (D-067 supersedes D-059);
+  the synthetic-smoke path now goes through the same containment funnel; splits carry a size
+  floor and ceiling and publish achieved fractions beside target ones; `epochs_completed`
+  counts only an exhausted epoch and the manifest distinguishes a truncated run; an
+  `.incomplete` sentinel closes the orphan-adapter window; the sanitizer screens
+  `target_text`; and the base-model snapshot no longer passes through shared temp. Each fix
+  is pinned by a test verified to fail when the fix is reverted. `PRD_AWAAZ.md` §9.3 carries
+  the table.
 - **Offline policy evaluation has no eligible input.** `backend/app/ml/rl/` runs offline and
   synthetic only; the production Awaaz schema records no slate, policy version, logged
   propensity, or outcome, so no current product event can be used. `docs/PLAN_RL.md`.
@@ -385,12 +387,14 @@ so in the source. D-015, D-017.
    laterality features lives in the deferred walking and stepping tests. M3 oculomotor
    carries laterality for those patients. If M3 capture quality turns out to be poor in the
    field, phone-only patients lose posterior laterality entirely — that is the risk to watch.
-5. **A governance receipt currently proves possession of a key, not approval.** The
-   `asr_runtime` receipt is a symmetric HMAC verified against a trust root the operator sets
-   through environment variables, so the operator of a training host can sign their own
-   authorisation. Until that becomes an asymmetric scheme with a public key pinned in
-   tracked config, a valid receipt is evidence that the job was configured, not that anyone
-   reviewed it — and the whole fail-closed design rests on that receipt.
+5. **A governance receipt now proves approval, but nobody can issue one yet.** The scheme
+   is Ed25519: verifying no longer confers the ability to sign, the signing function is gone
+   from the shipped package, and public halves are pinned in tracked config rather than read
+   from operator-set environment variables. Both halves were needed — asymmetric crypto alone
+   would have left the operator free to pin their own public key. What remains open is
+   custody, not code: `governance_public_keys.json` ships empty, so the runtime refuses every
+   real command, and it stays that way until a clinical owner generates a keypair offline and
+   someone other than the training operator commits the public half. `GOVERNANCE_KEYS.md`.
 6. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
    to three frames, so peak velocity is an average that understates the true peak. Recorded
    and flagged (`velocity_confidence` 0.00 at 30 fps) rather than corrected. Latency is
