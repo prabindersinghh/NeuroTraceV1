@@ -11,38 +11,56 @@ from .contracts import (
     FeedbackActor,
     LoggedFeedback,
     OfflinePolicy,
+    OutcomeModelPrediction,
+    OutcomeModelValidation,
+    OutcomeValidationScheme,
     PolicyManifest,
     PolicyPrediction,
     PolicyScope,
+    ValidatedOutcomeModel,
 )
 from .offline import (
     ComparisonStatus,
+    DoublyRobustDiagnostic,
     EvaluationConfig,
+    ImprovementDecision,
     OfflineComparison,
     PolicyEstimate,
     compare_policies,
 )
 from .rewards import RewardBreakdown, RewardConfig, score_logged_action
-from .safety import GateResult, gate_logged_feedback, gate_policy
+from .safety import (
+    GateResult,
+    gate_logged_feedback,
+    gate_outcome_model,
+    gate_policy,
+)
 
 __all__ = [
     "CollectionMode",
     "ComparisonStatus",
+    "DoublyRobustDiagnostic",
     "EvaluationConfig",
     "ExplicitFeedback",
     "FeedbackActor",
     "GateResult",
+    "ImprovementDecision",
     "LoggedFeedback",
     "OfflineComparison",
     "OfflinePolicy",
+    "OutcomeModelPrediction",
+    "OutcomeModelValidation",
+    "OutcomeValidationScheme",
     "PolicyEstimate",
     "PolicyManifest",
     "PolicyPrediction",
     "PolicyScope",
     "RewardBreakdown",
     "RewardConfig",
+    "ValidatedOutcomeModel",
     "compare_policies",
     "gate_logged_feedback",
+    "gate_outcome_model",
     "gate_policy",
     "score_logged_action",
 ]

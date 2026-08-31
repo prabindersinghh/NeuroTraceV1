@@ -34,14 +34,18 @@ def _uuid(value: uuid.UUID | str, *, field_name: str) -> uuid.UUID:
         raise ValueError(f"{field_name} must be an opaque UUID") from exc
 
 
-def _policy_id(value: object) -> str:
+def _slug(value: object, *, field_name: str) -> str:
     value = str(value)
     if _POLICY_ID.fullmatch(value) is None:
         raise ValueError(
-            "policy_id must be a lowercase opaque slug containing only letters, digits, "
+            f"{field_name} must be a lowercase opaque slug containing only letters, digits, "
             "dot, underscore, or dash"
         )
     return value
+
+
+def _policy_id(value: object) -> str:
+    return _slug(value, field_name="policy_id")
 
 
 def _boolean(value: object, *, field_name: str) -> bool:
@@ -394,3 +398,166 @@ class OfflinePolicy:
             tuple(sorted(predictions, key=lambda item: item.event_id.int)),
         )
 
+
+
+#: ``rewards.py`` builds every reward as a convex combination of a preference term in
+#: {-1, 0, 1} and a repair term in {-1, 0}, so no achievable reward can fall outside this
+#: range whatever weights a caller supplies. The bound is duplicated here rather than
+#: imported because ``rewards`` imports this module; an outcome model that predicts outside
+#: it is not a model of this reward and is refused at construction.
+REWARD_LOWER_BOUND = -1.0
+REWARD_UPPER_BOUND = 1.0
+
+
+class OutcomeValidationScheme(str, enum.Enum):
+    """How an outcome model's held-out evaluation was split.
+
+    ``grouped_holdout`` means the split kept every event from one speaker on one side of the
+    line. ``random_event_holdout`` shuffles events, which leaks a speaker's own events into
+    the model's own test set and reports an optimistic error. Both values exist because a
+    submitter must be able to *declare* the weaker one honestly; ``gate_outcome_model``
+    then refuses it. An enum with only the acceptable value would push the mis-declaration
+    into a comment nobody reads.
+    """
+
+    grouped_holdout = "grouped_holdout"
+    random_event_holdout = "random_event_holdout"
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeModelValidation:
+    """Attestation that an outcome model was validated somewhere this package cannot see.
+
+    Every field is required. There is deliberately no default and no ``validated: bool``
+    convenience flag, because a boolean with a default is exactly the shape a caller
+    eventually constructs by accident: ``OutcomeModelValidation()`` must not be a sentence
+    anyone can write. The doubly-robust estimator in ``offline`` is unreachable without one
+    of these, which is how PRD 11 ("may be added only after a separately validated outcome
+    model exists") is enforced in code rather than in prose.
+
+    The validation itself happens in a governed environment that legitimately holds the
+    patient key -- PRD 10.3 requires splitting by patient before any fitting. This package
+    never receives that key (see ``UNCERTAINTY_BASIS`` in ``offline``); it receives only this
+    attestation and the opaque references needed to audit it later.
+    """
+
+    validation_id: str
+    scheme: OutcomeValidationScheme
+    held_out_events: int
+    calibration_error: float
+    fitted_without_evaluation_events: bool
+    reviewer_reference: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "validation_id", _slug(self.validation_id, field_name="validation_id")
+        )
+        # An opaque slug, not a person's name. A reviewer's name is not a patient identifier,
+        # but a free-text field on a record that travels with logged patient feedback is a
+        # place free text learns to live, and INV-11 is cheaper to keep than to restore.
+        object.__setattr__(
+            self,
+            "reviewer_reference",
+            _slug(self.reviewer_reference, field_name="reviewer_reference"),
+        )
+        try:
+            scheme = OutcomeValidationScheme(self.scheme)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("outcome validation scheme is not supported") from exc
+        object.__setattr__(self, "scheme", scheme)
+
+        if type(self.held_out_events) is not int or self.held_out_events < 0:
+            raise ValueError("held_out_events must be a non-negative integer")
+        if isinstance(self.calibration_error, bool):
+            raise ValueError("calibration_error must be numeric")
+        error = float(self.calibration_error)
+        # The widest possible mean absolute error on a reward bounded in [-1, 1] is 2.0.
+        if not math.isfinite(error) or not 0.0 <= error <= 2.0:
+            raise ValueError("calibration_error must be finite and in [0, 2]")
+        object.__setattr__(self, "calibration_error", error)
+        object.__setattr__(
+            self,
+            "fitted_without_evaluation_events",
+            _boolean(
+                self.fitted_without_evaluation_events,
+                field_name="fitted_without_evaluation_events",
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeModelPrediction:
+    """One outcome model's predicted reward for every action offered in one event."""
+
+    event_id: uuid.UUID
+    action_rewards: tuple[tuple[uuid.UUID, float], ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "event_id", _uuid(self.event_id, field_name="event_id"))
+        raw: Iterable[tuple[uuid.UUID | str, float]]
+        if isinstance(self.action_rewards, Mapping):
+            raw = self.action_rewards.items()
+        else:
+            raw = self.action_rewards
+
+        parsed: list[tuple[uuid.UUID, float]] = []
+        for action_id, reward in raw:
+            action = _uuid(action_id, field_name="action_rewards action")
+            if isinstance(reward, bool):
+                raise ValueError("predicted rewards must be numeric")
+            value = float(reward)
+            if not math.isfinite(value) or not (
+                REWARD_LOWER_BOUND <= value <= REWARD_UPPER_BOUND
+            ):
+                raise ValueError(
+                    "predicted rewards must be finite and within the achievable reward range"
+                )
+            parsed.append((action, value))
+        if not parsed:
+            raise ValueError("action_rewards must not be empty")
+        action_ids = [item[0] for item in parsed]
+        if len(action_ids) != len(set(action_ids)):
+            raise ValueError("action_rewards must not repeat an action")
+        parsed.sort(key=lambda item: item[0].int)
+        object.__setattr__(self, "action_rewards", tuple(parsed))
+
+    @property
+    def action_ids(self) -> frozenset[uuid.UUID]:
+        return frozenset(action_id for action_id, _ in self.action_rewards)
+
+    def reward_for(self, action_id: uuid.UUID) -> float:
+        action_id = _uuid(action_id, field_name="action_id")
+        return next(
+            (reward for action, reward in self.action_rewards if action == action_id),
+            0.0,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedOutcomeModel:
+    """A reward model plus the attestation that makes it usable for doubly-robust scoring.
+
+    The validation is not optional and carries no default, so the type cannot be instantiated
+    without one. That is the whole point: ``compare_policies`` accepts an outcome model only
+    as this type, so "doubly robust with an unvalidated model" is not an expressible call.
+    """
+
+    model_id: str
+    validation: OutcomeModelValidation
+    predictions: tuple[OutcomeModelPrediction, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "model_id", _slug(self.model_id, field_name="model_id"))
+        if not isinstance(self.validation, OutcomeModelValidation):
+            raise ValueError("validation must be an OutcomeModelValidation record")
+        predictions = tuple(self.predictions)
+        if any(not isinstance(item, OutcomeModelPrediction) for item in predictions):
+            raise ValueError("predictions must contain OutcomeModelPrediction records")
+        event_ids = [item.event_id for item in predictions]
+        if len(event_ids) != len(set(event_ids)):
+            raise ValueError("an outcome model may provide only one prediction per event")
+        object.__setattr__(
+            self,
+            "predictions",
+            tuple(sorted(predictions, key=lambda item: item.event_id.int)),
+        )

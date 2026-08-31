@@ -1,6 +1,7 @@
 """Safety and reproducibility checks for the offline-only Awaaz policy scaffold."""
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import replace
 
@@ -16,17 +17,22 @@ from app.ml.rl import (
     LoggedFeedback,
     OfflineComparison,
     OfflinePolicy,
+    OutcomeModelPrediction,
+    OutcomeModelValidation,
+    OutcomeValidationScheme,
     PolicyManifest,
     PolicyPrediction,
     RewardConfig,
+    ValidatedOutcomeModel,
     compare_policies,
     gate_logged_feedback,
+    gate_outcome_model,
     gate_policy,
     score_logged_action,
 )
 from app.ml.rl import offline
 from app.ml.rl.simulate import _events as simulate_events
-from app.ml.rl.simulate import run_simulation
+from app.ml.rl.simulate import run_scenarios, run_simulation
 
 
 def _event(index: int, *, positive: bool, emergency: bool = False) -> LoggedFeedback:
@@ -712,21 +718,38 @@ def test_rejecting_the_logged_action_is_negative_preference_without_a_repair_cos
     assert breakdown.total == pytest.approx(-0.8)
 
 
-def test_leaving_for_the_phrase_board_scores_a_full_negative_with_a_repair_cost():
+def test_reaching_the_phrase_board_is_not_punished_harder_than_a_plain_rejection():
+    """The safety fallback must never be the worst outcome the reward function can express.
+
+    This previously charged a repair cost on top of the negative preference, scoring a
+    fallback at -1.0 against a bare rejection's -0.8. That ordering trains the ranker to
+    keep a patient wrestling with poor candidates rather than let them reach the board --
+    optimising against the mitigation PRD 20 names and the done-condition PRD 22 sets.
+
+    A correction still carries repair cost: the patient engaged with the candidate and then
+    had to fix it, which is real interaction cost. Walking away to the board is not.
+    """
     event = _event(0, positive=True)
-    fallback = replace(
-        event,
-        confirmation_observed=False,
-        output_spoken=False,
-        feedback=ExplicitFeedback(
-            actor=FeedbackActor.patient,
-            phrase_board_fallback=True,
-        ),
+
+    def outcome(**kwargs):
+        return score_logged_action(
+            replace(
+                event,
+                confirmation_observed=False,
+                output_spoken=False,
+                feedback=ExplicitFeedback(actor=FeedbackActor.patient, **kwargs),
+            )
+        )
+
+    fallback = outcome(phrase_board_fallback=True)
+    rejection = outcome(rejected_action_ids=(event.logged_action_id,))
+
+    assert fallback.explicit_preference == -1.0
+    assert fallback.repair_cost == 0.0
+    assert fallback.total == pytest.approx(-0.8)
+    assert fallback.total >= rejection.total, (
+        "the designed safety fallback scored worse than an outright rejection"
     )
-    breakdown = score_logged_action(fallback)
-    assert breakdown.explicit_preference == -1.0
-    assert breakdown.repair_cost == -1.0
-    assert breakdown.total == pytest.approx(-1.0)
 
 
 def test_a_selection_that_had_to_be_corrected_is_not_rewarded_for_being_selected():
@@ -788,3 +811,558 @@ def test_the_simulated_behaviour_policy_actually_randomises_over_its_candidates(
     assert 0 < logged_first < len(events)
     assert len({event.logged_action_probability for event in events}) > 1
     assert all(0.0 < event.logged_action_probability < 1.0 for event in events)
+
+
+# --- C12: doubly robust is unreachable without a validated outcome model -----
+#
+# PRD 11: "Doubly robust estimators may be added only after a separately validated outcome
+# model exists." These tests exist to make that sentence unfalsifiable in code: there is no
+# argument shape that produces a DR number without an attestation, and no attestation shape
+# that can be written without its evidence.
+
+
+def _valid_validation(**overrides) -> OutcomeModelValidation:
+    fields = {
+        "validation_id": "validation-001",
+        "scheme": OutcomeValidationScheme.grouped_holdout,
+        "held_out_events": 120,
+        "calibration_error": 0.10,
+        "fitted_without_evaluation_events": True,
+        "reviewer_reference": "reviewer-ref-001",
+    }
+    fields.update(overrides)
+    return OutcomeModelValidation(**fields)
+
+
+def _outcome_model(events, *, validation=None, model_id="outcome-v1", cover=None):
+    covered = events if cover is None else cover
+    return ValidatedOutcomeModel(
+        model_id=model_id,
+        validation=validation or _valid_validation(),
+        predictions=tuple(
+            OutcomeModelPrediction(
+                event_id=event.event_id,
+                # Deliberately imperfect and asymmetric: a model that predicted the logged
+                # reward exactly would make the DR residual vanish and DR would coincide
+                # with SNIPS, which would prove nothing about the two being separate.
+                action_rewards=tuple(
+                    (action, 0.5 if action == event.logged_action_id else -0.2)
+                    for action in event.candidate_action_ids
+                ),
+            )
+            for event in covered
+        ),
+    )
+
+
+def _sixty_events():
+    return [_event(i, positive=i % 2 == 0) for i in range(60)]
+
+
+def test_doubly_robust_is_refused_outright_when_no_validated_outcome_model_is_supplied():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        request_doubly_robust=True,
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "doubly_robust_requires_validated_outcome_model" in result.blockers
+    # The refusal is not a fallback: no estimate is produced at all.
+    assert result.reward_delta is None
+    assert result.doubly_robust is None
+
+
+def test_a_comparison_without_an_outcome_model_reports_no_doubly_robust_number_at_all():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.status is ComparisonStatus.candidate_better_offline
+    assert result.doubly_robust is None
+    assert result.baseline.doubly_robust_reward is None
+    assert result.candidate.doubly_robust_reward is None
+
+
+def test_supplying_an_outcome_model_without_requesting_doubly_robust_is_refused():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        outcome_model=_outcome_model(events),
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "doubly_robust_requires_explicit_request" in result.blockers
+
+
+def test_an_outcome_model_validation_record_cannot_be_written_without_its_evidence():
+    with pytest.raises(TypeError):
+        OutcomeModelValidation()
+    with pytest.raises(ValueError, match="held_out_events"):
+        _valid_validation(held_out_events=-1)
+    with pytest.raises(ValueError, match="calibration_error"):
+        _valid_validation(calibration_error=float("nan"))
+    with pytest.raises(ValueError, match="fitted_without_evaluation_events"):
+        _valid_validation(fitted_without_evaluation_events="yes")
+    with pytest.raises(ValueError, match="scheme"):
+        _valid_validation(scheme="whatever_split")
+
+
+def test_an_outcome_model_validated_on_a_random_event_split_is_refused_by_its_gate():
+    events = _sixty_events()
+    model = _outcome_model(
+        events,
+        validation=_valid_validation(
+            scheme=OutcomeValidationScheme.random_event_holdout,
+        ),
+    )
+    assert "outcome_model_validation_split_not_grouped" in gate_outcome_model(model).blockers
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        outcome_model=model,
+        request_doubly_robust=True,
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "outcome_model:outcome_model_validation_split_not_grouped" in result.blockers
+
+
+def test_an_outcome_model_fitted_on_the_evaluation_events_cannot_be_doubly_robust():
+    events = _sixty_events()
+    model = _outcome_model(
+        events,
+        validation=_valid_validation(fitted_without_evaluation_events=False),
+    )
+    assert "outcome_model_fitted_on_evaluation_events" in gate_outcome_model(model).blockers
+
+
+def test_a_small_holdout_or_a_poorly_calibrated_outcome_model_is_refused():
+    events = _sixty_events()
+    small = _outcome_model(events, validation=_valid_validation(held_out_events=10))
+    assert "outcome_model_holdout_below_minimum" in gate_outcome_model(small).blockers
+    uncalibrated = _outcome_model(
+        events,
+        validation=_valid_validation(calibration_error=0.4),
+    )
+    assert (
+        "outcome_model_calibration_error_above_maximum"
+        in gate_outcome_model(uncalibrated).blockers
+    )
+
+
+def test_an_outcome_model_with_no_predictions_is_refused():
+    model = ValidatedOutcomeModel(model_id="empty-v1", validation=_valid_validation())
+    assert "outcome_model_has_no_predictions" in gate_outcome_model(model).blockers
+
+
+def test_an_outcome_model_that_does_not_cover_every_logged_event_blocks_the_comparison():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        outcome_model=_outcome_model(events, cover=events[:-1]),
+        request_doubly_robust=True,
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "outcome_model:prediction_event_set_mismatch" in result.blockers
+
+
+def test_an_outcome_model_scoring_a_different_action_set_blocks_the_comparison():
+    events = _sixty_events()
+    honest = _outcome_model(events)
+    tampered = ValidatedOutcomeModel(
+        model_id=honest.model_id,
+        validation=honest.validation,
+        predictions=(
+            OutcomeModelPrediction(
+                event_id=events[0].event_id,
+                action_rewards=(
+                    (uuid.UUID(int=800_001), 0.5),
+                    (uuid.UUID(int=800_002), -0.5),
+                ),
+            ),
+        ) + honest.predictions[1:],
+    )
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        outcome_model=tampered,
+        request_doubly_robust=True,
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "outcome_model:candidate_action_set_mismatch" in result.blockers
+
+
+def test_an_outcome_model_may_not_predict_a_reward_outside_the_achievable_range():
+    with pytest.raises(ValueError, match="achievable reward range"):
+        OutcomeModelPrediction(
+            event_id=uuid.UUID(int=1),
+            action_rewards=((uuid.UUID(int=2), 5.0),),
+        )
+
+
+def test_a_validated_outcome_model_produces_doubly_robust_as_a_secondary_diagnostic_only():
+    events = _sixty_events()
+    kwargs = dict(
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    without = compare_policies(events, **kwargs)
+    with_model = compare_policies(
+        events,
+        **kwargs,
+        outcome_model=_outcome_model(events),
+        request_doubly_robust=True,
+    )
+    assert with_model.doubly_robust is not None
+    assert with_model.doubly_robust.outcome_model_id == "outcome-v1"
+    assert with_model.doubly_robust.validation_id == "validation-001"
+    assert with_model.doubly_robust.role == "secondary_diagnostic_only"
+    # The DR values are genuinely different numbers from the SNIPS ones, and they change
+    # nothing that decides: status, delta, interval and criterion are identical with and
+    # without the model, because all four are computed from SNIPS alone.
+    assert with_model.doubly_robust.baseline_reward != pytest.approx(
+        with_model.baseline.snips_reward
+    )
+    assert with_model.doubly_robust.candidate_reward != pytest.approx(
+        with_model.candidate.snips_reward
+    )
+    assert with_model.status is without.status
+    assert with_model.reward_delta == pytest.approx(without.reward_delta)
+    assert with_model.confidence_interval == without.confidence_interval
+    assert with_model.improvement.unmet_conditions == without.improvement.unmet_conditions
+
+
+def test_the_headline_estimator_is_snips_and_cannot_be_reassigned_to_doubly_robust():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+        outcome_model=_outcome_model(events),
+        request_doubly_robust=True,
+    )
+    assert result.headline_estimator == "snips"
+    with pytest.raises(TypeError):
+        replace(result, headline_estimator="doubly_robust")
+    with pytest.raises((AttributeError, TypeError)):
+        result.headline_estimator = "doubly_robust"
+    with pytest.raises((AttributeError, TypeError)):
+        result.doubly_robust.role = "primary"
+
+
+# --- C13: the interval is not clustered, and says so on every result ---------
+#
+# The contract carries no speaker key and this package does not add one: a grouping id stable
+# across a person's events is a pseudonymous patient identifier, and the property that makes
+# it useful (their events collide) is the property that makes it a re-identification handle.
+# See UNCERTAINTY_BASIS in offline.py. Since the limitation cannot be fixed here, these tests
+# check it cannot be missed either.
+
+
+def test_every_result_states_that_its_interval_is_uncorrected_for_speaker_clustering():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.uncertainty_basis == offline.UNCERTAINTY_BASIS
+    assert "clustering" in result.uncertainty_basis
+    assert "cluster" in result.limitations[0].lower()
+    assert "anti-conservative" in result.limitations[0]
+    blocked = compare_policies(
+        events[:10],
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+    )
+    # A refusal carries the caveat too; there is no output shape that omits it.
+    assert blocked.uncertainty_basis == offline.UNCERTAINTY_BASIS
+
+
+def test_clustered_uncertainty_is_reported_unavailable_and_cannot_be_claimed_otherwise():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.clustered_uncertainty_available is False
+    with pytest.raises(TypeError):
+        replace(result, clustered_uncertainty_available=True)
+    with pytest.raises((AttributeError, TypeError)):
+        result.clustered_uncertainty_available = True
+
+
+def test_the_logged_contract_still_carries_no_speaker_grouping_or_patient_key():
+    payload = _event(0, positive=True).to_dict()
+    flattened = " ".join(payload).lower()
+    for forbidden in ("patient", "speaker", "subject", "cluster", "group", "person"):
+        assert forbidden not in flattened
+
+
+# --- C14: deficient support is a first-class number with its own gate --------
+
+
+def test_candidate_mass_where_the_logger_provably_never_went_is_measured_and_blocked():
+    # 0.96 is under the 0.999 deterministic threshold, so the randomisation gate is satisfied.
+    # But the slate's propensities sum to one, so on those ten events every unlogged action
+    # provably had propensity under 0.04 -- below the 0.05 the config refuses to divide by.
+    events = _events_with([0.96] * 10 + [0.5] * 50)
+    result = compare_policies(
+        events,
+        baseline=_matched_policy("baseline-v1", events),
+        candidate=_shaped_policy(
+            "candidate-v1",
+            events,
+            lambda index: 0.1 if index < 10 else 0.5,
+        ),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "candidate:deficient_support_mass_above_maximum" in result.blockers
+    assert "logging_policy_is_deterministic" not in result.blockers
+    assert result.candidate.deficient_support_mass == pytest.approx(10 * 0.9 / 60)
+    assert result.candidate.deficient_support_event_rate == pytest.approx(10 / 60)
+    # Reported at the top level too, not only inside the estimate.
+    assert result.candidate_deficient_support_mass == pytest.approx(10 * 0.9 / 60)
+
+
+def test_deficient_support_is_detected_even_when_the_overlap_gate_is_fully_satisfied():
+    events = _events_with([0.96] * 10 + [0.5] * 50)
+    result = compare_policies(
+        events,
+        baseline=_matched_policy("baseline-v1", events),
+        candidate=_shaped_policy(
+            "candidate-v1",
+            events,
+            lambda index: 0.1 if index < 10 else 0.5,
+        ),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    # Every event still carries positive candidate weight, so overlap alone sees nothing.
+    assert result.candidate.overlap_rate == 1.0
+    assert result.candidate.max_importance_weight <= 10.0
+    assert result.blockers == ("candidate:deficient_support_mass_above_maximum",)
+
+
+def test_a_candidate_placing_no_mass_on_the_logged_action_counts_that_event_unsupported():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_matched_policy("baseline-v1", events),
+        candidate=_shaped_policy(
+            "candidate-v1",
+            events,
+            lambda index: 0.0 if index % 2 == 0 else 0.5,
+        ),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.status is ComparisonStatus.blocked
+    assert "candidate:deficient_support_mass_above_maximum" in result.blockers
+    assert result.candidate.deficient_support_mass == pytest.approx(0.5)
+    assert result.candidate.deficient_support_event_rate == pytest.approx(0.5)
+
+
+def test_a_well_supported_comparison_reports_exactly_zero_deficient_support_mass():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.candidate_deficient_support_mass == 0.0
+    assert result.baseline.deficient_support_mass == 0.0
+
+
+def test_the_deficient_support_gate_may_be_tightened_but_never_relaxed_past_its_ceiling():
+    with pytest.raises(ValueError, match="stringency ceiling"):
+        EvaluationConfig(max_deficient_support_mass=0.5)
+    with pytest.raises(ValueError, match="must be finite"):
+        EvaluationConfig(max_deficient_support_mass=-0.1)
+    assert EvaluationConfig(max_deficient_support_mass=0.0).max_deficient_support_mass == 0.0
+
+
+# --- C15: the conservative improvement criterion ----------------------------
+
+
+def test_a_point_estimate_above_the_minimum_effect_is_not_enough_on_its_own():
+    # Tuned so the SNIPS delta (~0.021) clears the 0.02 minimum effect while the interval's
+    # lower end (~0.019) does not. The old rule and the new rule disagree here, and the new
+    # one names the disagreement instead of rounding it up into a win.
+    scenario = run_scenarios()["genuinely_inconclusive"]
+    assert scenario["status"] == "inconclusive"
+    assert scenario["blockers"] == []
+    assert scenario["reward_delta"] > 0.02
+    assert scenario["improvement"]["unmet_conditions"] == [
+        "paired_lower_bound_below_minimum_effect"
+    ]
+    assert scenario["improvement"]["direction"] is None
+    assert scenario["offline_preferred_policy_id"] is None
+
+
+def test_an_improvement_that_vanishes_without_its_most_influential_event_is_refused():
+    decision = offline._evaluate_improvement(
+        delta=0.5,
+        interval=(0.4, 0.6),
+        leave_one_out_delta=0.001,
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert not decision.met
+    assert decision.direction is None
+    assert decision.unmet_conditions == (
+        "improvement_does_not_survive_influential_event_removal",
+    )
+
+
+def test_deleting_the_most_influential_event_uses_the_largest_weight_on_either_side():
+    rewards = [1.0] * 5 + [-1.0] * 5
+    baseline_weights = [1.0] * 10
+    candidate_weights = [1.0] * 9 + [9.0]
+    delta = offline._delta_without_most_influential_event(
+        rewards,
+        baseline_weights,
+        candidate_weights,
+    )
+    # Dropping index 9 makes the two policies identical over what remains.
+    assert delta == pytest.approx(0.0)
+
+
+def test_an_improvement_carried_by_one_high_weight_event_does_not_reach_a_verdict():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_matched_policy("baseline-v1", events),
+        candidate=_shaped_policy(
+            "candidate-v1",
+            events,
+            lambda index: 1.0 if index == 0 else 0.5,
+        ),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.status is ComparisonStatus.inconclusive
+    assert (
+        "improvement_does_not_survive_influential_event_removal"
+        in result.improvement.unmet_conditions
+    )
+    assert result.improvement.delta_without_most_influential_event == pytest.approx(0.0)
+    assert result.offline_preferred_policy_id is None
+
+
+def test_the_criterion_applies_the_same_three_conditions_to_the_baseline_direction():
+    met = offline._evaluate_improvement(
+        delta=-0.5,
+        interval=(-0.6, -0.4),
+        leave_one_out_delta=-0.5,
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert met.met and met.direction == "baseline"
+    unmet = offline._evaluate_improvement(
+        delta=-0.5,
+        interval=(-0.6, 0.4),
+        leave_one_out_delta=-0.001,
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert not unmet.met
+    assert set(unmet.unmet_conditions) == {
+        "paired_lower_bound_below_minimum_effect",
+        "improvement_does_not_survive_influential_event_removal",
+    }
+
+
+def test_every_improvement_decision_states_what_it_does_not_guarantee():
+    events = _sixty_events()
+    result = compare_policies(
+        events,
+        baseline=_policy("baseline-v1", events, preference_aware=False),
+        candidate=_policy("candidate-v1", events, preference_aware=True),
+        config=EvaluationConfig(bootstrap_replicates=200, seed=42),
+    )
+    assert result.improvement.met
+    assert result.improvement.direction == "candidate"
+    assert result.improvement.unmet_conditions == ()
+    assert result.improvement.criterion == "conservative_high_confidence_improvement"
+    not_guaranteed = " ".join(result.improvement.does_not_guarantee).lower()
+    for absent in ("clustering", "clinical", "deploy", "online experiment"):
+        assert absent in not_guaranteed
+    guaranteed = " ".join(result.improvement.guarantees).lower()
+    assert "most influential logged event" in guaranteed
+
+
+def test_the_strengthened_criterion_did_not_weaken_the_minimum_effect_floor():
+    with pytest.raises(ValueError):
+        EvaluationConfig(minimum_effect=0.0)
+    assert offline.MINIMUM_EFFECT_FLOOR == 0.02
+
+
+# --- C16: the simulation shows the refusals, not only the success ------------
+
+
+def test_the_simulation_demonstrates_every_failure_mode_and_authorises_nothing():
+    first = run_simulation()
+    second = run_simulation()
+    assert first == second
+    assert first["synthetic"] is True
+    assert first["outcome_model_validation_is_fabricated"] is True
+    assert first["speaker_clustering_correction"] == (
+        "unavailable_no_grouping_key_in_contract"
+    )
+
+    scenarios = first["scenarios"]
+    assert scenarios["nominal_candidate_better"]["status"] == "candidate_better_offline"
+    assert scenarios["deterministic_logger_refused"]["blockers"] == [
+        "logging_policy_is_deterministic"
+    ]
+    assert scenarios["deficient_support_refused"]["blockers"] == [
+        "candidate:deficient_support_mass_above_maximum"
+    ]
+    assert scenarios["deficient_support_refused"]["candidate_deficient_support_mass"] > 0.02
+    assert scenarios["too_few_events_refused"]["blockers"] == ["insufficient_event_count"]
+    assert scenarios["genuinely_inconclusive"]["status"] == "inconclusive"
+    assert scenarios["doubly_robust_without_validated_model_refused"]["blockers"] == [
+        "doubly_robust_requires_validated_outcome_model"
+    ]
+    dr = scenarios["doubly_robust_secondary_diagnostic"]
+    assert dr["headline_estimator"] == "snips"
+    assert dr["doubly_robust"]["role"] == "secondary_diagnostic_only"
+
+    for name, scenario in scenarios.items():
+        assert scenario["demonstrates"], name
+        assert scenario["deployment_allowed"] is False, name
+        assert scenario["online_experiment_allowed"] is False, name
+        assert scenario["clinical_claim_allowed"] is False, name
+        assert scenario["clustered_uncertainty_available"] is False, name
+        assert scenario["headline_estimator"] == "snips", name
+
+
+def test_no_simulation_scenario_emits_a_transcript_patient_or_timing_field():
+    payload = json.dumps(run_simulation()).lower()
+    for forbidden in (
+        "patient_id",
+        "transcript",
+        "target_text",
+        "audio",
+        "wav",
+        "latency",
+        "duration_ms",
+        "speaker_id",
+    ):
+        assert forbidden not in payload

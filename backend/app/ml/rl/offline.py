@@ -15,9 +15,15 @@ import math
 import random
 from dataclasses import dataclass
 
-from .contracts import LoggedFeedback, OfflinePolicy, PolicyPrediction
+from .contracts import (
+    LoggedFeedback,
+    OfflinePolicy,
+    OutcomeModelPrediction,
+    PolicyPrediction,
+    ValidatedOutcomeModel,
+)
 from .rewards import RewardConfig, score_logged_action
-from .safety import gate_logged_feedback, gate_policy
+from .safety import gate_logged_feedback, gate_outcome_model, gate_policy
 
 
 class ComparisonStatus(str, enum.Enum):
@@ -68,6 +74,35 @@ MINIMUM_EFFECT_FLOOR = 0.02
 DETERMINISTIC_PROBABILITY_CEILING = 0.999
 #: At most a quarter of events may be unrandomised however the caller configures it.
 MAX_DETERMINISTIC_EVENT_RATE_CEILING = 0.25
+#: Candidate probability mass sitting in a region the log provably never explored is not
+#: noisy, it is undefined: no reweighting of observed rewards says anything about it. A tenth
+#: of the evaluated policy's mass is already more extrapolation than a review can absorb.
+MAX_DEFICIENT_SUPPORT_MASS_CEILING = 0.10
+
+#: What the reported interval is, stated in the result object rather than in a footnote.
+#:
+#: The bootstrap below resamples EVENTS independently. Awaaz events are not independent: one
+#: speaker contributes many, and their choices correlate, so the true interval is wider than
+#: the one printed here and the error runs in the optimistic direction -- towards declaring a
+#: candidate better. The honest fix is a cluster bootstrap, which needs a per-speaker key.
+#:
+#: ``contracts`` carries no such key, and this module deliberately does not add one. A
+#: grouping id that is stable across a speaker's events IS a pseudonymous patient identifier:
+#: the property that makes it useful for clustering (all of one person's events collide) is
+#: exactly the property that makes it a re-identification handle, and no hashing, salting, or
+#: truncation separates the two -- a per-event salt would destroy the collisions the cluster
+#: bootstrap exists to exploit. "Opaque but stable per person" is a distinction of
+#: presentation, not of function, and INV-11 is about function. So the limitation is not
+#: repaired; it is named, carried on every result, and repeated in the improvement decision's
+#: ``does_not_guarantee``, so that no reader of an output can reach a conclusion without
+#: having read it. Correcting it is a logging-contract and governance decision (PLAN_RL.md
+#: steps 1-4), not a change this file may make on its own.
+UNCERTAINTY_BASIS = "event_level_iid_bootstrap_uncorrected_for_speaker_clustering"
+
+#: SNIPS is the headline estimator, permanently. Doubly robust is reported beside it as a
+#: diagnostic and never decides a status; see ``OfflineComparison.headline_estimator``.
+HEADLINE_ESTIMATOR = "snips"
+IMPROVEMENT_CRITERION = "conservative_high_confidence_improvement"
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +119,7 @@ class EvaluationConfig:
     minimum_effect: float = 0.02
     deterministic_probability_threshold: float = 0.999
     max_deterministic_event_rate: float = 0.10
+    max_deficient_support_mass: float = 0.02
     seed: int = 42
 
     def __post_init__(self) -> None:
@@ -137,6 +173,12 @@ class EvaluationConfig:
             or not 0.0 <= float(self.max_deterministic_event_rate) <= 1.0
         ):
             raise ValueError("max_deterministic_event_rate must be finite and in [0, 1]")
+        if (
+            isinstance(self.max_deficient_support_mass, bool)
+            or not math.isfinite(float(self.max_deficient_support_mass))
+            or not 0.0 <= float(self.max_deficient_support_mass) <= 1.0
+        ):
+            raise ValueError("max_deficient_support_mass must be finite and in [0, 1]")
 
         # Stringency floors. A caller may tighten any of these; loosening one past the
         # documented minimum is rejected here rather than politely accepted, because the
@@ -164,6 +206,8 @@ class EvaluationConfig:
              self.deterministic_probability_threshold, DETERMINISTIC_PROBABILITY_CEILING),
             ("max_deterministic_event_rate", self.max_deterministic_event_rate,
              MAX_DETERMINISTIC_EVENT_RATE_CEILING),
+            ("max_deficient_support_mass", self.max_deficient_support_mass,
+             MAX_DEFICIENT_SUPPORT_MASS_CEILING),
         )
         for name, value, ceiling in at_most:
             if float(value) > ceiling:
@@ -182,18 +226,97 @@ class PolicyEstimate:
     overlap_rate: float
     max_importance_weight: float
     weight_mass: float
+    #: Mean candidate probability mass this policy places on actions the log provably could
+    #: not have shown us -- see ``_deficient_support`` for what "provably" buys.
+    deficient_support_mass: float = 0.0
+    deficient_support_event_rate: float = 0.0
+    #: ``None`` unless a validated outcome model was supplied. It is never a fallback for
+    #: ``snips_reward``; a missing value means "not available", not "same number".
+    doubly_robust_reward: float | None = None
 
 
 LIMITATIONS = (
+    # First, because it is the one a reader is most likely to skip and the only one that
+    # biases the answer towards "the candidate is better".
+    "The reported interval resamples events independently. Awaaz events cluster by speaker, "
+    "the logged contract carries no grouping key by design (INV-11), and no cluster bootstrap "
+    "is therefore possible: the true interval is WIDER than the one shown here and this "
+    "result is anti-conservative in exactly the direction that favours the candidate.",
     "Offline agreement with logged explicit choices is a product-UX estimate, not a "
     "clinical outcome or treatment claim.",
     "Counterfactual validity depends on logged propensities, overlap, and policy predictions "
     "being produced without access to held-out feedback.",
-    "Event-level bootstrap intervals do not remove repeated-speaker dependence or unmeasured "
-    "context bias.",
+    "Unmeasured context bias is not addressed by any gate in this module.",
     "A passing comparison authorises human offline review only; deployment and online patient "
     "experimentation remain forbidden.",
 )
+
+#: What the conservative criterion in ``_evaluate_improvement`` does and does not buy. These
+#: travel on the decision object so a reader cannot obtain the verdict without the terms.
+IMPROVEMENT_GUARANTEES = (
+    "the lower end of the paired bootstrap interval on the SNIPS reward difference clears "
+    "the preregistered minimum effect, so the ranking is not a tail artefact",
+    "the point estimate agrees with the interval, so the verdict does not rest on an "
+    "asymmetric bootstrap tail alone",
+    "the improvement survives deleting the single most influential logged event, so it is "
+    "not one high-weight observation wearing a population",
+    "every gate -- overlap, effective sample size, weight magnitude, weight mass, propensity, "
+    "logged-support sufficiency, and behaviour-policy randomisation -- passed at or above "
+    "its absolute floor",
+)
+IMPROVEMENT_DOES_NOT_GUARANTEE = (
+    "any correction for repeated-speaker clustering: the interval assumes independent "
+    "events, the contract carries no grouping key, and the reported bound is therefore "
+    "optimistic by an unknown amount",
+    "any clinical benefit, intelligibility gain, or safety finding whatsoever",
+    "anything about speakers, contexts, or candidate slates that the log does not contain",
+    "that the reward definition in rewards.py is the outcome a patient actually cares about",
+    "authorisation to deploy, to run an online experiment, or to make a clinical claim",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DoublyRobustDiagnostic:
+    """A secondary estimate, and a record of the model that was allowed to produce it.
+
+    ``role`` is a read-only property for the same reason the authorisation answers below are:
+    the PRD defers doubly robust until a validated outcome model exists, and the moment a
+    result object can be edited to say DR was the primary estimate, the deferral is decided by
+    whoever holds the object rather than by the policy. There is no keyword to set it.
+    """
+
+    outcome_model_id: str
+    validation_id: str
+    baseline_reward: float
+    candidate_reward: float
+    reward_delta: float
+
+    @property
+    def role(self) -> str:
+        return "secondary_diagnostic_only"
+
+
+@dataclass(frozen=True, slots=True)
+class ImprovementDecision:
+    """Why a status was or was not reached, in terms a reviewer can argue with.
+
+    ``ComparisonStatus`` alone answers "which policy"; this answers "on what basis, and what
+    is still unproven". It is a field on the result rather than a log line because the
+    ``does_not_guarantee`` list is the part that gets dropped when a number is copied into a
+    slide.
+    """
+
+    criterion: str
+    minimum_effect: float
+    point_estimate: float
+    paired_lower_bound: float
+    paired_upper_bound: float
+    delta_without_most_influential_event: float
+    direction: str | None
+    met: bool
+    unmet_conditions: tuple[str, ...]
+    guarantees: tuple[str, ...] = IMPROVEMENT_GUARANTEES
+    does_not_guarantee: tuple[str, ...] = IMPROVEMENT_DOES_NOT_GUARANTEE
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +341,13 @@ class OfflineComparison:
     confidence_interval: tuple[float, float] | None
     offline_preferred_policy_id: str | None
     blockers: tuple[str, ...]
+    #: A first-class field, not a diagnostic: the fraction of the evaluated policy's
+    #: probability mass that the log cannot speak to at all. ``None`` only when the
+    #: comparison was blocked before any estimate existed.
+    candidate_deficient_support_mass: float | None = None
+    uncertainty_basis: str = UNCERTAINTY_BASIS
+    improvement: ImprovementDecision | None = None
+    doubly_robust: DoublyRobustDiagnostic | None = None
     limitations: tuple[str, ...] = LIMITATIONS
 
     @property
@@ -230,6 +360,22 @@ class OfflineComparison:
 
     @property
     def clinical_claim_allowed(self) -> bool:
+        return False
+
+    @property
+    def headline_estimator(self) -> str:
+        """Always SNIPS. A property so no caller can promote the DR diagnostic.
+
+        ``status``, ``reward_delta``, ``confidence_interval`` and ``improvement`` are all
+        computed from SNIPS. ``doubly_robust`` is reported alongside and read by a human; if
+        the two disagree, that disagreement is the finding, and the way to act on it is to
+        improve the outcome model and re-review -- not to relabel which number was primary.
+        """
+        return HEADLINE_ESTIMATOR
+
+    @property
+    def clustered_uncertainty_available(self) -> bool:
+        """Permanently false; see ``UNCERTAINTY_BASIS`` for why it cannot be made true here."""
         return False
 
 
@@ -248,6 +394,9 @@ def _blocked(
         confidence_interval=None,
         offline_preferred_policy_id=None,
         blockers=tuple(sorted(blockers)),
+        candidate_deficient_support_mass=(
+            candidate.deficient_support_mass if candidate is not None else None
+        ),
     )
 
 
@@ -266,10 +415,89 @@ def _weights(
     ]
 
 
-def _estimate(
-    policy_id: str,
+def _deficient_support(
+    events: tuple[LoggedFeedback, ...],
+    predictions: dict,
+    *,
+    min_logged_probability: float,
+) -> list[float]:
+    """Per-event candidate probability mass that the log provably cannot speak to.
+
+    Only one action per event has an observed reward and a known propensity: the logged one.
+    Mass on the other actions is normally fine -- a randomised logger shows each of them
+    eventually, and that is the entire premise of importance weighting. Two situations break
+    that premise, and both are provable from a single record rather than assumed:
+
+    1. ``pi_0(logged) `` sits within ``min_logged_probability`` of 1. Because the slate's
+       propensities sum to one, EVERY other action in that event provably had probability
+       below the floor the config already refuses to divide by. The alternatives were not
+       merely unobserved here; they were effectively unreachable.
+    2. The evaluated policy places zero probability on the logged action. The one action with
+       an observed reward is the one action the policy would never take, so its entire mass
+       for that event rests on rewards nobody recorded.
+
+    In both cases the unsupported quantity is ``1 - pi(logged)``: the mass sitting outside
+    what the log can identify. Everywhere else the contribution is zero -- this function
+    deliberately does not count ordinary unobserved actions as deficient, because doing so
+    would flag every honest evaluation and a gate that always fires is a gate nobody reads.
+
+    This is a LOWER BOUND on true support deficiency (Sachdeva, Su & Joachims, KDD 2020),
+    not a measurement of it, and the number should not be read as one. The full quantity --
+    candidate mass on actions whose logging probability really was zero -- needs pi_0 over
+    the whole slate, which the contract does not record: it stores one propensity, for the
+    action that was logged. Everything above is derived from the one thing a single record
+    does prove, namely that a slate's propensities sum to one. When the logging contract
+    grows slate-wide propensities, this function is where the exact quantity replaces the
+    bound; until then a zero here means "nothing provable", never "nothing there".
+    """
+    masses: list[float] = []
+    for event in events:
+        policy_probability = predictions[event.event_id].probability_for(
+            event.logged_action_id
+        )
+        residual = 1.0 - event.logged_action_probability
+        if residual < min_logged_probability or policy_probability == 0.0:
+            masses.append(1.0 - policy_probability)
+        else:
+            masses.append(0.0)
+    return masses
+
+
+def _doubly_robust(
+    events: tuple[LoggedFeedback, ...],
+    predictions: dict,
+    outcome: dict,
     rewards: list[float],
     weights: list[float],
+) -> float:
+    """The standard DR estimator: model-based value plus propensity-corrected residual.
+
+    ``sum_a pi(a|x) q(x, a)`` is what the reward model believes the policy is worth;
+    ``w * (r - q(x, a_logged))`` corrects that belief wherever the log disagrees. It is
+    reported only, never used to decide a status -- see ``headline_estimator``.
+    """
+    terms: list[float] = []
+    for event, reward, weight in zip(events, rewards, weights, strict=True):
+        model: OutcomeModelPrediction = outcome[event.event_id]
+        prediction: PolicyPrediction = predictions[event.event_id]
+        modelled = math.fsum(
+            probability * model.reward_for(action)
+            for action, probability in prediction.action_probabilities
+        )
+        residual = reward - model.reward_for(event.logged_action_id)
+        terms.append(modelled + weight * residual)
+    return math.fsum(terms) / len(terms)
+
+
+def _estimate(
+    policy_id: str,
+    events: tuple[LoggedFeedback, ...],
+    predictions: dict,
+    rewards: list[float],
+    weights: list[float],
+    *,
+    config: EvaluationConfig,
+    outcome: dict | None = None,
 ) -> PolicyEstimate:
     weight_sum = math.fsum(weights)
     square_sum = math.fsum(value * value for value in weights)
@@ -277,6 +505,11 @@ def _estimate(
         weight * reward for weight, reward in zip(weights, rewards, strict=True)
     )
     n = len(rewards)
+    deficient = _deficient_support(
+        events,
+        predictions,
+        min_logged_probability=config.min_logged_probability,
+    )
     return PolicyEstimate(
         policy_id=policy_id,
         events=n,
@@ -286,6 +519,13 @@ def _estimate(
         overlap_rate=sum(weight > 0.0 for weight in weights) / n,
         max_importance_weight=max(weights, default=0.0),
         weight_mass=weight_sum / n,
+        deficient_support_mass=math.fsum(deficient) / n,
+        deficient_support_event_rate=sum(mass > 0.0 for mass in deficient) / n,
+        doubly_robust_reward=(
+            _doubly_robust(events, predictions, outcome, rewards, weights)
+            if outcome is not None
+            else None
+        ),
     )
 
 
@@ -306,6 +546,8 @@ def _estimate_blockers(
         blockers.add(f"{label}:weight_mass_below_minimum")
     if estimate.weight_mass > config.max_weight_mass:
         blockers.add(f"{label}:weight_mass_above_maximum")
+    if estimate.deficient_support_mass > config.max_deficient_support_mass:
+        blockers.add(f"{label}:deficient_support_mass_above_maximum")
     if not math.isfinite(estimate.snips_reward):
         blockers.add(f"{label}:estimate_not_finite")
     return blockers
@@ -355,6 +597,83 @@ def _bootstrap_delta(
     ), len(deltas)
 
 
+def _delta_without_most_influential_event(
+    rewards: list[float],
+    baseline_weights: list[float],
+    candidate_weights: list[float],
+) -> float:
+    """The SNIPS delta with the single highest-weight event deleted.
+
+    A self-normalised ratio with one dominant weight is that event's reward with extra steps.
+    The bootstrap does not reliably catch it: a percentile interval built by resampling the
+    same sixty events redraws the dominant event in roughly 63% of replicates, so its
+    influence is present in most of the distribution rather than visible in its tail. Deleting
+    it and re-checking is cheap, deterministic, and answers the question the reviewer actually
+    has -- "would this survive if that one log line were wrong?"
+    """
+    influence = [
+        max(baseline, candidate)
+        for baseline, candidate in zip(baseline_weights, candidate_weights, strict=True)
+    ]
+    dropped = influence.index(max(influence))
+    kept = [index for index in range(len(rewards)) if index != dropped]
+    baseline = _snips(rewards, baseline_weights, kept)
+    candidate = _snips(rewards, candidate_weights, kept)
+    if baseline is None or candidate is None:
+        # No positive weight mass left without that event: the improvement was that event.
+        return float("-inf")
+    return candidate - baseline
+
+
+def _evaluate_improvement(
+    *,
+    delta: float,
+    interval: tuple[float, float],
+    leave_one_out_delta: float,
+    config: EvaluationConfig,
+) -> ImprovementDecision:
+    """Decide improvement conservatively, and say what the decision is worth.
+
+    The previous rule was a single inequality: the interval's lower end beats
+    ``minimum_effect``. That is one number from one tail of one bootstrap, and it can be
+    cleared by a skewed resampling distribution whose centre is nowhere near the effect, or by
+    a single high-weight event that appears in most replicates. All three conditions below
+    must hold, each is reported by name when it does not, and none of them replaces or relaxes
+    an existing gate -- this runs only after every gate has already passed.
+
+    The direction examined is the one the point estimate favours. Requiring both directions to
+    be evaluated would be theatre: they are mutually exclusive by construction.
+    """
+    lower, upper = interval
+    if delta >= 0.0:
+        direction = "candidate"
+        bound, point, dropped = lower, delta, leave_one_out_delta
+    else:
+        # Mirror image: the baseline wins when the UPPER end is below the negative effect.
+        direction = "baseline"
+        bound, point, dropped = -upper, -delta, -leave_one_out_delta
+
+    unmet: list[str] = []
+    if not bound > config.minimum_effect:
+        unmet.append("paired_lower_bound_below_minimum_effect")
+    if not point > config.minimum_effect:
+        unmet.append("point_estimate_below_minimum_effect")
+    if not dropped > config.minimum_effect:
+        unmet.append("improvement_does_not_survive_influential_event_removal")
+
+    return ImprovementDecision(
+        criterion=IMPROVEMENT_CRITERION,
+        minimum_effect=config.minimum_effect,
+        point_estimate=delta,
+        paired_lower_bound=lower,
+        paired_upper_bound=upper,
+        delta_without_most_influential_event=leave_one_out_delta,
+        direction=direction if not unmet else None,
+        met=not unmet,
+        unmet_conditions=tuple(unmet),
+    )
+
+
 def compare_policies(
     events: tuple[LoggedFeedback, ...] | list[LoggedFeedback],
     *,
@@ -362,8 +681,17 @@ def compare_policies(
     candidate: OfflinePolicy,
     reward_config: RewardConfig | None = None,
     config: EvaluationConfig | None = None,
+    outcome_model: ValidatedOutcomeModel | None = None,
+    request_doubly_robust: bool = False,
 ) -> OfflineComparison:
-    """Compare two policies without authorising either one to touch a live speech path."""
+    """Compare two policies without authorising either one to touch a live speech path.
+
+    Doubly robust is opt-in in BOTH directions, and a mismatch is a blocker rather than a
+    default. Asking for it without a model must not quietly return a SNIPS number under a DR
+    heading (PRD 11 defers DR until a validated outcome model exists), and supplying a model
+    without asking must not silently switch the estimator underneath a caller who did not
+    request it. Neither confusion has a safe default, so neither gets one.
+    """
     config = config or EvaluationConfig()
     reward_config = reward_config or RewardConfig()
     events = tuple(events)
@@ -376,6 +704,13 @@ def compare_policies(
         blockers.add("policies_must_have_distinct_ids")
     if len(events) < config.min_events:
         blockers.add("insufficient_event_count")
+    if request_doubly_robust and outcome_model is None:
+        blockers.add("doubly_robust_requires_validated_outcome_model")
+    if outcome_model is not None and not request_doubly_robust:
+        blockers.add("doubly_robust_requires_explicit_request")
+    if outcome_model is not None:
+        gate = gate_outcome_model(outcome_model)
+        blockers.update(f"outcome_model:{reason}" for reason in gate.blockers)
     event_ids = [event.event_id for event in events]
     if len(event_ids) != len(set(event_ids)):
         blockers.add("duplicate_event_id")
@@ -424,6 +759,21 @@ def compare_policies(
             ):
                 blockers.add(f"{label}:candidate_action_set_mismatch")
 
+    outcome_map: dict | None = None
+    if outcome_model is not None and request_doubly_robust:
+        outcome_map = {
+            prediction.event_id: prediction for prediction in outcome_model.predictions
+        }
+        if set(outcome_map) != expected_event_ids:
+            blockers.add("outcome_model:prediction_event_set_mismatch")
+        for event in events:
+            prediction = outcome_map.get(event.event_id)
+            if (
+                prediction is not None
+                and prediction.action_ids != frozenset(event.candidate_action_ids)
+            ):
+                blockers.add("outcome_model:candidate_action_set_mismatch")
+
     if blockers:
         return _blocked(blockers)
 
@@ -435,13 +785,21 @@ def compare_policies(
     candidate_weights = _weights(events, prediction_maps["candidate"])
     baseline_estimate = _estimate(
         baseline.manifest.policy_id,
+        events,
+        prediction_maps["baseline"],
         rewards,
         baseline_weights,
+        config=config,
+        outcome=outcome_map,
     )
     candidate_estimate = _estimate(
         candidate.manifest.policy_id,
+        events,
+        prediction_maps["candidate"],
         rewards,
         candidate_weights,
+        config=config,
+        outcome=outcome_map,
     )
     blockers.update(_estimate_blockers(
         baseline_estimate,
@@ -473,17 +831,45 @@ def compare_policies(
             candidate=candidate_estimate,
         )
 
+    # Every number that decides a status below comes from SNIPS. The doubly-robust pair is
+    # assembled afterwards and attached as a diagnostic; nothing reads it back.
     delta = candidate_estimate.snips_reward - baseline_estimate.snips_reward
-    lower, upper = interval
+    improvement = _evaluate_improvement(
+        delta=delta,
+        interval=interval,
+        leave_one_out_delta=_delta_without_most_influential_event(
+            rewards,
+            baseline_weights,
+            candidate_weights,
+        ),
+        config=config,
+    )
     preferred: str | None = None
-    if lower > config.minimum_effect:
+    if not improvement.met:
+        status = ComparisonStatus.inconclusive
+    elif improvement.direction == "candidate":
         status = ComparisonStatus.candidate_better_offline
         preferred = candidate.manifest.policy_id
-    elif upper < -config.minimum_effect:
+    else:
         status = ComparisonStatus.baseline_better_offline
         preferred = baseline.manifest.policy_id
-    else:
-        status = ComparisonStatus.inconclusive
+
+    doubly_robust: DoublyRobustDiagnostic | None = None
+    if (
+        outcome_model is not None
+        and baseline_estimate.doubly_robust_reward is not None
+        and candidate_estimate.doubly_robust_reward is not None
+    ):
+        doubly_robust = DoublyRobustDiagnostic(
+            outcome_model_id=outcome_model.model_id,
+            validation_id=outcome_model.validation.validation_id,
+            baseline_reward=baseline_estimate.doubly_robust_reward,
+            candidate_reward=candidate_estimate.doubly_robust_reward,
+            reward_delta=(
+                candidate_estimate.doubly_robust_reward
+                - baseline_estimate.doubly_robust_reward
+            ),
+        )
 
     return OfflineComparison(
         status=status,
@@ -494,5 +880,8 @@ def compare_policies(
         confidence_interval=interval,
         offline_preferred_policy_id=preferred,
         blockers=(),
+        candidate_deficient_support_mass=candidate_estimate.deficient_support_mass,
+        improvement=improvement,
+        doubly_robust=doubly_robust,
     )
 

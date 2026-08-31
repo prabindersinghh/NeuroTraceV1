@@ -83,9 +83,15 @@ def score_logged_action(
     else:
         explicit_preference = 0.0
 
-    repair_cost = -1.0 if (
-        feedback.correction_made or feedback.phrase_board_fallback
-    ) else 0.0
+    # The phrase board is the designed safety fallback, not a failure to be trained away.
+    # Charging repair cost for it on top of the negative preference above scored a fallback
+    # at -1.0 against a bare rejection's -0.8 -- so the ranker was rewarded for keeping a
+    # patient wrestling with poor candidates rather than letting them reach the board that
+    # exists to protect them. PRD 20 lists the board as a mitigation and 22 makes it a
+    # condition of done; a reward function that penalises taking it is optimising against
+    # the product's own safety design. A correction is different: the patient did engage
+    # with the candidate and then had to repair it, which is real interaction cost.
+    repair_cost = -1.0 if feedback.correction_made else 0.0
     total = (
         config.explicit_preference_weight * explicit_preference
         + config.repair_cost_weight * repair_cost
