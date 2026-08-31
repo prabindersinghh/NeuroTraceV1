@@ -205,7 +205,7 @@ validation.
 | AWA-FR-006 | Emergency playback | Setup, self-test, local storage, offline playback, cancellation, and dialer handoff are explicit | PR BRANCH |
 | AWA-FR-007 | Listener capability | URL is language-pinned, expiring, replaceable, revocable, and contains no patient identity/history/audio | PR BRANCH |
 | AWA-FR-008 | Endpointing | Manual stop remains default; optional silence timeout is 0.5–4.0 s and begins only after speech | PR BRANCH |
-| AWA-FR-009 | Training governance | Real training refuses unsigned/expired/wrong-purpose/wrong-hash receipts and unavailable local weights | PR BRANCH |
+| AWA-FR-009 | Training governance | Real training refuses receipts that are unsigned, expired, wrong-purpose, wrong-hash, or signed by a key not pinned in tracked config; Ed25519 means the training operator cannot mint their own approval | PR BRANCH |
 | AWA-FR-010 | Leakage-safe split | Test phrases never appear in training; multi-patient research also separates speaker groups | PR BRANCH runtime |
 | AWA-FR-011 | Patient-adapted ASR | Train a real Wav2Vec2/MMS CTC LoRA adapter only from a consented verified archive | BLOCKED |
 | AWA-FR-012 | On-device inference | Signed approved adapter runs without raw-audio cloud transfer and meets device targets | PLANNED |
@@ -269,29 +269,30 @@ PEFT 0.12.0, Accelerate 0.34.2, and Safetensors 0.4.5. These are reproducibility
 recommendations that they remain current; upgrades require a deliberate compatibility,
 privacy, and deterministic-smoke cycle.
 
-### 9.3 Known open runtime findings — BLOCKED before real training
+### 9.3 Runtime findings from adversarial review — all seven resolved
 
-The current tests prove the implemented contracts, but an adversarial review identified
-seven unresolved weaknesses. They are not waived by the fact that training is presently
-unreachable:
+An adversarial review of the runtime identified seven weaknesses. All seven are now fixed
+and each is pinned by a regression test verified to fail when the fix is reverted, checked
+by neutering the guard on a scratch copy rather than by inspection.
 
-1. The governance receipt uses a symmetric HMAC; an operator who holds the verification key
-   can also mint approval. Replace it with an approval/signing boundary the training operator
-   cannot self-authorize.
-2. The synthetic smoke output path is not covered by the same containment guard as real
-   output.
-3. Split construction has disjointness checks but no minimum train/validation/test size or
-   statistical adequacy floor.
-4. `epochs_completed` can overstate a partially completed/truncated epoch.
-5. Adapter publication has a window in which a model can be orphaned between publication
-   steps; make registry/pointer publication atomic.
-6. The sanitizer does not yet cover every possible `target_text` path.
-7. A base-model snapshot may pass through shared system temporary storage; use a private,
-   contained training-run directory throughout.
+| # | Finding | Resolution |
+|---|---|---|
+| 1 | Symmetric HMAC receipts: whoever could verify could also mint approval, and the trust root came from environment variables the same operator set | Ed25519, with public halves pinned in a tracked `governance_public_keys.json` located by a module constant. The signing function no longer ships with the package. The file is empty, so the runtime refuses every real command until a clinical owner commits a key |
+| 2 | The synthetic smoke path escaped the output-containment guard | Containment moved into `_create_staging_directory`, the funnel every writing path uses; parent directories are no longer created implicitly |
+| 3 | Splits had disjointness checks but no size floor | Relative floor and ceiling per partition, `split_too_small` / `split_unbalanced`, and the manifest now publishes achieved fractions beside target ones |
+| 4 | `epochs_completed` overstated a truncated epoch | Counts only a genuinely exhausted epoch; `training.status` distinguishes `truncated_before_completion`; a missing count reads as truncated |
+| 5 | A crash could orphan adapter weights with no manifest | `.incomplete` sentinel written before the first move and cleared after the manifest lands; `verify_published_artifact` refuses anything still carrying it |
+| 6 | The sanitizer never screened `target_text` at all — not merely "some paths" | Utterances of at least twelve characters and two words are screened with word-boundary matching, across more formats plus the safetensors header. Short utterances are deliberately excluded and pinned by a test, because a bare common word appears in tokenizer vocabularies |
+| 7 | The base-model snapshot passed through shared system temp | Snapshots beside the approved tree, matching the archive verifier's precedent |
 
-These findings are also tracked in `docs/COMPLETION_CHECKLIST.md` and
-`docs/PLAN_AWAAZ.md`. Real training and every downstream model claim remain blocked until
-they are fixed, reviewed, and regression-tested.
+Finding 6 was understated in the original review: `forbidden_identifiers` covered the patient
+UUID, capture IDs and audio hashes and did not include `target_text` in any form.
+
+**Real training remains blocked**, but the blockers are now governance and evidence rather
+than code: no clinical owner has committed a governance public key, no consented cohort or
+verified archive exists, no approved local base checkpoint is present, and no held-out
+listener evaluation has been designed. Nothing here has trained a model, and no WER or
+intelligibility number for Awaaz ASR exists anywhere in this repository.
 
 ## 10. Data, consent, and training plan
 
