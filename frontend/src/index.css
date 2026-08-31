@@ -172,3 +172,60 @@
     border-radius: var(--radius);
   }
 }
+
+@layer utilities {
+  /* ------------------------------------------------------------------ touch targets
+   *
+   * Scoped to COARSE POINTERS so the desktop rendering is byte-identical — a mouse does
+   * not need a 44px target and widening everything for it would be a redesign.
+   *
+   * Measured at 320/375/390/412/768 before writing this: the layout itself is sound (no
+   * horizontal overflow and no unsafe fixed widths anywhere), and every finding was an
+   * interactive element shorter than 44px on the caregiver and clinician surfaces, where
+   * `.patient-scale`'s 64px rule does not apply. The worst were the Emergency button at
+   * 40px and the language toggle at 28px.
+   *
+   * HEIGHT ONLY, deliberately. The header is a fixed 64px single row and at 320px its
+   * contents already measure ~320px, so adding horizontal padding to the three language
+   * buttons would push it into overflow — trading a small-target problem for a broken
+   * layout. Growing them vertically costs nothing, because 44px still fits inside a 64px
+   * header.
+   *
+   * Expanding the hit area with an oversized ::after was considered and rejected for the
+   * language toggle: the three buttons sit 28px apart, so 44px invisible areas would
+   * OVERLAP each other, and an ambiguous target is worse than a small one for a user with
+   * a tremor.
+   */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    select,
+    input[type="submit"],
+    /* Links styled as buttons, and the header logo. `buttonVariants` puts `focus-ring` in
+     * its base class list and the logo link carries it too, so this is the design system's
+     * own marker for "interactive" rather than a guess at class names — an earlier
+     * `a[class*="button"]` matched none of them, because the emitted classes are utility
+     * names with no "button" in them. */
+    a[class~="focus-ring"] {
+      min-height: 44px;
+    }
+
+    /* Checkbox and radio inputs are drawn at their intrinsic size, so min-height does not
+     * apply to them — pad the hit area instead. Safe here because these are not laid out
+     * adjacently anywhere in the app. */
+    input[type="checkbox"],
+    input[type="radio"] {
+      min-width: 24px;
+      min-height: 24px;
+    }
+
+    /* The real target for a checkbox is its LABEL — these are all written as
+     * `<label><input><span>text</span></label>`, so tapping the words toggles it. Measured
+     * at 301x40px, which is genuinely usable and just under the floor. Raising the label
+     * rather than the box keeps the control looking exactly as designed. */
+    label:has(> input[type="checkbox"]),
+    label:has(> input[type="radio"]) {
+      min-height: 44px;
+    }
+  }
+}
