@@ -347,7 +347,11 @@ so in the source. D-015, D-017.
   it byte-for-byte. The hand-written `## Purpose` section, delimited by
   `<!-- hand-written: purpose -->` markers, is carried through untouched and is the one part
   that can still drift. Three datasets need a human to request access.
-- **Clinician PDF export** — not built. The data endpoint it would render exists.
+- **Clinician PDF export** — built as a browser print-to-PDF view, not as server-side
+  generation. `frontend/src/routes/ClinicianReport.tsx` carries the print layout and tells
+  the clinician to use the browser print dialog and choose Save as PDF; there is no PDF
+  endpoint in any router and none is needed for that approach. This entry previously read
+  "not built", which was true only of server-side rendering.
 - **CCG baseline side-by-side** — the trace renders; comparison against the patient's own
   earlier trace does not.
 - **Task demo videos** — `TaskShell` displays them and the flow is built around them, but
