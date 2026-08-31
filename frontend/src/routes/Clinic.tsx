@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tour } from "@/components/Tour";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -77,7 +78,7 @@ export function Clinic() {
       {rows.length === 0 ? (
         <EmptyState>{t("noPatients")}</EmptyState>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div data-tour="roster" className="flex flex-col gap-3">
           {rows.map((row) => (
             <Card key={row.patient_id}>
               <CardContent className="flex flex-wrap items-center gap-4 p-5">
@@ -120,6 +121,7 @@ export function Clinic() {
                 )}
 
                 <Link
+                  data-tour="review-queue"
                   to={`/dashboard/${row.patient_id}`}
                   className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 >
@@ -140,6 +142,7 @@ export function Clinic() {
           This is a monitoring aid; clinical interpretation remains with you.
         </span>
       </p>
+      <Tour role="clinician" />
     </AppShell>
   );
 }

@@ -65,6 +65,76 @@ export function retriesRemaining(retriesUsed: number, max: number = MAX_RETRIES)
   return Math.max(0, max - retriesUsed);
 }
 
+/* ------------------------------------------------------------------ going back
+ *
+ * Back is VIEW-ONLY, and that restriction is the feature rather than a limitation of it.
+ *
+ * A patient who feels they did a task badly wants to do it again. Letting them, freely,
+ * would quietly destroy the measurement: unlimited retakes create a learning effect, so a
+ * module's "normal" would drift toward the patient's best-ever attempt instead of their
+ * typical one, and real decline would then have to be worse than that best attempt before
+ * anything showed. It is the same reasoning that caps retries at two and that discards the
+ * first three sessions from the baseline.
+ *
+ * The need behind "I did that wrong" is already met, inside the step, by the two-retry
+ * rule — which is offered at the moment it is relevant, when the capture actually failed
+ * its quality check. So going back shows what happened; it does not reopen it.
+ */
+
+/** What the runner should render: the live step, or an earlier one being reviewed. */
+export type StepView =
+  | { mode: "live"; index: number }
+  /** An earlier step, shown for reading only. `liveIndex` is where the session resumes. */
+  | { mode: "review"; index: number; liveIndex: number };
+
+export function viewFor(viewIndex: number, liveIndex: number): StepView {
+  return viewIndex >= liveIndex
+    ? { mode: "live", index: liveIndex }
+    : { mode: "review", index: viewIndex, liveIndex };
+}
+
+/**
+ * THE GUARD. A capture component may only be mounted for the live step.
+ *
+ * Every path that renders a capture goes through this, so "back cannot re-record" is one
+ * decision in one place rather than a property each of the eleven step components has to
+ * remember to have.
+ */
+export function mayCapture(view: StepView): boolean {
+  return view.mode === "live";
+}
+
+export function canGoBack(viewIndex: number): boolean {
+  return viewIndex > 0;
+}
+
+/** Forward only returns toward the live step — it can never skip past it. */
+export function canGoForward(viewIndex: number, liveIndex: number): boolean {
+  return viewIndex < liveIndex;
+}
+
+export function stepBack(viewIndex: number): number {
+  return Math.max(0, viewIndex - 1);
+}
+
+export function stepForward(viewIndex: number, liveIndex: number): number {
+  return Math.min(liveIndex, viewIndex + 1);
+}
+
+/**
+ * The numbers in "Stop this check-in? You've completed X of Y steps."
+ *
+ * X counts steps LEFT BEHIND, which is `liveIndex` — the live step is in progress, not
+ * completed, so counting it would tell the patient they finished something they are
+ * currently looking at. Clamped because a session that has run past its last step is
+ * finishing, not exiting.
+ */
+export function exitSummary(liveIndex: number, total: number): {
+  completed: number; total: number;
+} {
+  return { completed: Math.max(0, Math.min(liveIndex, total)), total };
+}
+
 /**
  * Language that must never appear at the moment of performance.
  *

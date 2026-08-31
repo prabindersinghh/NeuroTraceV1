@@ -22,7 +22,14 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_RETRIES,
   assessCapture,
+  canGoBack,
+  canGoForward,
+  exitSummary,
+  mayCapture,
   retriesRemaining,
+  stepBack,
+  stepForward,
+  viewFor,
   violatesConfirmNeutrality,
 } from "./taskFlow";
 import { STRINGS } from "./i18n";
@@ -227,5 +234,74 @@ describe("the confirm-neutrality scanner", () => {
   it("does NOT fire on the neutral confirm copy itself", () => {
     expect(violatesConfirmNeutrality("All done ✓")).toEqual([]);
     expect(violatesConfirmNeutrality("हो गया ✓")).toEqual([]);
+  });
+});
+
+
+// ------------------------------------------------ 6. going back is view-only (Part 1)
+describe("going back shows, it does not reopen", () => {
+  it("renders the live step when the view has not moved back", () => {
+    expect(viewFor(5, 5)).toEqual({ mode: "live", index: 5 });
+  });
+
+  it("never renders past the live step, even if asked to", () => {
+    // Guards against a stale viewIndex surviving an advance and rendering a step whose
+    // turn has not come — which would let a patient perform tasks out of protocol order
+    // and put the module at the wrong point on the fatigue curve (INV-14).
+    expect(viewFor(9, 5)).toEqual({ mode: "live", index: 5 });
+  });
+
+  it("renders an earlier step in review mode", () => {
+    expect(viewFor(2, 5)).toEqual({ mode: "review", index: 2, liveIndex: 5 });
+  });
+
+  it("THE RULE: a capture can only be mounted for the live step", () => {
+    // If this ever passes for review mode, a completed step can be re-recorded, and the
+    // baseline starts learning the patient's best attempt instead of their typical one.
+    expect(mayCapture(viewFor(5, 5))).toBe(true);
+    for (const earlier of [0, 1, 4]) {
+      expect(mayCapture(viewFor(earlier, 5))).toBe(false);
+    }
+  });
+
+  it("cannot step forward past the live step", () => {
+    expect(canGoForward(4, 5)).toBe(true);
+    expect(canGoForward(5, 5)).toBe(false);
+    expect(stepForward(5, 5)).toBe(5);
+    expect(stepForward(2, 5)).toBe(3);
+  });
+
+  it("cannot step back past the first step", () => {
+    expect(canGoBack(0)).toBe(false);
+    expect(stepBack(0)).toBe(0);
+    expect(canGoBack(3)).toBe(true);
+    expect(stepBack(3)).toBe(2);
+  });
+
+  it("walking back and forward again always lands on the live step, still live", () => {
+    // The property that matters for the patient: reviewing cannot strand them off the
+    // live step, and returning does not leave the step in a non-capturable state.
+    let view = 5;
+    for (let i = 0; i < 3; i += 1) view = stepBack(view);
+    for (let i = 0; i < 9; i += 1) view = stepForward(view, 5);
+    expect(view).toBe(5);
+    expect(mayCapture(viewFor(view, 5))).toBe(true);
+  });
+});
+
+describe("the exit summary counts honestly", () => {
+  it("counts completed steps, not the one in progress", () => {
+    // "You've completed 4 of 21" while looking at step 5 - the live step is being done,
+    // not done.
+    expect(exitSummary(4, 21)).toEqual({ completed: 4, total: 21 });
+  });
+
+  it("is zero before anything has been completed", () => {
+    expect(exitSummary(0, 21)).toEqual({ completed: 0, total: 21 });
+  });
+
+  it("never claims more completed steps than exist", () => {
+    expect(exitSummary(99, 21)).toEqual({ completed: 21, total: 21 });
+    expect(exitSummary(-3, 21)).toEqual({ completed: 0, total: 21 });
   });
 });

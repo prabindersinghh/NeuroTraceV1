@@ -95,6 +95,19 @@ async def _module_history(
             ExamSession.id != before.id,
             # Practice runs are familiarisation, not measurement (0009).
             ExamSession.is_practice.is_(False),
+            # And UNFINISHED sessions are not measurement either. This filter was missing
+            # while every other pipeline query had it — `_recent_sessions` below and
+            # `baseline_review` both pair `completed` with `is_practice` — so a session the
+            # patient walked out of fed its modules straight into the baseline.
+            #
+            # It matters for the INV-14 reason the fatigue fields exist: a module's baseline
+            # must be built from one measurement condition. A truncated session is a
+            # different one, and blending them widens the normal range until the drift that
+            # matters no longer stands out.
+            #
+            # Reachable before any exit button existed, by closing the tab after the runner
+            # posted its first module. Pinned by `tests/test_incomplete_session.py`.
+            ExamSession.completed.is_(True),
         )
         .order_by(ExamSession.ts.asc())
     )

@@ -233,6 +233,17 @@ class ModuleSubmit(BaseModel):
     paused_before_task: bool = False
 
 
+class SessionAbandon(BaseModel):
+    """The patient chose to stop part-way. Counts, so a caregiver can be told how far.
+
+    No `reason` field. Asking a stroke survivor to justify stopping is the wrong prompt at
+    the wrong moment, and a free-text field would be one more thing between them and the
+    exit they already asked for.
+    """
+    steps_completed: int = Field(ge=0)
+    steps_total: int = Field(ge=1)
+
+
 class SessionRead(BaseModel):
     model_config = ORM
     id: uuid.UUID
@@ -244,6 +255,10 @@ class SessionRead(BaseModel):
     off_window: bool
     completed: bool
     offline_captured: bool
+    #: Present only on a session the patient exited. `{"at", "steps_completed",
+    #: "steps_total"}`. Read from `device_info` rather than a column of its own — see the
+    #: note on `abandon_session` for why that trade was made.
+    abandoned: dict | None = None
 
 
 class ModuleResultRead(BaseModel):

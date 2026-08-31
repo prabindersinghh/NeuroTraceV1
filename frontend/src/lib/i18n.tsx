@@ -9,11 +9,111 @@
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
+import { readLang, writeLang } from "./langStorage";
 import type { Lang } from "./types";
 
 /** Exported so behavioural tests can assert on the copy the app actually renders,
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
+  orDivider: { en: "or", hi: "या", pa: "ਜਾਂ" },
+  languageLabel: { en: "Language", hi: "भाषा", pa: "ਭਾਸ਼ਾ" },
+  // ---- first-run tour (Part 3) ----
+  tourNext: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
+  tourDone: { en: "Done", hi: "हो गया", pa: "ਹੋ ਗਿਆ" },
+  tourSkip: { en: "Skip", hi: "छोड़ें", pa: "ਛੱਡੋ" },
+  tourPatientStart: {
+    // No duration here on purpose. The card above this button already shows today's,
+    // read from the server — and today may be the long session. A number typed into copy
+    // is how the app came to disagree with itself about how long Daily Pulse takes (D-045).
+    en: "Tap here each morning to start your check-in.",
+    hi: "हर सुबह अपनी जाँच शुरू करने के लिए यहाँ दबाएँ।",
+    pa: "ਹਰ ਸਵੇਰ ਆਪਣੀ ਜਾਂਚ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਇੱਥੇ ਦਬਾਓ।",
+  },
+  tourPatientEmergency: {
+    en: "If something feels suddenly wrong, this button is always here.",
+    hi: "अगर अचानक कुछ ठीक न लगे, तो यह बटन हमेशा यहाँ है।",
+    pa: "ਜੇ ਅਚਾਨਕ ਕੁਝ ਠੀਕ ਨਾ ਲੱਗੇ, ਤਾਂ ਇਹ ਬਟਨ ਹਮੇਸ਼ਾ ਇੱਥੇ ਹੈ।",
+  },
+  tourCaregiverList: {
+    en: "Everyone you look after appears here, with how their week has gone.",
+    hi: "आप जिनकी देखभाल करते हैं वे सब यहाँ दिखते हैं, उनके सप्ताह के साथ।",
+    pa: "ਤੁਸੀਂ ਜਿਨ੍ਹਾਂ ਦੀ ਦੇਖਭਾਲ ਕਰਦੇ ਹੋ ਉਹ ਸਾਰੇ ਇੱਥੇ ਦਿਖਦੇ ਹਨ, ਉਨ੍ਹਾਂ ਦੇ ਹਫ਼ਤੇ ਦੇ ਨਾਲ।",
+  },
+  tourCaregiverAdd: {
+    en: "Add the person you care for here to begin.",
+    hi: "शुरू करने के लिए जिनकी आप देखभाल करते हैं उन्हें यहाँ जोड़ें।",
+    pa: "ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਜਿਨ੍ਹਾਂ ਦੀ ਤੁਸੀਂ ਦੇਖਭਾਲ ਕਰਦੇ ਹੋ ਉਨ੍ਹਾਂ ਨੂੰ ਇੱਥੇ ਜੋੜੋ।",
+  },
+  tourClinicianRoster: {
+    en: "Your linked patients, ordered by what changed most recently.",
+    hi: "आपके जुड़े मरीज़, हाल में सबसे अधिक बदलाव के क्रम में।",
+    pa: "ਤੁਹਾਡੇ ਜੁੜੇ ਮਰੀਜ਼, ਹਾਲ ਵਿੱਚ ਸਭ ਤੋਂ ਵੱਧ ਬਦਲਾਅ ਦੇ ਕ੍ਰਮ ਵਿੱਚ।",
+  },
+  tourClinicianReview: {
+    en: "Baselines waiting for your confirmation appear here.",
+    hi: "आपकी पुष्टि की प्रतीक्षा कर रहे बेसलाइन यहाँ दिखते हैं।",
+    pa: "ਤੁਹਾਡੀ ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ ਕਰ ਰਹੇ ਬੇਸਲਾਈਨ ਇੱਥੇ ਦਿਖਦੇ ਹਨ।",
+  },
+  // ---- leaving a session part-way, and looking back at it (Part 1) ----
+  // Accessible names for two controls that had hardcoded English ones. A screen-reader
+  // user on the Punjabi build heard "line angle" in English on the SVV slider — a control
+  // that IS the measurement, so the instruction and the label disagreed.
+  cameraPreview: { en: "Camera preview", hi: "कैमरा दृश्य", pa: "ਕੈਮਰਾ ਦ੍ਰਿਸ਼" },
+  svvLineAngle: { en: "Line angle", hi: "रेखा का कोण", pa: "ਰੇਖਾ ਦਾ ਕੋਣ" },
+  // MUST stay distinct from `pause` in every language, and that is not automatic:
+  // "Stop" and "Pause" are different words in English but both rendered as रोकें / ਰੋਕੋ,
+  // so a Hindi or Punjabi patient saw two adjacent buttons with the SAME label — one
+  // pausing recoverably, one ending the session. Pinned by a test.
+  exitShort: { en: "Exit", hi: "बाहर निकलें", pa: "ਬਾਹਰ ਨਿਕਲੋ" },
+  exitLabel: {
+    en: "Stop this check-in",
+    hi: "यह जाँच रोकें",
+    pa: "ਇਹ ਜਾਂਚ ਰੋਕੋ",
+  },
+  exitTitle: {
+    en: "Stop this check-in?",
+    hi: "क्या यह जाँच रोकनी है?",
+    pa: "ਕੀ ਇਹ ਜਾਂਚ ਰੋਕਣੀ ਹੈ?",
+  },
+  // `{done}` and `{total}` are substituted by the caller. Kept as placeholders rather
+  // than string concatenation so each language keeps its own word order.
+  exitProgress: {
+    en: "You have completed {done} of {total} steps.",
+    hi: "आपने {total} में से {done} चरण पूरे किए हैं।",
+    pa: "ਤੁਸੀਂ {total} ਵਿੱਚੋਂ {done} ਪੜਾਅ ਪੂਰੇ ਕੀਤੇ ਹਨ।",
+  },
+  // Says what happens to the work, because "are you sure?" with no answer to "what do I
+  // lose?" is what makes someone stay in a check-in they wanted to leave.
+  exitKept: {
+    en: "What you have already done is saved. You can start again whenever you like.",
+    hi: "आपने अब तक जो किया है वह सुरक्षित है। आप जब चाहें फिर से शुरू कर सकते हैं।",
+    pa: "ਤੁਸੀਂ ਹੁਣ ਤੱਕ ਜੋ ਕੀਤਾ ਹੈ ਉਹ ਸੰਭਾਲਿਆ ਗਿਆ ਹੈ। ਤੁਸੀਂ ਜਦੋਂ ਚਾਹੋ ਦੁਬਾਰਾ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ।",
+  },
+  exitCancel: {
+    en: "Carry on with the check-in",
+    hi: "जाँच जारी रखें",
+    pa: "ਜਾਂਚ ਜਾਰੀ ਰੱਖੋ",
+  },
+  exitConfirm: { en: "Stop for now", hi: "अभी के लिए रोकें", pa: "ਹੁਣ ਲਈ ਰੋਕੋ" },
+  stepBack: { en: "Back", hi: "पीछे", pa: "ਪਿੱਛੇ" },
+  stepForward: { en: "Forward", hi: "आगे", pa: "ਅੱਗੇ" },
+  reviewNavLabel: {
+    en: "Look back at earlier steps",
+    hi: "पिछले चरण देखें",
+    pa: "ਪਿਛਲੇ ਪੜਾਅ ਵੇਖੋ",
+  },
+  reviewTitle: {
+    en: "Looking back",
+    hi: "पीछे देख रहे हैं",
+    pa: "ਪਿੱਛੇ ਵੇਖ ਰਹੇ ਹੋ",
+  },
+  // States plainly that this step cannot be redone, so the absence of a retake button
+  // reads as a decision rather than something missing.
+  reviewBody: {
+    en: "This step is already done and cannot be repeated. Go forward to carry on.",
+    hi: "यह चरण हो चुका है और दोबारा नहीं किया जा सकता। जारी रखने के लिए आगे जाएँ।",
+    pa: "ਇਹ ਪੜਾਅ ਹੋ ਚੁੱਕਾ ਹੈ ਅਤੇ ਦੁਬਾਰਾ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਜਾਰੀ ਰੱਖਣ ਲਈ ਅੱਗੇ ਜਾਓ।",
+  },
   qualityNoPerson: {
     en: "We could not see the whole body. Step back so everything fits, then try again.",
     hi: "पूरा शरीर नहीं दिखा। थोड़ा पीछे हों ताकि सब दिखे, फिर दोबारा करें।",
@@ -531,16 +631,20 @@ interface I18nValue {
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
-const LANG_KEY = "neurotrace.lang";
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(
-    () => (localStorage.getItem(LANG_KEY) as Lang | null) ?? "en",
-  );
+  const [lang, setLangState] = useState<Lang>(() => {
+    const initial = readLang() ?? "en";
+    // Set on first paint, not only on change. Without this the document carries no `lang`
+    // until someone switches language, so a screen reader announces Hindi and Punjabi
+    // content with an English voice on the very screens that most need to be spoken.
+    document.documentElement.lang = initial;
+    return initial;
+  });
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
-    localStorage.setItem(LANG_KEY, next);
+    writeLang(next);
     document.documentElement.lang = next;
   }, []);
 

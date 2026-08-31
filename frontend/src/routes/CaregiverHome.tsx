@@ -13,6 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
 import { EmergencyButton } from "@/components/EmergencyButton";
+import { Tour } from "@/components/Tour";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError, Input, Label, Select } from "@/components/ui/field";
@@ -61,7 +62,7 @@ export function CaregiverHome() {
         <div className="flex items-center gap-2">
           <EmergencyButton patientId={patients?.[0]?.id} />
           {canAdd && !adding && (
-            <Button variant="accent" onClick={() => setAdding(true)}>
+            <Button data-tour="add-patient" variant="accent" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" aria-hidden />
               {t("addPatient")}
             </Button>
@@ -88,11 +89,12 @@ export function CaregiverHome() {
       {!error && patients === null && <LoadingState />}
       {!error && patients?.length === 0 && !adding && <EmptyState>{t("noPatients")}</EmptyState>}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div data-tour="patient-list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {patients?.map((patient) => (
           <PatientCard key={patient.id} patient={patient} />
         ))}
       </div>
+      <Tour role="caregiver" />
     </AppShell>
   );
 }

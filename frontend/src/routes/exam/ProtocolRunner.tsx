@@ -22,7 +22,7 @@
  * NEVER A SCORE. The finish screen is "all done" and the FAST card. Bands go to the
  * caregiver dashboard, after aggregation, never at the moment of performance.
  */
-import { CheckCircle2, Pause, WifiOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Pause, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -40,7 +40,16 @@ import { emptyBalanceRaw } from "@/lib/ondevice/pose";
 import { loadPlan, runnableSteps, type Intensity, type PlanStep, type SessionPlan } from "@/lib/protocol";
 import { speak, warmUpVoices } from "@/lib/speech-synthesis";
 import { taskLabel } from "@/lib/taskLabels";
-import { MAX_RETRIES } from "@/lib/taskFlow";
+import {
+  MAX_RETRIES,
+  canGoBack,
+  canGoForward,
+  exitSummary,
+  mayCapture,
+  stepBack,
+  stepForward,
+  viewFor,
+} from "@/lib/taskFlow";
 import type { FastCard as FastCardData, ModuleFeatures, Patient, SessionType } from "@/lib/types";
 
 import { StepAttention } from "./StepAttention";
@@ -57,6 +66,16 @@ import StepSvv from "./StepSvv";
 import { StepTapping } from "./StepTapping";
 
 type Quality = { ok: boolean; reason?: string };
+
+/** Tasks whose step component renders its own skip control, so the runner must not add a
+ *  second one. Keyed on `task` because that is what the render below branches on. */
+const STEPS_WITH_OWN_SKIP = new Set([
+  "simple_and_choice_rt",     // StepAttention
+  "sustained_ddk_sentence",   // StepSpeech
+  "facial_battery",           // StepFace
+  "finger_tapping",           // StepTapping
+  "phq2", "medication_confirm", // StepQuestions
+]);
 
 /** Capture-failure reason → the sentence the patient sees. Anything unmapped falls back
  *  to the generic retake line — a reason must never surface as a raw code. */
@@ -88,6 +107,10 @@ export function ProtocolRunner({ practice = false }: Props) {
   const [sessionType, setSessionType] = useState<SessionType>("COMPREHENSIVE");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
+  /** Which step is on screen. Equals `index` normally; lower while reviewing an earlier
+   *  step. Kept separate so that going back cannot move where the session resumes. */
+  const [viewIndex, setViewIndex] = useState(0);
+  const [confirmExit, setConfirmExit] = useState(false);
   const [gatePassed, setGatePassed] = useState(false);
   const [gateSkipped, setGateSkipped] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
@@ -186,7 +209,14 @@ export function ProtocolRunner({ practice = false }: Props) {
   const advance = useCallback(() => {
     setStepError(null);
     setRetryNotice(null);
-    setIndex((i) => i + 1);
+    setIndex((i) => {
+      // The view follows the live step forward. Without this a patient who reviewed an
+      // earlier step and then let the session advance would be left looking at the old
+      // one, and `viewFor` would keep rendering it read-only while the real session had
+      // moved on — the session would look frozen.
+      setViewIndex(i + 1);
+      return i + 1;
+    });
   }, []);
 
   /**
@@ -339,6 +369,56 @@ export function ProtocolRunner({ practice = false }: Props) {
     // Caught by oxlint's exhaustive-deps warning, not by any test.
   }, [gateSkipped, lang, patientId, practice, sessionType]);
 
+  /**
+   * The patient chose to stop. Keep everything measured so far; score none of it.
+   *
+   * This is `submit` with a different ending, deliberately not folded into it: the two
+   * differ in the one respect that matters clinically, and a shared function with a
+   * `finish: boolean` would put that difference behind a parameter that is easy to pass
+   * wrong. What was captured still uploads — the family should see the check-in was
+   * started and adherence should count the attempt — and the session is then marked
+   * abandoned, which is what keeps it out of every baseline and out of scoring.
+   *
+   * Offline, it queues with the same marker; `syncPending` branches on it and calls
+   * abandon rather than finalize, because draining a partial session through finalize
+   * would score it (INV-14).
+   */
+  const exitSession = useCallback(async () => {
+    setConfirmExit(false);
+    setBusy(true);
+    const st = store.current;
+    const collected = [...st.modules.values()];
+    const summary = exitSummary(index, steps.length);
+    const deviceInfo = { userAgent: navigator.userAgent, language: lang, online: isOnline(),
+                         gate_skipped: gateSkipped ?? undefined };
+    try {
+      if (!isOnline()) throw new Error("offline");
+      const session = await api.startSession(patientId, {
+        type: sessionType, device_info: deviceInfo, is_practice: practice,
+      });
+      for (const m of collected) {
+        await api.submitModule(session.id, m.code, m.features, {
+          quality_flag: m.quality_flag, quality_detail: m.quality_detail, raw: m.raw,
+          session_position: m.session_position,
+          elapsed_seconds_at_task_start: m.elapsed_seconds_at_task_start,
+          intensity: m.intensity, paused_before_task: m.paused_before_task,
+        });
+      }
+      await api.abandonSession(session.id, summary);
+    } catch {
+      await enqueueSession({
+        localId: newLocalId(), patientId, type: sessionType,
+        capturedAt: new Date().toISOString(), deviceInfo,
+        modules: collected, attempts: 0, isPractice: practice,
+        abandoned: summary,
+      });
+    } finally {
+      setBusy(false);
+      navigate(user?.role === "patient" ? "/" : `/dashboard/${patientId}`, { replace: true });
+    }
+  }, [gateSkipped, index, lang, navigate, patientId, practice, sessionType, steps.length,
+      user?.role]);
+
   // Reaching past the last step submits.
   useEffect(() => {
     if (plan && steps.length > 0 && index >= steps.length && !finished && !busy) {
@@ -404,30 +484,118 @@ export function ProtocolRunner({ practice = false }: Props) {
     );
   }
 
+  if (confirmExit) {
+    const summary = exitSummary(index, steps.length);
+    return (
+      <Frame patientId={patientId}>
+        {/* The count is stated plainly rather than framed as a loss ("you'll lose your
+            progress"). Nothing is lost — what was measured is kept — and pressuring a
+            tired stroke survivor to stay in a check-in is not something this product
+            should do. The continue option is listed first and styled as the primary,
+            because it is the more common intent after an accidental tap, not because
+            stopping is discouraged. */}
+        <div role="dialog" aria-modal="true" aria-labelledby="exit-title"
+             className="flex flex-col items-center gap-6 py-12 text-center">
+          <h2 id="exit-title" className="text-3xl font-semibold">{t("exitTitle")}</h2>
+          <p className="text-xl" aria-live="polite">
+            {t("exitProgress")
+              .replace("{done}", String(summary.completed))
+              .replace("{total}", String(summary.total))}
+          </p>
+          <p className="max-w-sm text-lg text-muted-foreground">{t("exitKept")}</p>
+          <div className="flex w-full max-w-sm flex-col gap-3">
+            <Button size="touch" onClick={() => setConfirmExit(false)}>
+              {t("exitCancel")}
+            </Button>
+            <button type="button" onClick={() => void exitSession()}
+              className="focus-ring min-h-16 rounded-xl border-2 border-line px-4 text-lg font-medium">
+              {t("exitConfirm")}
+            </button>
+          </div>
+        </div>
+      </Frame>
+    );
+  }
+
   if (!step) return <Frame patientId={patientId}><LoadingState /></Frame>;
 
   // ---- per-step render ----
-  const demo = demoClipFor(step.module, step.task);
+  // `step` stays the LIVE step for every capture path — `record`, `gateQuality` and the
+  // fatigue fields all close over it. `view` only decides what is on screen. Keeping the
+  // two apart is what makes it impossible for a reviewed step to be recorded into: there
+  // is no code path where the thing being displayed is also the thing being written.
+  const view = viewFor(viewIndex, index);
+  const viewedStep = steps[view.index] ?? step;
+  const capturing = mayCapture(view);
+  const demo = demoClipFor(viewedStep.module, viewedStep.task);
 
   return (
     <Frame patientId={patientId}>
       <header className="mb-4 flex items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">
-          {index + 1} / {steps.length}
+        <span className="text-sm text-muted-foreground" aria-live="polite">
+          {view.index + 1} / {steps.length}
         </span>
-        {/* Always visible. Never behind a menu. */}
-        <button type="button" onClick={togglePause}
-          className="min-h-11 rounded-lg border border-line px-4 text-base">
-          {t("pause")}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Both always visible, never behind a menu — the same rule pause has always
+              had. Someone who wants to stop should not have to hunt for how. */}
+          <button type="button" onClick={togglePause}
+            className="focus-ring min-h-11 rounded-lg border border-line px-4 text-base">
+            {t("pause")}
+          </button>
+          {/* No aria-label. It used to carry "Stop this check-in" while the button read
+              "Exit", so the accessible name did not contain the visible one — WCAG 2.5.3,
+              and a real failure rather than a technicality: a voice-control user saying
+              what is written on the button would not activate it. The visible text is the
+              accessible name, and the confirmation step supplies the detail. */}
+          <button type="button" onClick={() => setConfirmExit(true)}
+            className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base">
+            <X className="h-5 w-5" aria-hidden />
+            {t("exitShort")}
+          </button>
+        </div>
       </header>
+
+      {/* Back is offered from the second step onward. It is a way to SEE what you did. */}
+      {(canGoBack(view.index) || view.mode === "review") && (
+        <nav aria-label={t("reviewNavLabel")} className="mb-4 flex items-center gap-2">
+          <button type="button"
+            onClick={() => setViewIndex((v) => stepBack(v))}
+            disabled={!canGoBack(view.index)}
+            className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+            {t("stepBack")}
+          </button>
+          {view.mode === "review" && (
+            <button type="button"
+              onClick={() => setViewIndex((v) => stepForward(v, index))}
+              disabled={!canGoForward(view.index, index)}
+              className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
+              {t("stepForward")}
+              <ArrowRight className="h-5 w-5" aria-hidden />
+            </button>
+          )}
+        </nav>
+      )}
+
+      {view.mode === "review" && (
+        <div role="status"
+          className="mb-4 flex items-start gap-3 rounded-xl border-2 border-accent/40 bg-secondary px-4 py-3 text-left">
+          <Eye className="mt-0.5 h-6 w-6 shrink-0 text-accent" aria-hidden />
+          <div>
+            <p className="text-lg font-medium">{t("reviewTitle")}</p>
+            {/* Says plainly that this cannot be redone, and why, so the absence of a
+                retake button reads as a decision rather than a missing feature. */}
+            <p className="text-base text-muted-foreground">{t("reviewBody")}</p>
+          </div>
+        </div>
+      )}
 
       <p className={[
         "mb-4 leading-snug",
         // Aphasia mode: bigger, fewer words on screen at once. Presentation only —
         // the measured task is identical.
         patient.aphasia_mode ? "text-3xl" : "text-xl",
-      ].join(" ")}>{taskLabel(step.task, step.label_en, lang)}</p>
+      ].join(" ")}>{taskLabel(viewedStep.task, viewedStep.label_en, lang)}</p>
       {demo && (
         <video src={demo} autoPlay loop muted playsInline
           className="mb-4 max-h-44 w-full rounded-lg border border-line object-cover" />
@@ -440,6 +608,11 @@ export function ProtocolRunner({ practice = false }: Props) {
         </p>
       )}
 
+      {/* THE GUARD, in one place. No capture component exists in the tree while an
+          earlier step is being reviewed, so there is no path by which a completed step's
+          result can be discarded and retaken. Unlimited retakes would teach the baseline
+          the patient's best attempt rather than their typical one. */}
+      {capturing && (<>
       {step.task === "simple_and_choice_rt" && (
         <StepAttention key={`m10-${attempt}`} onDone={done("M10")} onSkip={advance} />
       )}
@@ -540,10 +713,18 @@ export function ProtocolRunner({ practice = false }: Props) {
           }} />
       )}
 
-      <button type="button" onClick={advance}
-        className="mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
-        {t("skipStep")}
-      </button>
+      {/* Only for steps that do NOT provide their own skip. Five of them do — M10, M4,
+          M1, M7 and the questionnaire — and this generic one rendered underneath, so a
+          patient on those steps saw TWO identical "Skip this step" buttons stacked, doing
+          exactly the same thing. Found by driving the app, not by any test: both buttons
+          are individually correct and only the pair is wrong. */}
+      {!STEPS_WITH_OWN_SKIP.has(viewedStep.task) && (
+        <button type="button" onClick={advance}
+          className="focus-ring mt-6 min-h-12 w-full text-sm text-muted-foreground underline">
+          {t("skipStep")}
+        </button>
+      )}
+      </>)}
     </Frame>
   );
 }

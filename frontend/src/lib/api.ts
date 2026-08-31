@@ -404,6 +404,13 @@ export const api = {
   finalizeSession: (sessionId: string) =>
     request<FinalizeResult>(`/sessions/${sessionId}/finalize`, { method: "POST" }),
 
+  /** The patient stopped part-way. Stored, kept, and never scored — see the endpoint. */
+  abandonSession: (sessionId: string, steps: { completed: number; total: number }) =>
+    request<ExamSession>(`/sessions/${sessionId}/abandon`, {
+      method: "POST",
+      json: { steps_completed: steps.completed, steps_total: steps.total },
+    }),
+
   currentSession: (patientId: string) =>
     request<ExamSession | null>(`/sessions/${patientId}/current`),
 

@@ -15,11 +15,27 @@ THE TEST STRATEGY: build the same clinical history twice and compare the two pat
 field by field. Asserting "the late one looks sensible" would not catch a subtle ordering
 bug; asserting it is IDENTICAL to the online one does.
 
-TWO PROPERTIES, AND THEY ARE DIFFERENT. A late drain **in capture order** must be
-indistinguishable from having been online throughout — that is what the shipped
-`syncPending` does and it is the guarantee that matters. A drain **out of capture order**
-demonstrably is NOT equivalent, and the second test pins that divergence on purpose: it is
-the concrete reason ordered replay is a requirement rather than a preference.
+THREE PROPERTIES, AND THEY ARE DIFFERENT.
+
+1. A late drain **in capture order** must be indistinguishable from having been online
+   throughout. That is what the shipped `syncPending` does, and it is the guarantee that
+   matters.
+
+2. A drain **out of capture order** is still NOT equivalent, so ordered replay remains a
+   requirement rather than a preference.
+
+3. But out-of-order damage is now REPAIRABLE by rescoring in capture order, which it was
+   not before.
+
+Properties 2 and 3 both changed shape when `_module_history` began filtering on
+`completed` (the INV-14 fix — see `test_incomplete_session.py`). A session's baseline
+history now contains only sessions that have actually been scored, so replaying backwards
+no longer lets the first session processed see the entire history behind it. The result is
+that backwards replay builds NO baseline instead of a WRONG one, and because nothing locks
+against a window built from the future, a later in-order rescore converges exactly.
+
+That is worth stating plainly: the failure is now visible and recoverable rather than
+silent and permanent. It is not a licence to drop the ordering guarantee.
 """
 from __future__ import annotations
 
@@ -175,20 +191,23 @@ async def test_a_late_drain_in_capture_order_produces_the_identical_result(sessi
     assert b["drift"] == a["drift"]
 
 
-async def test_replaying_out_of_capture_order_does_change_the_baseline(session):
-    """A FINDING, pinned deliberately — this is the reason ordered replay is mandatory.
+async def test_replaying_out_of_capture_order_still_does_not_build_a_baseline(session):
+    """Ordered replay is still a REQUIREMENT — the failure just changed shape.
 
-    Draining newest-first is not merely untidy, it produces a materially different
-    baseline. `_upsert_baseline` builds each module's window from the sessions that already
-    exist with an EARLIER timestamp; replaying backwards means the very first session
-    processed already sees the entire history behind it, so the baseline locks in one step
-    against a window the in-order path would never have produced. Rescoring afterwards does
-    not undo it, because a locked baseline row is never rebuilt.
+    This test used to assert that backwards replay produced a *different, wrong* baseline
+    and that rescoring could not repair it, because `_module_history` fed on every earlier
+    session whether or not it had been scored. Processing newest-first therefore let the
+    very first session see the entire history behind it, lock a baseline against a window
+    the in-order path would never produce, and keep it forever.
 
-    So this test asserts the DIVERGENCE. If a future change made backwards replay safe this
-    test would fail, and that would be good news worth looking at — but until then, the
-    ordering guarantee in `syncPending` is load-bearing and automatic drain must preserve
-    it (`docs/plans/PLAN_offline_auto_drain.md`).
+    Adding `completed.is_(True)` to that query (the INV-14 fix in
+    `tests/test_incomplete_session.py`) changed the outcome. A session now only sees
+    history that has actually been SCORED, so replaying backwards gives every session an
+    empty history and no baseline is built at all.
+
+    That is a better failure — visibly empty rather than quietly wrong — but it is still a
+    failure, so `syncPending`'s ordering guarantee remains load-bearing and automatic drain
+    still must preserve it (`docs/plans/PLAN_offline_auto_drain.md`).
     """
     forward = await _make_patient(session, "fwd")
     for day, drift in zip(DAYS, DRIFTS):
@@ -200,16 +219,53 @@ async def test_replaying_out_of_capture_order_does_change_the_baseline(session):
                 for day, drift in zip(DAYS, DRIFTS)]
     for _day, exam_id in reversed(captured):
         await compute_session(session, exam_id)
-    # Even a full rescore in the right order afterwards does not repair it.
+
+    a = await _final_state(session, forward)
+    b = await _final_state(session, backward)
+    assert b["baseline_medians"] != a["baseline_medians"], (
+        "backwards replay now yields the same baseline as ordered replay WITHOUT a repair "
+        "pass. That is a behaviour change worth understanding before relaxing the ordering "
+        "requirement in docs/plans/PLAN_offline_auto_drain.md"
+    )
+    # And say specifically what went wrong, so a future reader does not have to rediscover
+    # that "differs" here means "was never built".
+    assert set(b["baseline_n"].values()) == {0}, (
+        f"expected backwards replay to build NO baseline; got {b['baseline_n']}"
+    )
+
+
+async def test_an_out_of_order_replay_is_repairable_by_rescoring_in_order(session):
+    """THE IMPROVEMENT, pinned so it cannot be lost.
+
+    Out-of-order damage used to be permanent: a baseline row locked against the wrong
+    window was never rebuilt, so rescoring in capture order afterwards did not repair it.
+    Now that a session's history contains only scored sessions, nothing locks against a
+    window built from the future, and an in-order rescore converges on the identical state
+    — every band, both gates, the drift series, the medians and the session counts.
+
+    This is what makes a mis-drained queue recoverable in the field rather than a patient
+    whose baseline is quietly wrong for the rest of their enrolment.
+    """
+    forward = await _make_patient(session, "fwd-repair")
+    for day, drift in zip(DAYS, DRIFTS):
+        exam_id = await _capture(session, forward, day, drift)
+        await compute_session(session, exam_id)
+
+    backward = await _make_patient(session, "bwd-repair")
+    captured = [(day, await _capture(session, backward, day, drift))
+                for day, drift in zip(DAYS, DRIFTS)]
+    for _day, exam_id in reversed(captured):
+        await compute_session(session, exam_id)
+    # The repair: rescore in capture order.
     for _day, exam_id in captured:
         await compute_session(session, exam_id)
 
     a = await _final_state(session, forward)
     b = await _final_state(session, backward)
-    assert b["baseline_medians"] != a["baseline_medians"], (
-        "backwards replay now yields the same baseline as ordered replay. That is a "
-        "behaviour change worth understanding before relaxing the ordering requirement in "
-        "docs/plans/PLAN_offline_auto_drain.md"
+    assert b == a, (
+        "an in-order rescore no longer repairs an out-of-order drain. That is a "
+        "regression in recoverability: it means a mis-drained queue leaves a patient's "
+        "baseline permanently wrong."
     )
 
 

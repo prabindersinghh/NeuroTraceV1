@@ -43,6 +43,13 @@ export interface QueuedSession {
   modules: QueuedModule[];
   attempts: number;
   lastError?: string;
+  /**
+   * Set when the patient EXITED this session part-way. Present here and not only on the
+   * server because the exit happens offline too, and a queued partial session that drained
+   * through `finalizeSession` would be scored — which is precisely the INV-14 violation the
+   * exit path exists to avoid. The drain below branches on this.
+   */
+  abandoned?: { completed: number; total: number };
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -131,6 +138,8 @@ export async function syncPending(
       intensity?: string; paused_before_task?: boolean;
     }) => Promise<unknown>;
     finalizeSession: (sessionId: string) => Promise<{ band: string }>;
+    abandonSession: (sessionId: string,
+                     steps: { completed: number; total: number }) => Promise<unknown>;
   },
 ): Promise<SyncOutcome> {
   const queue = await pendingSessions();
@@ -155,8 +164,18 @@ export async function syncPending(
           paused_before_task: module.paused_before_task,
         });
       }
-      const result = await api.finalizeSession(started.id);
-      outcome.bands.push(result.band);
+      if (session.abandoned) {
+        // A session the patient walked out of. It uploads in full — the results are kept —
+        // and is then marked abandoned rather than finalised, so it never reaches a
+        // baseline or a band. Finalising it here would score a truncated session, which is
+        // the INV-14 failure this whole path exists to prevent. No band is pushed onto the
+        // outcome because there is none, and inventing one would surface a score for a
+        // check-in that was never completed.
+        await api.abandonSession(started.id, session.abandoned);
+      } else {
+        const result = await api.finalizeSession(started.id);
+        outcome.bands.push(result.band);
+      }
       outcome.synced += 1;
       await removeSession(session.localId);
     } catch (error) {

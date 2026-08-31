@@ -24,6 +24,7 @@ from ..safety.fast import fast_card
 from ..schemas import (
     ModuleResultRead,
     ModuleSubmit,
+    SessionAbandon,
     SessionFinalizeResponse,
     SessionRead,
     SessionStart,
@@ -291,14 +292,70 @@ async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> Ses
     return SessionFinalizeResponse(**result)
 
 
+@router.post("/{session_id}/abandon", response_model=SessionRead)
+async def abandon_session(
+    session_id: uuid.UUID, payload: SessionAbandon, user: CurrentUser, db: Session,
+) -> SessionRead:
+    """The patient stopped part-way. Keep what was measured; keep it out of the engine.
+
+    `completed` stays False, and that single fact is what excludes this session from every
+    baseline and from scoring — the pipeline filters on it (see `_module_history`, and
+    `tests/test_incomplete_session.py`). Nothing here needs to reach into the engine, which
+    is the point: exiting is not a special case the engine has to know about, it is just a
+    session that never finished.
+
+    The results already submitted are RETAINED. The family should be able to see that a
+    check-in was started, and adherence should count the attempt. Deleting them would
+    punish someone for stopping, which is the opposite of what an exit button is for.
+
+    Idempotent: exiting twice (a double tap, a retried request from the offline queue)
+    records the first exit and leaves it alone, rather than 409-ing at a patient who is
+    trying to leave.
+    """
+    exam = await db.get(ExamSession, session_id)
+    if exam is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    patient = await _assert_can_access(db, exam.patient_id, user)
+
+    if exam.completed:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "This session is already finished and scored")
+
+    if exam.abandoned is None:
+        info = dict(exam.device_info or {})
+        info["abandoned"] = {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "steps_completed": payload.steps_completed,
+            "steps_total": payload.steps_total,
+        }
+        # Reassigned, not mutated in place: SQLAlchemy does not track mutation of a plain
+        # JSON dict, so an in-place update would be silently dropped on commit.
+        exam.device_info = info
+        db.add(AuditLog(
+            actor_id=user.id, action="session.abandoned", patient_id=patient.id,
+            meta_json={"session_id": str(session_id),
+                       "steps_completed": payload.steps_completed,
+                       "steps_total": payload.steps_total},
+        ))
+        await db.commit()
+        await db.refresh(exam)
+    return SessionRead.model_validate(exam)
+
+
 @router.get("/{patient_id}/current", response_model=SessionRead | None)
 async def current_session(patient: AuthorisedPatient, db: Session) -> SessionRead | None:
-    """Lets the PWA resume a session interrupted mid-battery."""
-    exam = await db.scalar(
+    """Lets the PWA resume a session interrupted mid-battery.
+
+    A session the patient deliberately EXITED is not offered for resume. Interrupted and
+    abandoned are both `completed=False`, and only one of them is an invitation to carry
+    on — re-offering a check-in somebody just chose to stop would undo the exit.
+    """
+    rows = await db.scalars(
         select(ExamSession)
         .where(ExamSession.patient_id == patient.id, ExamSession.completed.is_(False))
-        .order_by(ExamSession.ts.desc()).limit(1)
+        .order_by(ExamSession.ts.desc()).limit(20)
     )
+    exam = next((s for s in rows if s.abandoned is None), None)
     return SessionRead.model_validate(exam) if exam else None
 
 
