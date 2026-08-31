@@ -65,7 +65,11 @@ export default {
          * measured there as font-mono + uppercase + tracking 0.18-0.22em, used 75
          * times. Mono and wide tracking are most of why that page reads as
          * instrumentation and the app did not. */
-        label:     ["0.6875rem",{ lineHeight: "1.2", fontWeight: "500", letterSpacing: "0.18em" }],
+        /* 12px, not the reference doc's 11px. The mobile audit flags anything under
+         * 12px, and this token is now on every page header — a marketing page can
+         * afford 11px on a desktop, a clinical app read at arm's length on a phone
+         * cannot. The wide tracking is what makes it read as a label, not the size. */
+        label:     ["0.75rem",  { lineHeight: "1.2", fontWeight: "500", letterSpacing: "0.16em" }],
         /* Fluid page title, the landing page's own clamp. */
         "title-fluid": ["clamp(1.75rem,3.4vw,2.6rem)", { lineHeight: "1.1", fontWeight: "600", letterSpacing: "-0.025em" }],
       },

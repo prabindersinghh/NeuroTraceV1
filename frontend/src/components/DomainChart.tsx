@@ -74,14 +74,14 @@ export function DomainChart({ domain, data, threshold, color }: Props) {
 
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 11, fill: "hsl(215 16% 42%)" }}
+                tick={{ fontSize: 12, fill: "hsl(215 16% 42%)" }}
                 tickLine={false}
                 axisLine={{ stroke: "hsl(214 25% 86%)" }}
                 interval="preserveStartEnd"
               />
               <YAxis
                 domain={[0, Math.ceil(peak)]}
-                tick={{ fontSize: 11, fill: "hsl(215 16% 42%)" }}
+                tick={{ fontSize: 12, fill: "hsl(215 16% 42%)" }}
                 tickLine={false}
                 axisLine={false}
                 width={40}
