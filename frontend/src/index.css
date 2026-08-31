@@ -301,6 +301,7 @@
     transition: transform var(--dur-instant) var(--ease-spring),
                 background-color var(--dur-fast) var(--ease-in-out),
                 border-color var(--dur-fast) var(--ease-in-out),
+                color var(--dur-fast) var(--ease-in-out),
                 opacity var(--dur-fast) var(--ease-in-out);
   }
   /* Deeper on a real press than on a card hover — the control should feel like it takes

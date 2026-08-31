@@ -104,7 +104,7 @@ function PatientCard({ patient }: { patient: Patient }) {
 
   return (
     <Card
-      className="chip-edge tactile flex flex-col"
+      className="chip-edge flex flex-col"
       style={{
         ["--chip-edge-color" as string]:
           setupPending || learning ? "hsl(var(--watch))" : "hsl(var(--stable))",

@@ -20,7 +20,7 @@ export function LanguageToggle({ className }: { className?: string }) {
           onClick={() => setLang(code)}
           aria-pressed={lang === code}
           className={cn(
-            "rounded-md px-2 py-1 text-sm font-medium transition-colors focus-ring",
+            "tactile rounded-md px-2 py-1 text-sm font-medium focus-ring",
             lang === code
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-secondary",

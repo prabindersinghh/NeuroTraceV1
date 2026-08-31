@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export const Label = forwardRef<HTMLLabelElement, LabelHTMLAttributes<HTMLLabelElement>>(
   ({ className, ...props }, ref) => (
-    <label ref={ref} className={cn("text-sm font-medium text-foreground", className)} {...props} />
+    <label ref={ref} className={cn("text-sm font-medium text-foreground transition-[border-color,box-shadow] duration-150 ease-out", className)} {...props} />
   ),
 );
 Label.displayName = "Label";
@@ -13,7 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       className={cn(
-        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem]",
+        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] transition-[border-color,box-shadow] duration-150 ease-out",
         "placeholder:text-muted-foreground focus-ring disabled:opacity-50",
         className,
       )}
@@ -28,7 +28,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     <select
       ref={ref}
       className={cn(
-        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] focus-ring",
+        "h-11 w-full rounded-lg border border-input bg-card px-3 text-[0.95rem] focus-ring transition-[border-color,box-shadow] duration-150 ease-out",
         className,
       )}
       {...props}

@@ -53,6 +53,10 @@ export function Metric({
     <div
       className={cn(
         "chip-edge rounded-xl border border-border bg-card py-4 pe-4",
+        // A readout, not a control: it gets a smooth colour change when its tone
+        // moves (STABLE -> ALERT) and deliberately no press animation, because
+        // nothing happens when you click it.
+        "transition-[background-color,border-color] duration-200 ease-out",
         className,
       )}
       style={{ ["--chip-edge-color" as string]: EDGE[tone] }}

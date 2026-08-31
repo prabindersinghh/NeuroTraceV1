@@ -123,7 +123,7 @@ export function Clinic() {
                eye lands; the finding underneath, which is the sentence a clinician
                actually reads. The leading edge carries the band so the list can be
                scanned down the margin without reading any words. */
-            <Card key={row.patient_id} className="chip-edge tactile"
+            <Card key={row.patient_id} className="chip-edge"
                   style={{ ["--chip-edge-color" as string]: BAND_EDGE[row.band ?? "NONE"] }}>
               <CardContent className="p-5 ps-4">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

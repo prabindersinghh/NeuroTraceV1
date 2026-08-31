@@ -12,12 +12,27 @@ import { cn } from "@/lib/utils";
  * repository-wide — 78 sites — and is recorded as a deferred doc-vs-practice decision in
  * UX-CHANGES.md rather than swept here, because changing it is a restyle, not a fix.
  */
-export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  /**
+   * The card is itself a control — a row you open, a tile you tap.
+   *
+   * DESIGN_LANGUAGE.md §3 gives interactive cards `tactile-lift`. The reference lifts them
+   * to a higher elevation on hover; this product has no shadows, so the lift is carried by
+   * the border warming to the accent and a very slight rise. Same signal, same vocabulary,
+   * within this product's own rules.
+   */
+  interactive?: boolean;
+}
+
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground transition-colors duration-200",
+        "rounded-xl border border-border bg-card text-card-foreground",
+        // Colour AND transform, so an interactive card can move without a second rule.
+        "transition-[background-color,border-color,transform] duration-200 ease-out",
+        interactive && "tactile tactile-lift cursor-pointer",
         className,
       )}
       {...props}
