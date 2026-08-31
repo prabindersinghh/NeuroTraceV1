@@ -294,3 +294,30 @@ async def test_a_finished_session_cannot_be_retro_abandoned(client, session):
                              json={"steps_completed": 21, "steps_total": 21},
                              headers=_auth(token))
     assert resp.status_code == 409, resp.text
+
+
+async def test_history_lists_sessions_newest_first_without_verdicts(client):
+    """The patient-facing history: when, which type, finished or not — and NOTHING that
+    reads as a verdict. A band on this payload would put ALERT on the patient's own
+    calendar the morning after, which is the experience this product refuses to build."""
+    token, patient_id = await _caregiver_and_patient(client)
+    first = await _started_session(client, token, patient_id)
+    second = await _started_session(client, token, patient_id)
+    await client.post(f"/sessions/{second}/abandon",
+                      json={"steps_completed": 2, "steps_total": 18}, headers=_auth(token))
+
+    resp = await client.get(f"/sessions/{patient_id}/history", headers=_auth(token))
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()
+    assert [r["id"] for r in rows][:2] == [second, first], "newest first"
+
+    for row in rows:
+        for banned in ("band", "score", "deviation", "z", "drivers"):
+            assert banned not in row, (
+                f"'{banned}' reached the patient-facing history payload"
+            )
+        assert "completed" in row and "type" in row and "ts" in row
+    # The exited session is present and honest about itself.
+    exited = next(r for r in rows if r["id"] == second)
+    assert exited["completed"] is False
+    assert exited["abandoned"]["steps_completed"] == 2

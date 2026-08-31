@@ -130,6 +130,8 @@ export interface ExamSession {
   off_window: boolean;
   completed: boolean;
   offline_captured: boolean;
+  /** Present only when the patient exited part-way: {at, steps_completed, steps_total}. */
+  abandoned?: { at: string; steps_completed: number; steps_total: number } | null;
 }
 
 export interface ModuleResult {

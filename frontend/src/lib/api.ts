@@ -411,6 +411,11 @@ export const api = {
       json: { steps_completed: steps.completed, steps_total: steps.total },
     }),
 
+  /** When, which type, finished or not — and deliberately no verdicts. Feeds the
+   *  patient's history list and calendar; bands stay on /dashboard. */
+  sessionHistory: (patientId: string, limit = 90) =>
+    request<ExamSession[]>(`/sessions/${patientId}/history?limit=${limit}`),
+
   currentSession: (patientId: string) =>
     request<ExamSession | null>(`/sessions/${patientId}/current`),
 

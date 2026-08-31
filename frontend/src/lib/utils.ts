@@ -63,7 +63,7 @@ const DATE_OPTS: Intl.DateTimeFormatOptions = {
  */
 const localeUsable = new Map<string, boolean>();
 
-function usableLocale(locale: string): string {
+export function usableLocale(locale: string): string {
   let ok = localeUsable.get(locale);
   if (ok === undefined) {
     try {

@@ -359,6 +359,33 @@ async def current_session(patient: AuthorisedPatient, db: Session) -> SessionRea
     return SessionRead.model_validate(exam) if exam else None
 
 
+@router.get("/{patient_id}/history", response_model=list[SessionRead])
+async def session_history(
+    patient: AuthorisedPatient, db: Session, limit: int = 90,
+) -> list[SessionRead]:
+    """The check-ins themselves — when, which type, finished or not. NO VERDICTS.
+
+    This feeds the patient's own history list and calendar, so what it deliberately does
+    not carry matters more than what it does: no band, no score, no deviation. Bands go to
+    the caregiver dashboard after aggregation, never to the person at or near the moment of
+    performance — a patient reading ALERT off their own calendar the morning after is
+    exactly the "app tells me I am declining" experience this product refuses to build.
+    `SessionRead` already has that shape; the caregiver's clinical view stays `/dashboard`.
+
+    Authorisation is the standard patient gate, so the same list serves the patient, the
+    owning caregiver, and a linked clinician or family member with consent in force.
+
+    Capped and ordered newest-first: the calendar wants a season, not an unbounded table.
+    """
+    rows = await db.scalars(
+        select(ExamSession)
+        .where(ExamSession.patient_id == patient.id)
+        .order_by(ExamSession.ts.desc())
+        .limit(max(1, min(limit, 366)))
+    )
+    return [SessionRead.model_validate(s) for s in rows]
+
+
 @router.get("/{session_id}/modules", response_model=list[ModuleResultRead])
 async def session_modules(session_id: uuid.UUID, user: CurrentUser,
                           db: Session) -> list[ModuleResultRead]:

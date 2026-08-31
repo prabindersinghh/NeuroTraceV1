@@ -23,6 +23,29 @@ export const STRINGS = {
     pa: "ਤੁਹਾਡੇ ਨਾਲ ਜੁੜੇ, ਸਹਿਮਤੀ ਲਾਗੂ ਹੈ",
   },
   // Mono caps eyebrows above a page title — the landing page's own vocabulary.
+  // ---- the patient's check-in calendar and history. No verdicts, by design. ----
+  calTitle: { en: "Your check-ins", hi: "आपकी जाँचें", pa: "ਤੁਹਾਡੀਆਂ ਜਾਂਚਾਂ" },
+  calPrev: { en: "Previous month", hi: "पिछला महीना", pa: "ਪਿਛਲਾ ਮਹੀਨਾ" },
+  calNext: { en: "Next month", hi: "अगला महीना", pa: "ਅਗਲਾ ਮਹੀਨਾ" },
+  calDone: { en: "Done", hi: "पूरी हुई", pa: "ਪੂਰੀ ਹੋਈ" },
+  calStopped: { en: "Stopped part-way", hi: "बीच में रुकी", pa: "ਵਿਚਕਾਰ ਰੁਕੀ" },
+  calStreak: { en: "{n} days in a row", hi: "लगातार {n} दिन", pa: "ਲਗਾਤਾਰ {n} ਦਿਨ" },
+  // Session TYPE names for history rows. Distinct from todayShort/todayLong, which
+  // embed "Today is" — reused in a history row that produced "31 Aug — Today is the
+  // short check-in", a sentence about the wrong day.
+  typeShort: { en: "Daily check-in", hi: "रोज़ की जाँच", pa: "ਰੋਜ਼ ਦੀ ਜਾਂਚ" },
+  typeLong: { en: "Longer check-in", hi: "लंबी जाँच", pa: "ਲੰਬੀ ਜਾਂਚ" },
+  historyTitle: { en: "Recent check-ins", hi: "हाल की जाँचें", pa: "ਹਾਲੀਆ ਜਾਂਚਾਂ" },
+  historyStopped: {
+    en: "Stopped at {done} of {total}",
+    hi: "{total} में से {done} पर रुकी",
+    pa: "{total} ਵਿੱਚੋਂ {done} ਤੇ ਰੁਕੀ",
+  },
+  historyEmpty: {
+    en: "Your first check-in will appear here.",
+    hi: "आपकी पहली जाँच यहाँ दिखेगी।",
+    pa: "ਤੁਹਾਡੀ ਪਹਿਲੀ ਜਾਂਚ ਇੱਥੇ ਦਿਖੇਗੀ।",
+  },
   signInEyebrow: { en: "Secure sign-in", hi: "सुरक्षित साइन-इन", pa: "ਸੁਰੱਖਿਅਤ ਸਾਈਨ-ਇਨ" },
   clinicEyebrow: { en: "Clinician", hi: "चिकित्सक", pa: "ਡਾਕਟਰ" },
   caregiverEyebrow: { en: "Care at home", hi: "घर पर देखभाल", pa: "ਘਰ ਵਿੱਚ ਦੇਖਭਾਲ" },

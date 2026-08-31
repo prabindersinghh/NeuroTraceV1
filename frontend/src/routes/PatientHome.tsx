@@ -11,25 +11,28 @@
  * exactly why: two files once disagreed about how long Daily Pulse takes because one of them
  * held a hand-written constant.
  */
-import { HeartPulse, MessageSquareText } from "lucide-react";
+import { MessageSquareText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
+import { CheckinCalendar } from "@/components/CheckinCalendar";
 import { EmergencyButton } from "@/components/EmergencyButton";
 import { Tour } from "@/components/Tour";
 import { buttonVariants } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { Patient, SessionType } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import type { ExamSession, Patient, SessionType } from "@/lib/types";
+import { cn, formatDateTime, usableLocale } from "@/lib/utils";
 
 type Due = { session_type: SessionType; estimated_seconds: number; step_count: number };
 
 export function PatientHome() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [patients, setPatients] = useState<Patient[] | null>(null);
   const [due, setDue] = useState<Due | null>(null);
+  const [history, setHistory] = useState<ExamSession[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -45,6 +48,13 @@ export function PatientHome() {
           setDue(await api.sessionDue(list[0].id));
         } catch {
           setDue(null);
+        }
+        // Same non-fatal reasoning: the calendar is a record, not a gate. Offline, the
+        // button still works and the calendar simply shows what it last knew.
+        try {
+          setHistory(await api.sessionHistory(list[0].id));
+        } catch {
+          setHistory([]);
         }
       }
     } catch (err) {
@@ -75,68 +85,107 @@ export function PatientHome() {
   // Round up, never down. Promising "3 minutes" for 195 seconds and then running longer is
   // the small dishonesty that makes someone distrust the next number too.
   const minutes = due ? Math.max(1, Math.ceil(due.estimated_seconds / 60)) : null;
+  const locale = usableLocale(lang === "hi" ? "hi-IN" : lang === "pa" ? "pa-IN" : "en-IN");
 
   return (
     <AppShell>
-      {/* NOT `.patient-scale`. This is the patient's HOME — software chrome, where they
-          choose what to do — and the 20px floor with 64px targets belongs on the exam,
-          where they are performing a task. Applying the test treatment here is what made
-          a laptop render a 448px column of 72px buttons. The exam surfaces keep it. */}
-      <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-8 text-center">
-        <HeartPulse className="h-14 w-14 text-accent" aria-hidden />
-        {me ? (
-          <>
-            <h1 className="text-title-fluid">
-              {t("checkinTitle")}
-              <span className="mt-2 block text-lg font-normal text-muted-foreground">{me.name}</span>
-            </h1>
+      {me ? (
+        <div className="mx-auto w-full max-w-md lg:max-w-none">
+          {/* The same header grammar as every other screen — mono eyebrow, fluid title,
+              hairline rule. The subtitle is the patient's own name: this page is theirs. */}
+          <PageHeader eyebrow={t("patientEyebrow")} title={t("checkinTitle")} subtitle={me.name} />
 
-            {due && minutes !== null && (
-              <div className="w-full rounded-lg border border-line bg-surface p-4 text-left">
-                <p className="font-semibold">
-                  {due.session_type === "DAILY_PULSE" ? t("todayShort") : t("todayLong")}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {t("aboutMinutes").replace("{n}", String(minutes))}
-                  {" · "}
-                  {t("stepsCount").replace("{n}", String(due.step_count))}
-                </p>
-                {/* One of the three safety guarantees, stated before they start rather than
-                    discovered mid-session. */}
-                <p className="mt-2 text-muted-foreground">{t("restAnyTime")}</p>
+          {/* Laptop-first: today's action on the left, the record of showing up on the
+              right. On a phone they stack, action first. */}
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <div className="flex flex-col gap-4">
+              {due && minutes !== null && (
+                <div className="rounded-xl border border-border bg-secondary/50 p-4">
+                  <p className="text-label text-muted-foreground">
+                    {due.session_type === "DAILY_PULSE" ? t("todayShort") : t("todayLong")}
+                  </p>
+                  <p className="mt-2 text-title-3">
+                    {t("aboutMinutes").replace("{n}", String(minutes))}
+                    {" · "}
+                    {t("stepsCount").replace("{n}", String(due.step_count))}
+                  </p>
+                  {/* One of the three safety guarantees, stated before they start rather
+                      than discovered mid-session. */}
+                  <p className="mt-1.5 text-muted-foreground">{t("restAnyTime")}</p>
+                </div>
+              )}
+
+              <Link
+                data-tour="start-check-in"
+                to={`/exam/${me.id}`}
+                className={cn(buttonVariants({ variant: "accent", size: "touch" }))}
+              >
+                {t("begin")}
+              </Link>
+              {/* Awaaz is the OTHER daily surface — for some patients the more important
+                  one. Same size as the check-in button, never buried in a menu. */}
+              <Link
+                to={`/awaaz/${me.id}`}
+                className={cn(buttonVariants({ variant: "outline", size: "touch" }))}
+              >
+                <MessageSquareText className="mr-2 h-6 w-6" aria-hidden />
+                {t("awaazOpen")}
+              </Link>
+              {/* Never behind a menu, never below the fold on this column. */}
+              <div data-tour="emergency">
+                <EmergencyButton patientId={me.id} />
               </div>
-            )}
-
-            <Link
-              data-tour="start-check-in"
-              to={`/exam/${me.id}`}
-              className={cn(buttonVariants({ variant: "accent", size: "touch" }), "max-w-sm")}
-            >
-              {t("begin")}
-            </Link>
-            {/* Awaaz is the OTHER daily surface — for some patients the more important
-                one. Same size as the check-in button, never buried in a menu. */}
-            <Link
-              to={`/awaaz/${me.id}`}
-              className={cn(buttonVariants({ variant: "outline", size: "touch" }), "max-w-sm")}
-            >
-              <MessageSquareText className="mr-2 h-6 w-6" aria-hidden />
-              {t("awaazOpen")}
-            </Link>
-            {/* The patient's OWN screen had no emergency control. It was on the
-                caregiver, family and dashboard surfaces but not here — so the person most
-                likely to be having a second stroke was the one person who could not reach
-                it from their home screen. Same size and prominence as the other two
-                actions, never behind a menu. */}
-            <div data-tour="emergency" className="w-full max-w-sm">
-              <EmergencyButton patientId={me.id} />
             </div>
-            <Tour role="patient" />
-          </>
-        ) : (
-          <EmptyState>{t("noData")}</EmptyState>
-        )}
-      </div>
+
+            <div className="flex flex-col gap-6">
+              <CheckinCalendar sessions={history} />
+
+              <section aria-labelledby="history-h">
+                <div className="mb-3 flex items-baseline justify-between border-b border-border pb-2">
+                  <h2 id="history-h" className="text-label text-muted-foreground">
+                    {t("historyTitle")}
+                  </h2>
+                </div>
+                {history.length === 0 ? (
+                  <p className="py-4 text-muted-foreground">{t("historyEmpty")}</p>
+                ) : (
+                  <ul className="flex flex-col">
+                    {history.slice(0, 7).map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/60 py-3 last:border-b-0"
+                      >
+                        <span className="font-medium tabular-nums">
+                          {formatDateTime(s.ts, locale)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {s.type === "DAILY_PULSE" ? t("typeShort") : t("typeLong")}
+                        </span>
+                        {/* Done, or how far they got. Never a verdict — the server strips
+                            them from this payload for exactly this screen. */}
+                        {s.completed ? (
+                          <span className="font-medium text-accent">{t("calDone")}</span>
+                        ) : s.abandoned ? (
+                          <span className="text-muted-foreground">
+                            {t("historyStopped")
+                              .replace("{done}", String(s.abandoned.steps_completed))
+                              .replace("{total}", String(s.abandoned.steps_total))}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">{t("calStopped")}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </div>
+          <Tour role="patient" />
+        </div>
+      ) : (
+        <EmptyState>{t("noData")}</EmptyState>
+      )}
     </AppShell>
   );
 }

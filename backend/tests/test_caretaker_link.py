@@ -91,6 +91,7 @@ FOREIGN_ROUTES = [
     "/audit/{pid}",
     "/wearable/{pid}",
     "/awaaz/{pid}/board",
+    "/sessions/{pid}/history",
 ]
 
 
