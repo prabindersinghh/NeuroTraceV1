@@ -70,3 +70,52 @@ Run this before the first real training job and at least quarterly afterward:
 A failed or unrecorded drill blocks real training and deployment. A synthetic dry-run may
 exercise the manifest and restore logic, but it is not evidence that patient data or a model
 was backed up.
+
+## Policy-event log retention (`awaaz_policy_events`)
+
+This table is the one asset here that is deleted on a schedule rather than on request, and
+the reasoning is different enough from the rest of this document to be worth stating.
+
+**What it is.** Awaaz candidate-ranking events: an opaque slate, the propensity of the
+action shown, and what the person did. No patient column, no foreign key, no timestamp finer than a
+UTC day — D-062. It is not audit data. The audit trail for these interactions is `audit_log`,
+which stays append-only and is never swept (INV-8). This log is operational analytics held
+under a purpose-specific consent for one declared purpose: offline policy comparison by
+`app/ml/rl/offline.py`. Data held for a purpose has the life of that purpose.
+
+**The window: 120 days.** Ninety days of accrual plus thirty days of review lag. Ninety
+because an offline estimate is a statement about one named behaviour policy, so rows either
+side of a version bump can never be pooled, and because ninety days is the quarterly cadence
+this document already sets for the restore drill; thirty because a log exported on the last
+day of a cycle still has to be run through `compare_policies` and argued about, and rows
+expiring under an open review make its numbers unreproducible. The number is configurable
+downward and cannot be configured upward: `MAX_RETENTION_DAYS` equals the default, in the
+same idiom as the stringency floors on `EvaluationConfig`.
+
+**The sweep.** `backend/app/services/policy_retention.py`. One bounded `DELETE` per
+invocation over `logged_on < cutoff` and nothing else, committed immediately, so it cannot
+hold locks across a backlog and an interruption is indistinguishable from not having called
+it. It is idempotent — the effect is a function of the day, not of the call count — and it
+reports aggregates only: table, window, cutoff, batch limit, rows deleted, expired rows
+remaining. Never a row identifier. It runs either from `POST /awaaz/policy/retention/sweep`
+under `require_roles(Role.admin)`, which is the routine path because this deployment has no
+scheduler, or as `python -m app.services.policy_retention` for a restored database that is
+not serving an API.
+
+**What restore means here.** Nothing. That is the useful part: this table needs no tombstone
+journal, because its deletion rule is a deterministic predicate, not a list of objects.
+A restored snapshot is by definition no newer than the one it replaced, so re-running the
+sweep after a restore removes at least everything the pre-restore sweeps removed, and more.
+The correct post-restore action for this table is therefore step 4's replay reduced to a
+single command: run the sweep. Its RPO and RTO are those of the application database row
+above; it introduces no separate recovery source.
+
+**The limitation, stated plainly.** This is expiry, not erasure. Because the table has no
+patient column, a person asking to be rid of their events cannot be answered: the server
+cannot determine which rows are theirs, and any mechanism that could would have to store the
+link the table was deliberately built without — which is the same argument that keeps a
+speaker key out of the cluster bootstrap in `offline.py`. The candidate identifiers in a row
+are client-minted and opaque and afford no selection either. So a subject-erasure request
+against this table can only be answered with the truth: the events cannot be identified, and
+they will be gone within 120 days of being written. No deletion receipt is issued for an
+individual, because there is no individual object to name in one.

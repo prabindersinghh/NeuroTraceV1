@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.deps import CurrentUser, get_patient_for_user
+from ..auth.deps import CurrentUser, get_patient_for_user, require_roles
 from ..awaaz.safety import (
     AUTO_SPEAK_ELIGIBLE,
     MIN_AUTO_SPEAK_THRESHOLD,
@@ -25,9 +25,13 @@ from ..awaaz.safety import (
 from ..db import get_session
 from ..models import (
     AuditLog, AwaazPolicyEvent, AwaazProfile, MAX_POLICY_CANDIDATES, Patient,
-    PhraseCard, PolicyEventOutcome, PolicyFeedbackActor, User, UtteranceLog,
+    PhraseCard, PolicyEventOutcome, PolicyFeedbackActor, Role, User, UtteranceLog,
 )
 from ..services.emergency_notifications import deliver_emergency
+from ..services.policy_retention import (
+    DEFAULT_RETENTION_POLICY,
+    sweep_expired_policy_events,
+)
 from ..schemas import (
     AwaazBoard,
     AwaazPolicyDecision,
@@ -50,6 +54,7 @@ router = APIRouter(prefix="/awaaz", tags=["awaaz"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 AuthorisedPatient = Annotated[Patient, Depends(get_patient_for_user)]
+Admin = Annotated[User, Depends(require_roles(Role.admin))]
 
 MAX_BOARD_CARDS = 36
 SUPPORTED_LANGUAGES = frozenset({"en", "hi", "pa"})
@@ -1180,6 +1185,48 @@ async def policy_outcome(
     await db.commit()
     _PENDING_POLICY_DECISIONS.pop(payload.event_id, None)
     return AwaazPolicyEventRead.model_validate(row, from_attributes=True)
+
+
+# ------------------------------------------------------- D5 · retention for the same table
+# D-062 indexed `logged_on` for a sweep and no sweep existed, so the rows accrued forever.
+# The window, the append-only reasoning, and the erasure limitation all live in
+# `services/policy_retention.py`; this is only the door.
+#
+# WHY AN ENDPOINT AT ALL. This deployment has no scheduler. Railway runs one web process,
+# operations are performed against the running instance (`scripts/verify_deploy.sh`,
+# `/admin/*`), and a retention promise whose only implementation needs a shell on the
+# production host is a promise that gets skipped. The module also exposes a `python -m`
+# runner for the one situation the API cannot serve -- a database restored into an isolated
+# environment during the ML_RECOVERY drill -- so both paths exist because both are needed,
+# not to be thorough.
+#
+# WHY IT IS ADMIN-ONLY AND CARRIES NO PATIENT IN ITS PATH. Every other route in this file is
+# scoped by `get_patient_for_user` (INV-6). This one cannot be: the table has no patient
+# column, so there is no patient whose authorisation would mean anything here, and mounting
+# it under `/{patient_id}` would advertise a per-patient deletion this table cannot perform.
+# It is an operator action on aggregate data, which is exactly what `/admin` is for, so it
+# takes the same `require_roles(Role.admin)` guard.
+@router.post("/policy/retention/sweep")
+async def policy_retention_sweep(admin: Admin, db: Session) -> dict:
+    """Delete policy events past the retention window. Bounded, repeatable, aggregate-only.
+
+    Idempotent in the sense that matters for a deletion: the effect is a function of the
+    day, not of how many times it is called. Once nothing is beyond the window a repeat call
+    deletes nothing and returns `deleted: 0`, and `complete: false` is the caller's
+    instruction to call again rather than an error.
+    """
+    report = await sweep_expired_policy_events(db, policy=DEFAULT_RETENTION_POLICY)
+    # An audit row for a deletion, with no patient (there is none to name) and no event id
+    # -- for the same reason the two writers omit it, and because a list of what was deleted
+    # would preserve outside the table what deleting it was meant to end. Note this row is
+    # inside the same database as the rows it describes, so it is NOT a tombstone in
+    # ML_RECOVERY's sense; that document explains why this table does not need one.
+    db.add(AuditLog(
+        actor_id=admin.id, action="awaaz.policy_event.retention_sweep",
+        meta_json=report.as_audit_meta(),
+    ))
+    await db.commit()
+    return report.as_audit_meta()
 
 
 def logged_feedback_from(row: AwaazPolicyEvent):
