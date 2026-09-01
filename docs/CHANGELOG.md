@@ -30,7 +30,10 @@ Refreshing mid-session offers "Welcome back — continue where you left off?"
 - **The five recall words were never spoken.** The step spoke them and the runner's label
   cancelled them a moment later. Queued speech now (`speak(..., { queue: true })`).
 Also: a state update inside a countdown updater (five steps) that React warned about in
-the console — the countdown now only counts and an effect acts when it lands.
+the console — the countdown now only counts and an effect acts when it lands. And one
+backend test that had nothing to do with this branch: `test_tiers_wearables_asha.py`
+pinned `NOW` to a literal date, the wearable route drops readings older than thirty
+days, so the test began failing on 2026-08-31 by itself. Its clock is relative now.
 
 ### Verified
 - Frontend: `tsc -b` clean; oxlint 9 (baseline); vitest **181/181** (42 new:

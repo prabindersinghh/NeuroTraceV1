@@ -34,7 +34,10 @@ from app.models import (
     WearableMetric,
 )
 
-NOW = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+# Relative, not a fixed date: the wearable route drops readings older than
+# MAX_BACKFILL_DAYS, so a literal date here became "too old" thirty days after it was
+# written and the test failed with stored == 0 on 2026-08-31, with nothing changed.
+NOW = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
 
 
 # --------------------------------------------------------------- tier-gated modules
