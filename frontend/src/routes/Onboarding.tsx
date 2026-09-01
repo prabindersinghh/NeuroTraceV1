@@ -307,9 +307,9 @@ export default function Onboarding() {
 
         {step === 6 && (
           <p className="text-lg">
-            {{ en: "Do this one together. Every task shows a short video first. Nothing is scored — this is only so they know what to expect.",
-               hi: "यह साथ मिलकर कीजिए। हर काम से पहले एक छोटा वीडियो दिखेगा। कुछ भी गिना नहीं जाएगा — यह सिर्फ़ अभ्यास है।",
-               pa: "ਇਹ ਇਕੱਠੇ ਕਰੋ। ਹਰ ਕੰਮ ਤੋਂ ਪਹਿਲਾਂ ਇੱਕ ਛੋਟਾ ਵੀਡੀਓ ਦਿਖੇਗਾ। ਕੁਝ ਵੀ ਗਿਣਿਆ ਨਹੀਂ ਜਾਵੇਗਾ — ਇਹ ਸਿਰਫ਼ ਅਭਿਆਸ ਹੈ।" }[lang]}
+            {{ en: "Do this one together. It begins with a gentle warm-up, every instruction is spoken aloud, and nothing is scored — this is only so they know what to expect.",
+               hi: "यह साथ मिलकर कीजिए। यह एक हल्के वार्म-अप से शुरू होता है, हर निर्देश बोलकर सुनाया जाता है, और कुछ भी गिना नहीं जाएगा — यह सिर्फ़ अभ्यास है।",
+               pa: "ਇਹ ਇਕੱਠੇ ਕਰੋ। ਇਹ ਇੱਕ ਹਲਕੇ ਵਾਰਮ-ਅੱਪ ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ, ਹਰ ਹਦਾਇਤ ਬੋਲ ਕੇ ਸੁਣਾਈ ਜਾਂਦੀ ਹੈ, ਅਤੇ ਕੁਝ ਵੀ ਗਿਣਿਆ ਨਹੀਂ ਜਾਵੇਗਾ — ਇਹ ਸਿਰਫ਼ ਅਭਿਆਸ ਹੈ।" }[lang]}
           </p>
         )}
         {step === 6 && (

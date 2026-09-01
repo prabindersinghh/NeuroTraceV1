@@ -8,13 +8,18 @@
  *
  * Latency is measured from the frame in which the stimulus actually painted, not from the
  * timer that scheduled it, so what is recorded is the person rather than the event loop.
+ *
+ * PRESENTATION. The stimulus is the light coming on — the same light the warm-up taught.
+ * A false start is still counted (it is part of the measurement); the patient is told
+ * "a little early", never "wrong". Progress is a row of ten small stops rather than a
+ * counter, and there is no score anywhere.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Light } from "@/components/journey/Light";
+import { haptic } from "@/lib/haptic";
 import { useI18n } from "@/lib/i18n";
 import { extractAttentionSpeed } from "@/lib/ondevice/attention";
-import { speak } from "@/lib/speech-synthesis";
 import type { ModuleFeatures } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,11 +32,10 @@ type Phase = "idle" | "waiting" | "go" | "done";
 
 interface Props {
   onDone: (features: ModuleFeatures, quality: { ok: boolean; reason?: string }) => void;
-  onSkip: () => void;
 }
 
-export function StepAttention({ onDone, onSkip }: Props) {
-  const { t, lang } = useI18n();
+export function StepAttention({ onDone }: Props) {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("idle");
   const [trial, setTrial] = useState(0);
   const [flash, setFlash] = useState<string | null>(null);
@@ -78,7 +82,7 @@ export function StepAttention({ onDone, onSkip }: Props) {
       timers.current.push(
         window.setTimeout(() => {
           setPhase("go");
-          // Stamp the time in the frame where the blue circle is actually painted.
+          // Stamp the time in the frame where the light is actually painted.
           requestAnimationFrame(() => {
             shownAt.current = performance.now();
           });
@@ -100,14 +104,14 @@ export function StepAttention({ onDone, onSkip }: Props) {
       latencies.current = [];
       misses.current = 0;
       falseStarts.current = 0;
-      speak(t("tapTitle"), lang);
+      haptic();
       runTrial(0);
       return;
     }
     if (phase === "waiting") {
       falseStarts.current += 1;
       setFlash(t("tapTooSoon"));
-      window.setTimeout(() => setFlash(null), 700);
+      window.setTimeout(() => setFlash(null), 900);
       return;
     }
     if (phase === "go") {
@@ -115,47 +119,48 @@ export function StepAttention({ onDone, onSkip }: Props) {
       if (shownAt.current > 0) latencies.current.push(performance.now() - shownAt.current);
       shownAt.current = 0;
       setFlash(null);
+      haptic();
       runTrial(trial + 1);
     }
   }
 
-  const isGo = phase === "go";
   const label =
-    phase === "idle" ? t("begin") : phase === "waiting" ? t("tapWait") : isGo ? t("tapNow") : "✓";
+    phase === "idle" ? t("begin") : phase === "waiting" ? t("tapWait") : phase === "go" ? t("tapNow") : "";
+  const shown = Math.min(trial + (phase === "idle" ? 0 : 1), TRIALS);
 
   return (
-    <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-title-2">{t("tapTitle")}</h2>
-
-      <button
-        type="button"
-        onPointerDown={handleTap}
+    <div className="flex flex-col items-center gap-6 text-center">
+      <Light
+        state={phase === "done" ? "done" : phase === "go" ? "on" : phase === "waiting" ? "waiting" : "idle"}
+        label={label}
         disabled={phase === "done"}
-        aria-label={label}
-        className={cn(
-          "grid h-64 w-64 select-none place-items-center rounded-full text-4xl font-bold transition-colors duration-75 focus-ring touch-manipulation",
-          isGo && "bg-accent text-accent-foreground",
-          phase === "waiting" && "bg-secondary text-muted-foreground",
-          phase === "idle" && "bg-primary text-primary-foreground",
-          phase === "done" && "bg-stable text-white",
-        )}
+        onPress={handleTap}
       >
-        {label}
-      </button>
+        <span className={cn(phase === "go" ? "text-title-1" : "text-title-2")}>{label}</span>
+      </Light>
 
-      <p className="h-6 text-lg font-medium text-destructive" role="status">
+      {/* Never red. An early tap is information, not a fault. */}
+      <p className="min-h-8 text-lg font-medium text-watch" role="status">
         {flash}
       </p>
 
-      <p className="text-lg text-muted-foreground">
-        {t("trial")} {Math.min(trial + (phase === "idle" ? 0 : 1), TRIALS)} / {TRIALS}
-      </p>
-
-      {phase === "idle" && (
-        <Button variant="link" onClick={onSkip}>
-          {t("skipStep")}
-        </Button>
-      )}
+      {/* Ten small stops, lit as the trials pass. The number is for the screen reader. */}
+      <div
+        className="flex items-center gap-2"
+        role="img"
+        aria-label={t("stepOf").replace("{n}", String(shown)).replace("{total}", String(TRIALS))}
+      >
+        {Array.from({ length: TRIALS }, (_, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className={cn(
+              "h-2.5 w-2.5 rounded-full transition-colors duration-300",
+              i < shown ? "bg-accent" : "bg-border",
+            )}
+          />
+        ))}
+      </div>
     </div>
   );
 }

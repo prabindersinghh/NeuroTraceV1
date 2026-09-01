@@ -92,7 +92,11 @@ describe("neutral confirm — no score, praise or criticism at the moment of per
    * The keys the finish screen actually renders. Read from the real i18n table, so this
    * fails if the copy changes rather than passing against a copy of it.
    */
-  const CONFIRM_KEYS = ["allDone", "practiceDone", "finish", "onDevice"] as const;
+  const CONFIRM_KEYS = [
+    "allDone", "practiceDone", "finish", "onDevice",
+    // The journey's own ending (components/journey/Completion.tsx).
+    "doneTitle", "doneBody",
+  ] as const;
 
   it("the finish-screen copy carries no praise, criticism or score, in any language", () => {
     for (const key of CONFIRM_KEYS) {

@@ -10,6 +10,7 @@
 import { Camera, Check } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Ring } from "@/components/journey/Ring";
 import { Button } from "@/components/ui/button";
 import { CaptureError, startFaceCapture, type FaceCaptureHandle } from "@/lib/capture";
 import { useI18n, type StringKey } from "@/lib/i18n";
@@ -36,10 +37,9 @@ interface Props {
   identitySignature?: IdentitySignature | null;
   onIdentity?: (verdict: { score: number; verified: boolean; unenrolled: boolean }) => void;
   onError: (message: string) => void;
-  onSkip: () => void;
 }
 
-export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentity }: Props) {
+export function StepFace({ onDone, onError, identitySignature, onIdentity }: Props) {
   const { t, lang } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const handleRef = useRef<FaceCaptureHandle | null>(null);
@@ -109,15 +109,11 @@ export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentit
 
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-title-2">{t("faceTitle")}</h2>
+      <p className="text-title-3 text-accent" aria-live="polite">
+        {current ? t(current.label) : t("faceTitle")}
+      </p>
 
-      {current && (
-        <p className="text-2xl font-medium text-accent" aria-live="polite">
-          {t(current.label)}
-        </p>
-      )}
-
-      <div className="relative aspect-[3/4] w-full max-w-xs overflow-hidden rounded-2xl border-2 border-border bg-secondary">
+      <div className="relative aspect-[3/4] w-full max-w-xs overflow-hidden rounded-2xl border-2 border-line bg-secondary">
         <video
           ref={videoRef}
           playsInline
@@ -131,22 +127,25 @@ export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentit
           </div>
         )}
         {current && (
-          <span className="absolute left-3 top-3 rounded-full bg-accent px-3 py-1 text-lg font-bold text-accent-foreground tabular-nums">
-            {Math.max(0, remaining)}
-          </span>
+          <Ring seconds={current.seconds} remaining={Math.max(0, remaining)} size={56} overlay className="absolute left-3 top-3" />
         )}
       </div>
 
       {started ? (
-        <div className="flex items-center gap-2" aria-label="progress">
+        <div
+          className="flex items-center gap-2"
+          role="img"
+          aria-label={t("stepOf").replace("{n}", String(Math.min(index + 1, TASKS.length))).replace("{total}", String(TASKS.length))}
+        >
           {TASKS.map((task, i) => (
             <span
               key={task.task}
+              aria-hidden
               className={cn(
-                "grid h-8 w-8 place-items-center rounded-full border-2 text-xs",
-                i < index && "border-stable bg-stable text-white",
-                i === index && "border-accent bg-accent text-accent-foreground",
-                i > index && "border-border text-muted-foreground",
+                "grid h-8 w-8 place-items-center rounded-full border-2 text-xs transition-colors duration-300",
+                i < index && "border-accent bg-accent text-accent-foreground",
+                i === index && "border-accent bg-accent/15 text-accent",
+                i > index && "border-line text-muted-foreground",
               )}
             >
               {i < index ? <Check className="h-4 w-4" aria-hidden /> : i + 1}
@@ -154,15 +153,9 @@ export function StepFace({ onDone, onError, onSkip, identitySignature, onIdentit
           ))}
         </div>
       ) : (
-        <Button size="touch" variant="accent" onClick={start}>
+        <Button size="touch" variant="accent" className="max-w-sm" onClick={start}>
           <Camera className="h-7 w-7" aria-hidden />
           {t("begin")}
-        </Button>
-      )}
-
-      {!started && (
-        <Button variant="link" onClick={onSkip}>
-          {t("skipStep")}
         </Button>
       )}
     </div>

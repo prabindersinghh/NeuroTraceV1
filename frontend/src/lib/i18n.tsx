@@ -15,6 +15,133 @@ import type { Lang } from "./types";
 /** Exported so behavioural tests can assert on the copy the app actually renders,
  *  rather than against a duplicated copy of it. See lib/taskFlow.test.ts. */
 export const STRINGS = {
+  // ================================================================ the journey
+  // One path, a few chapters, never "test N of 18". Presentation only — positions,
+  // timings and stimuli are the protocol's (docs/superpowers/specs/2026-09-02-*.md).
+  progressStart: { en: "Just getting started", hi: "अभी शुरुआत है", pa: "ਹੁਣੇ ਸ਼ੁਰੂਆਤ ਹੈ" },
+  progressUnderWay: { en: "Under way", hi: "चल रहा है", pa: "ਚੱਲ ਰਿਹਾ ਹੈ" },
+  progressHalf: { en: "About halfway", hi: "लगभग आधा हो गया", pa: "ਲਗਭਗ ਅੱਧਾ ਹੋ ਗਿਆ" },
+  progressPastHalf: { en: "More than halfway", hi: "आधे से ज़्यादा हो गया", pa: "ਅੱਧੇ ਤੋਂ ਵੱਧ ਹੋ ਗਿਆ" },
+  progressNearly: { en: "Nearly there", hi: "बस थोड़ा और", pa: "ਬੱਸ ਥੋੜ੍ਹਾ ਹੋਰ" },
+  progressLast: { en: "The last one", hi: "आख़िरी", pa: "ਆਖ਼ਰੀ" },
+  // The path's accessible name. `{phrase}` is one of the six above.
+  pathLabel: {
+    en: "Your path today: {phrase}. {n} of {total}.",
+    hi: "आज का आपका रास्ता: {phrase}। {total} में से {n}।",
+    pa: "ਅੱਜ ਦਾ ਤੁਹਾਡਾ ਰਾਹ: {phrase}। {total} ਵਿੱਚੋਂ {n}।",
+  },
+  pathEyebrow: { en: "Your path today", hi: "आज का आपका रास्ता", pa: "ਅੱਜ ਦਾ ਤੁਹਾਡਾ ਰਾਹ" },
+  stepOf: { en: "{n} of {total}", hi: "{total} में से {n}", pa: "{total} ਵਿੱਚੋਂ {n}" },
+  // ---- welcome and warm-up. Nothing here is recorded. ----
+  welcomeTitle: { en: "Let's get comfortable.", hi: "आइए, आराम से शुरू करें।", pa: "ਆਓ, ਆਰਾਮ ਨਾਲ ਸ਼ੁਰੂ ਕਰੀਏ।" },
+  welcomeBody: {
+    en: "A few short moments, one at a time. You can rest whenever you like.",
+    hi: "कुछ छोटे-छोटे काम, एक-एक करके। जब चाहें आराम कर सकते हैं।",
+    pa: "ਕੁਝ ਛੋਟੇ-ਛੋਟੇ ਕੰਮ, ਇੱਕ-ਇੱਕ ਕਰਕੇ। ਜਦੋਂ ਚਾਹੋ ਆਰਾਮ ਕਰ ਸਕਦੇ ਹੋ।",
+  },
+  welcomeSit: {
+    en: "Sit somewhere comfortable, with the phone in front of you.",
+    hi: "आराम से बैठिए, फ़ोन अपने सामने रखिए।",
+    pa: "ਆਰਾਮ ਨਾਲ ਬੈਠੋ, ਫ਼ੋਨ ਆਪਣੇ ਸਾਹਮਣੇ ਰੱਖੋ।",
+  },
+  welcomePractice: {
+    en: "This is a practice run. Nothing is scored.",
+    hi: "यह अभ्यास है। कुछ भी गिना नहीं जाएगा।",
+    pa: "ਇਹ ਅਭਿਆਸ ਹੈ। ਕੁਝ ਵੀ ਗਿਣਿਆ ਨਹੀਂ ਜਾਵੇਗਾ।",
+  },
+  ready: { en: "I'm ready", hi: "मैं तैयार हूँ", pa: "ਮੈਂ ਤਿਆਰ ਹਾਂ" },
+  skipWarmup: { en: "Skip the warm-up", hi: "वार्म-अप छोड़ें", pa: "ਵਾਰਮ-ਅੱਪ ਛੱਡੋ" },
+  warmupTap: { en: "Tap the light.", hi: "रोशनी को छुएँ।", pa: "ਰੌਸ਼ਨੀ ਨੂੰ ਛੂਹੋ।" },
+  warmupHold: {
+    en: "Now hold it until it fills.",
+    hi: "अब इसे तब तक दबाए रखें जब तक यह भर न जाए।",
+    pa: "ਹੁਣ ਇਸਨੂੰ ਉਦੋਂ ਤੱਕ ਦਬਾਈ ਰੱਖੋ ਜਦੋਂ ਤੱਕ ਇਹ ਭਰ ਨਾ ਜਾਵੇ।",
+  },
+  warmupNote: {
+    en: "Just to get comfortable — nothing is recorded yet.",
+    hi: "सिर्फ़ अभ्यास के लिए — अभी कुछ दर्ज नहीं हो रहा।",
+    pa: "ਸਿਰਫ਼ ਅਭਿਆਸ ਲਈ — ਹਾਲੇ ਕੁਝ ਦਰਜ ਨਹੀਂ ਹੋ ਰਿਹਾ।",
+  },
+  warmupDone: {
+    en: "That's the idea. Let's begin.",
+    hi: "बस यही करना है। चलिए शुरू करें।",
+    pa: "ਬੱਸ ਇਹੀ ਕਰਨਾ ਹੈ। ਚੱਲੋ ਸ਼ੁਰੂ ਕਰੀਏ।",
+  },
+  // ---- comfort controls: the patient's own, kept on the device (lib/prefs.ts) ----
+  comfortTitle: { en: "Make it comfortable", hi: "अपने हिसाब से", pa: "ਆਪਣੇ ਹਿਸਾਬ ਨਾਲ" },
+  comfortVoice: { en: "Read aloud", hi: "बोलकर सुनाएँ", pa: "ਬੋਲ ਕੇ ਸੁਣਾਓ" },
+  comfortMotion: { en: "Less movement", hi: "कम हलचल", pa: "ਘੱਟ ਹਿਲਜੁਲ" },
+  comfortText: { en: "Bigger text", hi: "बड़े अक्षर", pa: "ਵੱਡੇ ਅੱਖਰ" },
+  // ---- chapters. A name and one line each; the line is spoken. ----
+  chNext: { en: "Next along the path", hi: "रास्ते में आगे", pa: "ਰਾਹ ਵਿੱਚ ਅੱਗੇ" },
+  chHands: { en: "Hands and voice", hi: "हाथ और आवाज़", pa: "ਹੱਥ ਅਤੇ ਆਵਾਜ਼" },
+  chHandsIntro: {
+    en: "A few quick things with your hands and your voice.",
+    hi: "हाथों और आवाज़ से कुछ छोटे काम।",
+    pa: "ਹੱਥਾਂ ਅਤੇ ਆਵਾਜ਼ ਨਾਲ ਕੁਝ ਛੋਟੇ ਕੰਮ।",
+  },
+  chCheckin: { en: "A quick check-in", hi: "एक छोटी बात", pa: "ਇੱਕ ਛੋਟੀ ਗੱਲ" },
+  chCheckinIntro: {
+    en: "Two short questions, then your medicines.",
+    hi: "दो छोटे सवाल, फिर आपकी दवाइयाँ।",
+    pa: "ਦੋ ਛੋਟੇ ਸਵਾਲ, ਫਿਰ ਤੁਹਾਡੀਆਂ ਦਵਾਈਆਂ।",
+  },
+  chEyes: { en: "Your eyes", hi: "आपकी आँखें", pa: "ਤੁਹਾਡੀਆਂ ਅੱਖਾਂ" },
+  chEyesIntro: {
+    en: "Five words to keep in mind, then follow the light with your eyes.",
+    hi: "पाँच शब्द याद रखने के लिए, फिर आँखों से रोशनी का पीछा।",
+    pa: "ਪੰਜ ਸ਼ਬਦ ਯਾਦ ਰੱਖਣ ਲਈ, ਫਿਰ ਅੱਖਾਂ ਨਾਲ ਰੌਸ਼ਨੀ ਦਾ ਪਿੱਛਾ।",
+  },
+  chStanding: { en: "On your feet", hi: "खड़े होकर", pa: "ਖੜ੍ਹੇ ਹੋ ਕੇ" },
+  chStandingIntro: {
+    en: "Someone should be beside you for this part.",
+    hi: "इस हिस्से में कोई आपके पास होना चाहिए।",
+    pa: "ਇਸ ਹਿੱਸੇ ਵਿੱਚ ਕੋਈ ਤੁਹਾਡੇ ਕੋਲ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ।",
+  },
+  chClose: { en: "Winding down", hi: "समापन की ओर", pa: "ਸਮਾਪਤੀ ਵੱਲ" },
+  chCloseIntro: {
+    en: "Nearly there. A few calm moments to finish.",
+    hi: "बस थोड़ा और। शांति से कुछ आख़िरी पल।",
+    pa: "ਬੱਸ ਥੋੜ੍ਹਾ ਹੋਰ। ਸ਼ਾਂਤੀ ਨਾਲ ਕੁਝ ਆਖ਼ਰੀ ਪਲ।",
+  },
+  restPrompt: {
+    en: "Would you like a short rest first?",
+    hi: "क्या पहले थोड़ा आराम करना चाहेंगे?",
+    pa: "ਕੀ ਪਹਿਲਾਂ ਥੋੜ੍ਹਾ ਆਰਾਮ ਕਰਨਾ ਚਾਹੋਗੇ?",
+  },
+  restNow: { en: "Rest a moment", hi: "थोड़ा आराम करें", pa: "ਥੋੜ੍ਹਾ ਆਰਾਮ ਕਰੋ" },
+  // ---- coming back after a reload (lib/journeyStore.ts) ----
+  resumeTitle: { en: "Welcome back.", hi: "फिर से स्वागत है।", pa: "ਫਿਰ ਸਵਾਗਤ ਹੈ।" },
+  resumeBody: {
+    en: "You were part-way through. Continue where you left off?",
+    hi: "आप बीच में थे। वहीं से आगे बढ़ें?",
+    pa: "ਤੁਸੀਂ ਵਿਚਕਾਰ ਸੀ। ਉੱਥੋਂ ਹੀ ਅੱਗੇ ਵਧੋ?",
+  },
+  resumeContinue: { en: "Continue where I left off", hi: "वहीं से आगे बढ़ें", pa: "ਉੱਥੋਂ ਹੀ ਅੱਗੇ ਵਧੋ" },
+  resumeFresh: { en: "Start again from the beginning", hi: "शुरू से फिर करें", pa: "ਸ਼ੁਰੂ ਤੋਂ ਫਿਰ ਕਰੋ" },
+  // ---- the instruction card ----
+  listenAgain: { en: "Listen again", hi: "फिर से सुनें", pa: "ਫਿਰ ਸੁਣੋ" },
+  watchHow: { en: "Watch how", hi: "देखिए कैसे", pa: "ਦੇਖੋ ਕਿਵੇਂ" },
+  secondsLeft: { en: "{n} seconds left", hi: "{n} सेकंड बाकी", pa: "{n} ਸਕਿੰਟ ਬਾਕੀ" },
+  keepGoing: { en: "Keep going", hi: "जारी रखें", pa: "ਜਾਰੀ ਰੱਖੋ" },
+  // Presentation overrides of two server labels (lib/journey.ts, LABEL_OVERRIDE).
+  labelTapLight: {
+    en: "Tap the light the moment it comes on.",
+    hi: "जैसे ही रोशनी जले, तुरंत छुएँ।",
+    pa: "ਜਿਵੇਂ ਹੀ ਰੌਸ਼ਨੀ ਜਗੇ, ਤੁਰੰਤ ਛੂਹੋ।",
+  },
+  labelRecall: {
+    en: "Which of these words did you see earlier? Tap them.",
+    hi: "इनमें से कौन से शब्द आपने पहले देखे थे? उन्हें छुएँ।",
+    pa: "ਇਹਨਾਂ ਵਿੱਚੋਂ ਕਿਹੜੇ ਸ਼ਬਦ ਤੁਸੀਂ ਪਹਿਲਾਂ ਦੇਖੇ ਸਨ? ਉਹਨਾਂ ਨੂੰ ਛੂਹੋ।",
+  },
+  // ---- the end. Neutral: no praise, no score (lib/taskFlow.ts, FORBIDDEN_AT_CONFIRM). ----
+  doneTitle: { en: "That's everything for today.", hi: "आज के लिए बस इतना ही।", pa: "ਅੱਜ ਲਈ ਬੱਸ ਇੰਨਾ ਹੀ।" },
+  doneBody: {
+    en: "Thank you. Everything is saved.",
+    hi: "धन्यवाद। सब कुछ सहेज लिया गया है।",
+    pa: "ਧੰਨਵਾਦ। ਸਭ ਕੁਝ ਸੰਭਾਲ ਲਿਆ ਗਿਆ ਹੈ।",
+  },
   orDivider: { en: "or", hi: "या", pa: "ਜਾਂ" },
   // Clinician roster summary: the metrics row above the list.
   linkedToYou: {
@@ -533,8 +660,6 @@ export const STRINGS = {
 
   // --- exam ---
   checkinTitle: { en: "Daily check-in", hi: "रोज़ाना जाँच", pa: "ਰੋਜ਼ਾਨਾ ਜਾਂਚ" },
-  stepOf: { en: "Step", hi: "चरण", pa: "ਪੜਾਅ" },
-  of: { en: "of", hi: "में से", pa: "ਵਿੱਚੋਂ" },
   begin: { en: "Begin", hi: "शुरू करें", pa: "ਸ਼ੁਰੂ ਕਰੋ" },
   next: { en: "Next", hi: "आगे", pa: "ਅੱਗੇ" },
   listen: { en: "Play instruction again", hi: "निर्देश फिर सुनें", pa: "ਹਦਾਇਤ ਦੁਬਾਰਾ ਸੁਣੋ" },
@@ -545,7 +670,6 @@ export const STRINGS = {
   faceEyes: { en: "Close your eyes tightly", hi: "आँखें कसकर बंद कीजिए", pa: "ਅੱਖਾਂ ਕੱਸ ਕੇ ਬੰਦ ਕਰੋ" },
   faceCheeks: { en: "Puff out your cheeks", hi: "गाल फुलाइए", pa: "ਗੱਲ੍ਹਾਂ ਫੁਲਾਓ" },
 
-  speechTitle: { en: "Now your voice", hi: "अब आपकी आवाज़", pa: "ਹੁਣ ਤੁਹਾਡੀ ਆਵਾਜ਼" },
   speechSustain: { en: "Say 'aaah' and hold it", hi: "'आ' बोलिए और बनाए रखिए", pa: "'ਆ' ਬੋਲੋ ਅਤੇ ਕਾਇਮ ਰੱਖੋ" },
   speechDdk: { en: "Say 'pa-ta-ka' as fast as you can", hi: "जितनी तेज़ी से हो सके 'प-त-क' बोलिए", pa: "ਜਿੰਨੀ ਤੇਜ਼ੀ ਨਾਲ ਹੋ ਸਕੇ 'ਪ-ਤ-ਕ' ਬੋਲੋ" },
   speechSentence: { en: "Read this out loud", hi: "इसे ज़ोर से पढ़ें", pa: "ਇਸਨੂੰ ਉੱਚੀ ਪੜ੍ਹੋ" },
@@ -555,13 +679,10 @@ export const STRINGS = {
     pa: "ਸਾਡੇ ਪਿੰਡ ਕੋਲ ਸ਼ਾਂਤ ਖੇਤਾਂ ਉੱਤੇ ਸੂਰਜ ਹੌਲੀ-ਹੌਲੀ ਚੜ੍ਹਿਆ।",
   },
 
-  tapTitle: { en: "Tap when the circle turns blue", hi: "जब घेरा नीला हो, तब दबाएँ", pa: "ਜਦੋਂ ਗੋਲਾ ਨੀਲਾ ਹੋਵੇ, ਦਬਾਓ" },
-  tapWait: { en: "Wait…", hi: "रुकिए…", pa: "ਰੁਕੋ…" },
-  tapNow: { en: "TAP", hi: "दबाएँ", pa: "ਦਬਾਓ" },
-  tapTooSoon: { en: "Too soon — wait for blue", hi: "बहुत जल्दी — नीले का इंतज़ार करें", pa: "ਬਹੁਤ ਜਲਦੀ — ਨੀਲੇ ਦੀ ਉਡੀਕ ਕਰੋ" },
-  trial: { en: "Tap", hi: "टैप", pa: "ਟੈਪ" },
+  tapWait: { en: "Wait for it…", hi: "इंतज़ार करें…", pa: "ਉਡੀਕ ਕਰੋ…" },
+  tapNow: { en: "Tap", hi: "छुएँ", pa: "ਛੂਹੋ" },
+  tapTooSoon: { en: "A little early — wait for the light", hi: "थोड़ा जल्दी — रोशनी का इंतज़ार करें", pa: "ਥੋੜ੍ਹਾ ਜਲਦੀ — ਰੌਸ਼ਨੀ ਦੀ ਉਡੀਕ ਕਰੋ" },
 
-  handTitle: { en: "Tap as fast as you can", hi: "जितनी तेज़ी से हो सके दबाएँ", pa: "ਜਿੰਨੀ ਤੇਜ਼ੀ ਨਾਲ ਹੋ ਸਕੇ ਦਬਾਓ" },
   handLeft: { en: "Use your LEFT hand", hi: "बाएँ हाथ का उपयोग करें", pa: "ਖੱਬਾ ਹੱਥ ਵਰਤੋ" },
   handRight: { en: "Now your RIGHT hand", hi: "अब दायाँ हाथ", pa: "ਹੁਣ ਸੱਜਾ ਹੱਥ" },
 
@@ -611,7 +732,7 @@ export const STRINGS = {
     hi: "यह ब्राउज़र रिकॉर्ड नहीं कर सकता। कृपया Chrome या Safari का उपयोग करें।",
     pa: "ਇਹ ਬ੍ਰਾਊਜ਼ਰ ਰਿਕਾਰਡ ਨਹੀਂ ਕਰ ਸਕਦਾ। ਕਿਰਪਾ ਕਰਕੇ Chrome ਜਾਂ Safari ਵਰਤੋ।",
   },
-  skipStep: { en: "Skip this step", hi: "यह चरण छोड़ें", pa: "ਇਹ ਪੜਾਅ ਛੱਡੋ" },
+  skipStep: { en: "Skip this one", hi: "इसे छोड़ें", pa: "ਇਹ ਛੱਡੋ" },
 
   // --- safety ---
   emergency: { en: "Emergency", hi: "आपातकाल", pa: "ਐਮਰਜੈਂਸੀ" },

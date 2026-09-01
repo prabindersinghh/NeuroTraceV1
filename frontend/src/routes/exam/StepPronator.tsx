@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { startPoseStream, type LandmarkStream } from "@/lib/capture";
 import type { PosePoint, PronatorRaw } from "@/lib/ondevice/pose";
+import { Ring } from "@/components/journey/Ring";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 
 interface Props {
@@ -98,18 +100,13 @@ export function StepPronator({ seconds, onDone, onError }: Props) {
       <div className={["relative overflow-hidden rounded-xl border-4", inFrame ? "border-accent" : "border-line"].join(" ")}>
         <video ref={videoRef} muted playsInline className="aspect-[3/4] w-full object-cover" />
         {phase === "capture" && (
-          <span className="absolute right-3 top-3 rounded-lg bg-black/60 px-3 py-1 text-2xl font-semibold tabular-nums text-white">
-            {remaining}
-          </span>
+          <Ring seconds={seconds} remaining={remaining} size={64} overlay className="absolute right-3 top-3" />
         )}
       </div>
       {phase === "position" && (
-        <button
-          type="button" disabled={!inFrame} onClick={begin}
-          className="min-h-16 w-full rounded-xl bg-accent text-lg font-medium text-accent-foreground disabled:opacity-40"
-        >
+        <Button size="touch" variant="accent" disabled={!inFrame} onClick={begin}>
           {t("start")}
-        </button>
+        </Button>
       )}
     </div>
   );

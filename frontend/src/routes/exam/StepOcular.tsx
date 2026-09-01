@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { startFaceStream, type LandmarkStream } from "@/lib/capture";
 import { gazeFromLandmarks, type OculomotorRaw, type SaccadeTrial } from "@/lib/ondevice/ocular";
+import { Ring } from "@/components/journey/Ring";
 import { useI18n } from "@/lib/i18n";
 
 export type OcularTask =
@@ -164,23 +165,29 @@ export function StepOcular({ task, seconds, raw, onDone, onError }: Props) {
 
   return (
     <div className="relative flex min-h-[60vh] flex-col">
-      {/* The camera preview is deliberately tiny: the patient must watch the DOT, and a
+      {/* The camera preview is deliberately tiny: the patient must watch the LIGHT, and a
           big mirror image of their own face is the strongest possible distractor. */}
       <video
         ref={videoRef}
         muted playsInline
-        className="absolute right-2 top-2 h-20 w-16 rounded-lg border border-line object-cover opacity-80"
+        className="absolute right-2 top-2 z-10 h-20 w-16 rounded-lg border border-slate-700 object-cover opacity-70"
       />
-      <div className="relative flex-1 rounded-xl bg-slate-900">
+      {/* The dark room. The shell goes dark with it (JourneyShell `dark`), so the light
+          is the only bright thing on the page. The glow is functional — it is what makes
+          a small moving target visible at arm's length — and is the one shadow this
+          product keeps on purpose. */}
+      <div className="relative flex-1 rounded-2xl bg-slate-900">
         <div
           aria-hidden
           className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_14px_4px_rgba(255,255,255,0.6)] transition-none"
           style={{ left: `${dot[0] * 100}%`, top: `${dot[1] * 100}%` }}
         />
       </div>
-      <p className="mt-3 text-center text-3xl font-semibold tabular-nums">
-        {running ? remaining : t("loading")}
-      </p>
+      <div className="mt-4 flex justify-center">
+        {running
+          ? <Ring seconds={seconds} remaining={remaining} size={64} overlay />
+          : <p className="text-lg text-slate-300">{t("loading")}</p>}
+      </div>
     </div>
   );
 }

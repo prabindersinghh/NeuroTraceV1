@@ -13,6 +13,7 @@
  * voice for the requested language is missing the text still renders on screen — the
  * session degrades to visual-only rather than failing.
  */
+import { readPrefs } from "./prefs";
 import type { Lang } from "./types";
 
 const BCP47: Record<Lang, string[]> = {
@@ -47,14 +48,27 @@ export interface SpeakOptions {
   /** Slower than default: these are instructions for someone who may process slowly. */
   rate?: number;
   onEnd?: () => void;
+  /**
+   * Say this AFTER whatever is already being said, instead of cutting it off.
+   *
+   * The default cancels, which is right for a new instruction replacing an old one. It
+   * was wrong for the five recall words: the step spoke them, then the runner spoke the
+   * step's label a moment later and cancelled them, so the words were never heard.
+   */
+  queue?: boolean;
+}
+
+/** The patient's own switch (`lib/prefs.ts`). Off means the text still renders. */
+export function isVoiceEnabled(): boolean {
+  return readPrefs().voice;
 }
 
 export function speak(text: string, lang: Lang, options: SpeakOptions = {}): void {
-  if (!isSpeechSupported() || !text.trim()) {
+  if (!isSpeechSupported() || !text.trim() || !isVoiceEnabled()) {
     options.onEnd?.();
     return;
   }
-  window.speechSynthesis.cancel();
+  if (!options.queue) window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = pickVoice(lang);

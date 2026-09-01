@@ -41,6 +41,8 @@ export interface QueuedSession {
   capturedAt: string;
   deviceInfo: Record<string, unknown>;
   modules: QueuedModule[];
+  /** PHQ-2 and medicines, answered at their positions (D-061). Absent when skipped. */
+  questions?: { phq2?: number[]; medicationTaken?: boolean };
   attempts: number;
   lastError?: string;
   /**
@@ -140,6 +142,9 @@ export async function syncPending(
     finalizeSession: (sessionId: string) => Promise<{ band: string }>;
     abandonSession: (sessionId: string,
                      steps: { completed: number; total: number }) => Promise<unknown>;
+    submitQuestionnaire?: (patientId: string, instrument: "PHQ2", responses: number[],
+                           sessionId?: string) => Promise<unknown>;
+    submitAdherence?: (patientId: string, taken: boolean) => Promise<unknown>;
   },
 ): Promise<SyncOutcome> {
   const queue = await pendingSessions();
@@ -173,6 +178,13 @@ export async function syncPending(
         // check-in that was never completed.
         await api.abandonSession(started.id, session.abandoned);
       } else {
+        // Answers travel with the session they belong to, and only what was answered.
+        if (session.questions?.phq2?.length && api.submitQuestionnaire) {
+          await api.submitQuestionnaire(session.patientId, "PHQ2", session.questions.phq2, started.id);
+        }
+        if (session.questions?.medicationTaken !== undefined && api.submitAdherence) {
+          await api.submitAdherence(session.patientId, session.questions.medicationTaken);
+        }
         const result = await api.finalizeSession(started.id);
         outcome.bands.push(result.band);
       }

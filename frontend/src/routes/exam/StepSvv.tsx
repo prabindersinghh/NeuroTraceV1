@@ -173,18 +173,18 @@ export default function StepSvv({
   const done = conditionIndex * TRIALS_PER_CONDITION + trial;
 
   return (
-    <div onPointerDownCapture={requestOrientationPermission} className="mx-auto flex max-w-md flex-col gap-4 p-4">
-      <header className="space-y-1">
-        <h2 className="text-title-2">{CONDITION_LABEL[condition][lang]}</h2>
+    <div onPointerDownCapture={requestOrientationPermission} className="flex flex-col gap-4">
+      <header className="space-y-2">
+        <p className="text-title-3 text-accent" aria-live="polite">{CONDITION_LABEL[condition][lang]}</p>
         <div
-          className="h-1.5 overflow-hidden rounded-full bg-muted"
+          className="h-1.5 overflow-hidden rounded-full bg-border"
           role="progressbar"
           aria-valuenow={done}
           aria-valuemin={0}
           aria-valuemax={totalTrials}
         >
           <div
-            className="h-full bg-sky-600 transition-all"
+            className="h-full bg-accent transition-all"
             style={{ width: `${(done / totalTrials) * 100}%` }}
           />
         </div>
@@ -243,7 +243,7 @@ export default function StepSvv({
         />
       </label>
 
-      <Button className="min-h-14 w-full text-base" onClick={confirm}>
+      <Button size="touch" variant="accent" onClick={confirm}>
         {{ en: "This looks upright", hi: "यह सीधा लग रहा है",
            pa: "ਇਹ ਸਿੱਧਾ ਲੱਗ ਰਿਹਾ ਹੈ" }[lang]}
       </Button>
@@ -252,8 +252,7 @@ export default function StepSvv({
       <button
         type="button"
         onClick={abort}
-        className="min-h-12 w-full rounded-lg border border-amber-400 text-sm
-                   text-amber-800 dark:text-amber-200"
+        className="focus-ring tactile min-h-14 w-full rounded-xl border-2 border-watch/60 bg-watch-soft text-lg text-foreground"
       >
         {{ en: "Stop — I feel unwell", hi: "रोकिए — तबीयत ठीक नहीं",
            pa: "ਰੋਕੋ — ਤਬੀਅਤ ਠੀਕ ਨਹੀਂ" }[lang]}

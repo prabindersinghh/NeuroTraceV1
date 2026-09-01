@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { frameStats, looksCovered, tryEnableTorch, type PpgRaw } from "@/lib/ondevice/ppg";
+import { Ring } from "@/components/journey/Ring";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 
 interface Props {
@@ -122,20 +124,23 @@ export function StepPpg({ seconds, onDone, onError }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <video ref={videoRef} muted playsInline className="h-28 w-36 rounded-xl border border-line object-cover" />
+      <video
+        ref={videoRef} muted playsInline
+        className={[
+          "h-28 w-36 rounded-xl border-4 object-cover transition-colors duration-300",
+          covered ? "border-accent" : "border-line",
+        ].join(" ")}
+      />
       {phase === "cover" ? (
         <>
-          <p className="text-center text-lg">{covered ? t("ppgReady") : t("ppgCover")}</p>
-          <button
-            type="button" disabled={!covered} onClick={begin}
-            className="min-h-16 w-full rounded-xl bg-accent text-lg font-medium text-accent-foreground disabled:opacity-40"
-          >
+          <p className="text-center text-lg" aria-live="polite">{covered ? t("ppgReady") : t("ppgCover")}</p>
+          <Button size="touch" variant="accent" disabled={!covered} onClick={begin}>
             {t("start")}
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <p className="text-6xl font-semibold tabular-nums">{remaining}</p>
+          <Ring seconds={seconds} remaining={remaining} size={112} />
           <p className="text-center text-lg text-muted-foreground">{t("ppgHold")}</p>
         </>
       )}

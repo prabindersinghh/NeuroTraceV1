@@ -11,9 +11,10 @@
  *
  * The PCM is analysed in the browser and dropped. Only numbers leave this component.
  */
-import { Mic, Square } from "lucide-react";
+import { Mic } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Ring } from "@/components/journey/Ring";
 import { Button } from "@/components/ui/button";
 import { CaptureError, startAudioCapture, type AudioCapture } from "@/lib/capture";
 import { useI18n, type StringKey } from "@/lib/i18n";
@@ -37,10 +38,9 @@ const TASKS: { key: TaskKey; label: StringKey; seconds: number; showSentence?: b
 interface Props {
   onDone: (features: ModuleFeatures, quality: { ok: boolean; reason?: string }) => void;
   onError: (message: string) => void;
-  onSkip: () => void;
 }
 
-export function StepSpeech({ onDone, onError, onSkip }: Props) {
+export function StepSpeech({ onDone, onError }: Props) {
   const { t, lang } = useI18n();
   const captureRef = useRef<AudioCapture | null>(null);
   const collected = useRef<DysarthriaInput>({});
@@ -138,10 +138,8 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <h2 className="text-title-2">{t("speechTitle")}</h2>
-
       {current && (
-        <p className="text-2xl font-medium text-accent" aria-live="polite">
+        <p className="text-title-3 text-accent" aria-live="polite">
           {t(current.label)}
         </p>
       )}
@@ -155,18 +153,20 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
         </blockquote>
       )}
 
-      <div className="relative grid h-36 w-36 place-items-center">
+      {/* The light swells with the voice — "we can hear you", with no number attached.
+          Accent while listening, never red: red is the alert colour and this is not one. */}
+      <div className="relative grid h-40 w-40 place-items-center">
         {recording && (
           <span
-            className="absolute inset-0 rounded-full bg-accent/25"
-            style={{ transform: `scale(${1 + Math.min(level, 1) * 1.4})` }}
+            className="absolute inset-0 rounded-full bg-accent/20 transition-transform duration-150"
+            style={{ transform: `scale(${1 + Math.min(level, 1) * 1.3})` }}
             aria-hidden
           />
         )}
         <span
           className={cn(
-            "relative grid h-28 w-28 place-items-center rounded-full transition-colors",
-            recording ? "bg-destructive text-destructive-foreground" : "bg-secondary text-primary",
+            "relative grid h-32 w-32 place-items-center rounded-full border-2 transition-colors",
+            recording ? "border-accent bg-accent text-accent-foreground" : "border-line bg-secondary text-primary",
           )}
         >
           <Mic className="h-12 w-12" aria-hidden />
@@ -174,30 +174,26 @@ export function StepSpeech({ onDone, onError, onSkip }: Props) {
       </div>
 
       {recording ? (
-        <p className="text-3xl font-bold tabular-nums text-accent" aria-live="polite">
-          {Math.max(0, remaining)}
-        </p>
+        <Ring seconds={current?.seconds ?? 0} remaining={Math.max(0, remaining)} size={72} />
       ) : index < 0 ? (
-        <>
-          <Button size="touch" variant="accent" onClick={begin}>
-            <Mic className="h-7 w-7" aria-hidden />
-            {t("begin")}
-          </Button>
-          <Button variant="link" onClick={onSkip}>
-            {t("skipStep")}
-          </Button>
-        </>
-      ) : (
-        <Square className="h-6 w-6 text-muted-foreground" aria-hidden />
-      )}
+        <Button size="touch" variant="accent" className="max-w-sm" onClick={begin}>
+          <Mic className="h-7 w-7" aria-hidden />
+          {t("begin")}
+        </Button>
+      ) : null}
 
-      <div className="flex items-center gap-2" aria-label="progress">
+      <div
+        className="flex items-center gap-2"
+        role="img"
+        aria-label={t("stepOf").replace("{n}", String(Math.min(index + 1, TASKS.length))).replace("{total}", String(TASKS.length))}
+      >
         {TASKS.map((task, i) => (
           <span
             key={task.key}
+            aria-hidden
             className={cn(
-              "h-2.5 w-10 rounded-full",
-              i < index ? "bg-stable" : i === index ? "bg-accent" : "bg-secondary",
+              "h-2.5 w-10 rounded-full transition-colors duration-300",
+              i < index ? "bg-accent" : i === index ? "bg-accent/60" : "bg-border",
             )}
           />
         ))}

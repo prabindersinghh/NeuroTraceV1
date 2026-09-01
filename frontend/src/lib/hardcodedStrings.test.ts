@@ -18,6 +18,8 @@ const PATIENT_SOURCES = {
   ...import.meta.glob("../components/FastCard.tsx", { query: "?raw", import: "default", eager: true }),
   ...import.meta.glob("../components/FallRiskGate.tsx", { query: "?raw", import: "default", eager: true }),
   ...import.meta.glob("../components/EmergencyButton.tsx", { query: "?raw", import: "default", eager: true }),
+  // The journey: every screen of the check-in that is not a step.
+  ...import.meta.glob("../components/journey/*.tsx", { query: "?raw", import: "default", eager: true }),
 } as Record<string, string>;
 
 /**
@@ -71,6 +73,7 @@ describe("patient surfaces have no hardcoded English", () => {
     expect(files.length).toBeGreaterThan(8);
     expect(files.some((f) => f.includes("ProtocolRunner"))).toBe(true);
     expect(files.some((f) => f.includes("StepSvv"))).toBe(true);
+    expect(files.some((f) => f.includes("Welcome"))).toBe(true);
   });
 
   it("routes every visible string and accessible name through t()", () => {

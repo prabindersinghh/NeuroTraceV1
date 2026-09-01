@@ -71,17 +71,20 @@ export function FallRiskGate({
   onProceed: () => void;
   onSkip: (reason: string) => void;
 }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const [acknowledged, setAcknowledged] = useState(false);
 
   return (
+    // Rendered inside the journey shell (the path stays visible), but still an alert
+    // dialog: nothing else on the page is actionable until this is answered.
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-center gap-6 bg-background p-6"
+      className="flex flex-1 flex-col justify-center gap-6 py-4"
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="fall-gate-title"
+      aria-labelledby="scene-title"
     >
-      <h2 id="fall-gate-title" className="text-2xl font-semibold">
+      <p className="text-label text-muted-foreground">{t("chStanding")}</p>
+      <h2 id="scene-title" tabIndex={-1} className="text-title-1 focus:outline-none">
         {COPY.title[lang]}
       </h2>
 
@@ -98,7 +101,7 @@ export function FallRiskGate({
 
       {/* A deliberate act, not a tap-through. Reappears every session — a dialog seen
           before is a dialog not read. */}
-      <label className="flex items-start gap-3 rounded-lg border p-4 text-lg">
+      <label className="flex items-start gap-3 rounded-xl border-2 border-line p-4 text-lg">
         <input
           type="checkbox"
           className="mt-1 h-6 w-6 shrink-0"
@@ -108,11 +111,7 @@ export function FallRiskGate({
         <span>{COPY.confirm[lang]}</span>
       </label>
 
-      <Button
-        className="min-h-16 w-full text-lg"
-        disabled={!acknowledged}
-        onClick={onProceed}
-      >
+      <Button size="touch" variant="accent" disabled={!acknowledged} onClick={onProceed}>
         {COPY.start[lang]}
       </Button>
 
@@ -120,8 +119,7 @@ export function FallRiskGate({
       <button
         type="button"
         onClick={() => onSkip("no_supervisor_present")}
-        className="min-h-14 w-full rounded-lg border border-line px-4 text-base
-                   text-muted-foreground"
+        className="focus-ring tactile min-h-14 w-full rounded-xl border-2 border-line px-4 text-lg text-foreground"
       >
         {COPY.skip[lang]}
       </button>

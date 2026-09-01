@@ -1,5 +1,5 @@
 /**
- * M11 · word memory — encoding at position 2, recall at position 18.
+ * M11 · word memory — encoding at position 7, recall at position 17 (Comprehensive).
  *
  * RECOGNITION, NOT FREE RECALL — AND LABELLED AS SUCH.
  * Free recall needs the patient to SAY the words and someone (or an ASR) to score them.
@@ -12,11 +12,20 @@
  * The word pool is drawn per-session but FIXED within it via sessionStorage — the recall
  * step must test the words that were actually shown, including after an app reload
  * mid-session.
+ *
+ * The words are spoken QUEUED behind the instruction. Before this they were spoken and
+ * then cancelled a moment later by the step label, so a patient who does not read never
+ * heard them at all.
  */
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Ring } from "@/components/journey/Ring";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { speak } from "@/lib/speech-synthesis";
 import type { ModuleFeatures } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const POOL = {
   en: ["river", "candle", "market", "yellow", "elbow", "window", "farmer", "spoon", "temple", "pocket", "cloud", "mirror"],
@@ -61,15 +70,11 @@ export function StepRecall({ mode, seconds, onDone }: Props) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const started = useMemo(() => performance.now(), []);
 
-  // Encoding: show the five words, spoken aloud, then finish on the timer.
+  // Encoding: show the five words, spoken aloud after the instruction, then finish on
+  // the timer.
   useEffect(() => {
     if (mode !== "encode") return;
-    try {
-      const u = new SpeechSynthesisUtterance(words.shown.join(", "));
-      u.lang = { en: "en-IN", hi: "hi-IN", pa: "pa-IN" }[lang] ?? "en-IN";
-      u.rate = 0.75;
-      window.speechSynthesis?.speak(u);
-    } catch { /* text remains on screen */ }
+    speak(words.shown.join(", "), lang, { rate: 0.75, queue: true });
     const timer = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
@@ -112,47 +117,57 @@ export function StepRecall({ mode, seconds, onDone }: Props) {
 
   if (mode === "encode") {
     return (
-      <div className="flex flex-col items-center gap-6">
-        <ul className="flex flex-col gap-3">
-          {words.shown.map((w) => (
-            <li key={w} className="text-center text-3xl font-semibold">{w}</li>
+      <div className="flex flex-col items-center gap-8">
+        <ul className="flex flex-col gap-3 rounded-2xl border border-line bg-secondary px-10 py-6">
+          {words.shown.map((w, i) => (
+            <li
+              key={w}
+              lang={lang}
+              className="journey-in text-center text-title-1"
+              style={{ animationDelay: `${i * 120}ms` }}
+            >
+              {w}
+            </li>
           ))}
         </ul>
-        <p className="text-4xl font-semibold tabular-nums text-muted-foreground">{remaining}</p>
+        <Ring seconds={seconds} remaining={remaining} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3">
-        {options.map((w) => (
-          <button
-            key={w}
-            type="button"
-            onClick={() =>
-              setPicked((p) => {
-                const n = new Set(p);
-                if (n.has(w)) n.delete(w); else n.add(w);
-                return n;
-              })
-            }
-            className={[
-              "min-h-16 rounded-xl border-2 px-3 text-xl",
-              picked.has(w) ? "border-accent bg-accent/10 font-semibold" : "border-line",
-            ].join(" ")}
-          >
-            {w}
-          </button>
-        ))}
+        {options.map((w) => {
+          const on = picked.has(w);
+          return (
+            <button
+              key={w}
+              type="button"
+              lang={lang}
+              aria-pressed={on}
+              onClick={() =>
+                setPicked((p) => {
+                  const n = new Set(p);
+                  if (n.has(w)) n.delete(w); else n.add(w);
+                  return n;
+                })
+              }
+              className={cn(
+                "focus-ring tactile flex min-h-16 items-center justify-center gap-2 rounded-xl border-2 px-3 text-xl",
+                on ? "border-accent bg-accent/10 font-semibold" : "border-line bg-card",
+              )}
+            >
+              {/* Selection is carried by the fill AND a tick, never by colour alone. */}
+              {on && <Check className="h-5 w-5 shrink-0 text-accent" aria-hidden />}
+              {w}
+            </button>
+          );
+        })}
       </div>
-      <button
-        type="button"
-        onClick={submitRecall}
-        className="min-h-16 w-full rounded-xl bg-accent text-lg font-medium text-accent-foreground"
-      >
+      <Button size="touch" variant="accent" onClick={submitRecall}>
         {t("done")}
-      </button>
+      </Button>
     </div>
   );
 }

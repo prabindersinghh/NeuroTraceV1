@@ -8,16 +8,23 @@
  *
  * Timestamps come from `performance.now()` at pointerdown, which is the closest thing the
  * browser offers to the moment of contact.
+ *
+ * PRESENTATION. No tap count on screen. A number climbing in front of someone whose
+ * weaker hand is the one being measured is a scoreboard, and the ratio it feeds is not
+ * something they can improve by watching it. Each tap is acknowledged by the light
+ * dipping for a frame and a haptic tick; the ring shows how long is left.
  */
 import { Hand } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Light } from "@/components/journey/Light";
+import { haptic } from "@/lib/haptic";
+import { Ring } from "@/components/journey/Ring";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { extractFineMotor } from "@/lib/ondevice/motor";
 import { speak } from "@/lib/speech-synthesis";
 import type { ModuleFeatures } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const SECONDS_PER_HAND = 10;
 const MIN_TAPS = 4;
@@ -26,14 +33,13 @@ type Phase = "idle" | "left" | "between" | "right" | "done";
 
 interface Props {
   onDone: (features: ModuleFeatures, quality: { ok: boolean; reason?: string }) => void;
-  onSkip: () => void;
 }
 
-export function StepTapping({ onDone, onSkip }: Props) {
+export function StepTapping({ onDone }: Props) {
   const { t, lang } = useI18n();
   const [phase, setPhase] = useState<Phase>("idle");
   const [remaining, setRemaining] = useState(SECONDS_PER_HAND);
-  const [count, setCount] = useState(0);
+  const [pressed, setPressed] = useState(false);
 
   const left = useRef<number[]>([]);
   const right = useRef<number[]>([]);
@@ -50,7 +56,6 @@ export function StepTapping({ onDone, onSkip }: Props) {
   useEffect(() => {
     if (phase !== "left" && phase !== "right") return;
     setRemaining(SECONDS_PER_HAND);
-    setCount(0);
     speak(t(phase === "left" ? "handLeft" : "handRight"), lang);
 
     const tick = window.setInterval(() => setRemaining((r) => r - 1), 1000);
@@ -74,53 +79,41 @@ export function StepTapping({ onDone, onSkip }: Props) {
     if (phase !== "left" && phase !== "right") return;
     const now = performance.now();
     (phase === "left" ? left : right).current.push(now);
-    setCount((c) => c + 1);
+    haptic(5);
+    // A one-frame dip acknowledges the contact without counting it.
+    setPressed(true);
+    window.setTimeout(() => setPressed(false), 60);
   }
 
   const active = phase === "left" || phase === "right";
 
   return (
-    <div className="flex flex-col items-center gap-5 text-center">
-      <h2 className="text-title-2">{t("handTitle")}</h2>
-
+    <div className="flex flex-col items-center gap-6 text-center">
       {active && (
-        <p className="text-2xl font-medium text-accent" aria-live="polite">
+        <p className="text-title-3 text-accent" aria-live="polite">
           {t(phase === "left" ? "handLeft" : "handRight")}
         </p>
       )}
 
-      <button
-        type="button"
-        onPointerDown={tap}
+      <Light
+        state={phase === "done" ? "done" : active ? (pressed ? "idle" : "on") : "idle"}
+        label={t("tapNow")}
         disabled={!active}
-        aria-label={t("tapNow")}
-        className={cn(
-          "grid h-64 w-64 select-none place-items-center rounded-full text-4xl font-bold transition-transform duration-75 focus-ring touch-manipulation active:scale-95",
-          active ? "bg-accent text-accent-foreground" : "bg-secondary text-muted-foreground",
-        )}
+        onPress={tap}
       >
-        {active ? count : <Hand className="h-16 w-16" aria-hidden />}
-      </button>
+        {active ? <span className="text-title-2">{t("keepGoing")}</span> : <Hand className="h-16 w-16" aria-hidden />}
+      </Light>
 
-      {active && (
-        <p className="text-3xl font-bold tabular-nums" aria-live="polite">
-          {Math.max(0, remaining)}
-        </p>
-      )}
+      {active && <Ring seconds={SECONDS_PER_HAND} remaining={Math.max(0, remaining)} />}
 
       {phase === "idle" && (
-        <>
-          <Button size="touch" variant="accent" onClick={() => setPhase("left")}>
-            {t("begin")}
-          </Button>
-          <Button variant="link" onClick={onSkip}>
-            {t("skipStep")}
-          </Button>
-        </>
+        <Button size="touch" variant="accent" className="max-w-sm" onClick={() => setPhase("left")}>
+          {t("begin")}
+        </Button>
       )}
 
       {phase === "between" && (
-        <Button size="touch" variant="accent" onClick={() => setPhase("right")}>
+        <Button size="touch" variant="accent" className="max-w-sm" onClick={() => setPhase("right")}>
           {t("handRight")}
         </Button>
       )}
