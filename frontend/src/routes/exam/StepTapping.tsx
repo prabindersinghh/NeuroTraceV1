@@ -88,11 +88,14 @@ export function StepTapping({ onDone }: Props) {
   const active = phase === "left" || phase === "right";
 
   return (
-    <div className="flex flex-col items-center gap-6 text-center">
+    <div className="flex flex-col items-center gap-5 text-center">
       {active && (
-        <p className="text-title-3 text-accent" aria-live="polite">
-          {t(phase === "left" ? "handLeft" : "handRight")}
-        </p>
+        <div className="flex w-full items-center justify-between gap-4 px-2">
+          <p className="text-title-3 text-accent" aria-live="polite">
+            {t(phase === "left" ? "handLeft" : "handRight")}
+          </p>
+          <Ring seconds={SECONDS_PER_HAND} remaining={Math.max(0, remaining)} size={64} />
+        </div>
       )}
 
       <Light
@@ -103,8 +106,6 @@ export function StepTapping({ onDone }: Props) {
       >
         {active ? <span className="text-title-2">{t("keepGoing")}</span> : <Hand className="h-16 w-16" aria-hidden />}
       </Light>
-
-      {active && <Ring seconds={SECONDS_PER_HAND} remaining={Math.max(0, remaining)} />}
 
       {phase === "idle" && (
         <Button size="touch" variant="accent" className="max-w-sm" onClick={() => setPhase("left")}>

@@ -30,7 +30,6 @@ export const STRINGS = {
     hi: "आज का आपका रास्ता: {phrase}। {total} में से {n}।",
     pa: "ਅੱਜ ਦਾ ਤੁਹਾਡਾ ਰਾਹ: {phrase}। {total} ਵਿੱਚੋਂ {n}।",
   },
-  pathEyebrow: { en: "Your path today", hi: "आज का आपका रास्ता", pa: "ਅੱਜ ਦਾ ਤੁਹਾਡਾ ਰਾਹ" },
   stepOf: { en: "{n} of {total}", hi: "{total} में से {n}", pa: "{total} ਵਿੱਚੋਂ {n}" },
   // ---- welcome and warm-up. Nothing here is recorded. ----
   welcomeTitle: { en: "Let's get comfortable.", hi: "आइए, आराम से शुरू करें।", pa: "ਆਓ, ਆਰਾਮ ਨਾਲ ਸ਼ੁਰੂ ਕਰੀਏ।" },

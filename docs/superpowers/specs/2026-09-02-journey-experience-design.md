@@ -37,8 +37,8 @@ changes it does make are called out as decisions (§Q) so they cannot pass unnot
   expression, `key={…attempt}` on the eight gated steps and a memoised `done`;
   `lib/hardcodedStrings.test.ts` scans `routes/exam/*.tsx` for untranslated copy;
   `lib/typeScale.test.ts` forbids ad-hoc heading sizes; `backend/tests/
-  test_regulatory_claims.py` scans user-facing source for overclaims and the stale
-  "ninety-second" figure; `test_protocol_runtime.py` pins `PROTOCOL_MIRROR` and
+  test_regulatory_claims.py` scans user-facing source for overclaims and the retired
+  Daily Pulse duration figure (D-045); `test_protocol_runtime.py` pins `PROTOCOL_MIRROR` and
   `WEB_RUNNABLE` to the Python protocol.
 - **Onboarding** is the caregiver's (`routes/Onboarding.tsx`: consent, eligibility, the
   scope disclosure that is a safety control, calibration, placement, a practice run, the
@@ -331,7 +331,7 @@ today when a camera step mounts. The snapshot write is debounced to once per `re
 - The source scans in `taskFlow.test.ts` constrain the runner's text; they are kept
   deliberately and re-run after every edit.
 - The backend overclaim scanner reads frontend source: no "detect", "diagnose",
-  "clinically…", no accuracy figure, no ninety-second claim in any new copy.
+  "clinically…", no accuracy figure, no retired duration figure (D-045) in any new copy.
 - A snapshot restore after a *long* gap (hours) is offered up to six hours; beyond that
   the partial is uploaded as abandoned on the next start. Fatigue position is preserved
   either way because positions never renumber.

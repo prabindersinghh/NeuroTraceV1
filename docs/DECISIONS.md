@@ -1135,3 +1135,63 @@ management, no repositioning — and it cannot fail in the way that matters.
 
 (If this is revisited: v3 removed the default export, so most Joyride examples in
 circulation are v2 and will not compile against it.)
+
+### D-061 — the questionnaire is recorded at its positions and submitted at the end
+
+**2026-09-02.** `StepQuestions` asked the two PHQ-2 questions and the medicines question in
+one component and then called `submit()`, which finalised the whole session. Under the
+original 21-step order those were positions 19-20, so the cost was one skipped step (PPG at
+21). D-044 then moved the six Daily Pulse modules to positions 1-6 in BOTH session types —
+correct for the fatigue curve — and the same component at position 5 now ended every
+Comprehensive session with twelve steps left. Nothing local could see it: the plan parity
+test checks the step list, not what the runner does with it, and the demo data is seeded.
+
+The answers are now recorded into the session store at positions 5 and 6, each at its own
+protocol position, and submitted with the modules at the end (`submitQuestionnaire`,
+`submitAdherence`, then `finalizeSession`). Only what was actually answered is sent: a
+skipped question is not "never", and a skipped medicines check is not "not taken" — the
+old skip path posted `[]` and `false`. The offline queue carries the answers the same way.
+
+No schema change. Sessions finalised before this are unaffected; they simply contain
+fewer positions.
+
+### D-062 — the session clock starts at the first chapter, not at plan load
+
+**2026-09-02.** `elapsed_seconds_at_task_start` is recorded on every module so a task's
+place on the fatigue curve is visible. It was measured from the moment the plan loaded,
+which included the time the patient spent reading the first instruction and, now, the
+welcome and warm-up. The warm-up records nothing and is skippable, so its length varies;
+counting it would put the same physiological moment at different elapsed times on
+different days for no clinical reason.
+
+The clock now starts when the first chapter begins (`beginSession`). Reading time between
+steps — the chapter intros — still counts, as instruction-reading time always has. After a
+reload the clock resumes from the saved ACTIVE time and the next task is recorded
+`paused_before_task`, exactly as the pause button records it (`lib/journeyStore.ts`).
+
+### D-063 — the check-in is presented as one path with chapters; the protocol is untouched
+
+**2026-09-02.** Five concepts were scored against clinical appropriateness, cognitive load,
+accessibility, cost, scalability across eighteen heterogeneous tasks, emotional comfort,
+older-adult fit, mobile, performance and consistency with the blue/white no-gradient
+system (`docs/superpowers/specs/2026-09-02-journey-experience-design.md`, §D–F). A path of
+lights won: it is static (this product screens for vertigo, so no parallax and no drift),
+abstract and adult, draws with one SVG and at most eighteen circles, and the dark
+oculomotor field — already the most striking screen — becomes its centrepiece instead of an
+anomaly. The tasks that respond to a stimulus *are* lights: tap it, follow it, hold it.
+
+What the journey is: screens shown between and around positions (welcome and warm-up,
+chapter intros with a rest offer, welcome-back after a reload, the end), a shell that stays
+put while the scene inside changes, an instruction that is spoken and repeatable, and
+three comfort switches the patient owns. Chapters are derived from the runnable steps BY
+TASK (`lib/journey.ts`), not by clinical block — the six Daily Pulse modules span three
+blocks — and a chapter boundary is a screen, never a change to a position.
+
+What it is not: no stimulus, timing, randomisation, threshold, scorer or position changed.
+Two behavioural changes came with it and are D-061 and D-062. The two-retry rule, the
+neutral ending, the always-visible pause and exit, view-only back (D-059) and the
+structural fall gate are unchanged and still pinned by `taskFlow.test.ts`.
+
+Deliberately not done: sound design beyond speech (no audio assets — a tracked binary trips
+INV-11's scanner, and a required sound would exclude the people speech already serves),
+WebGL or canvas of any kind, and a countdown that reads as a deadline — the ring fills.

@@ -4,6 +4,56 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-09-02 — The patient journey: one path of lights over the unchanged 18-step protocol
+
+Branch `feat/journey-experience`, off `main`. **Not merged, not deployed.** Design proposal
+in `docs/superpowers/specs/2026-09-02-journey-experience-design.md`; decisions D-061,
+D-062, D-063. **No migration** — head stays `0020`; no API changed.
+
+### What the patient now sees
+Welcome ("Let's get comfortable") with three comfort switches (read aloud / less movement /
+bigger text, on-device, `lib/prefs.ts`) and a two-gesture warm-up that records nothing;
+five chapters for a Comprehensive session (hands and voice · a quick check-in · your eyes ·
+on your feet · winding down), two for Daily Pulse; a path of lights on every screen with
+a phrase ("About halfway") and a count as its textual equivalent; a rest offer at every
+chapter boundary (rest IS pause, recorded on the next task); Back and Forward in the
+header, view-only as before; a spoken, repeatable instruction card; the light in place of
+the circle for M10 and M7 with no tap count; a ring that fills in place of every raw
+countdown numeral; "a little early" in the watch tone instead of red; a neutral ending.
+Refreshing mid-session offers "Welcome back — continue where you left off?"
+(`lib/journeyStore.ts`); starting again uploads the partial as abandoned (D-059).
+
+### Two defects found on the way, both live before this branch
+- **A Comprehensive session ended at step 5 of 18.** The questionnaire step submitted the
+  whole session, and D-044 had moved it to position 5 (D-061). Every Comprehensive session
+  run through the UI since D-044 contained five positions.
+- **The five recall words were never spoken.** The step spoke them and the runner's label
+  cancelled them a moment later. Queued speech now (`speak(..., { queue: true })`).
+Also: a state update inside a countdown updater (five steps) that React warned about in
+the console — the countdown now only counts and an effect acts when it lands.
+
+### Verified
+- Frontend: `tsc -b` clean; oxlint 9 (baseline); vitest **181/181** (42 new:
+  `journey.test.ts`, `journeyStore.test.ts`); `vite build` clean; the hardcoded-string scan
+  extended to `components/journey/*.tsx`; the confirm-neutrality lexicon extended to the
+  new ending strings.
+- Backend scanners against the new source: `test_regulatory_claims.py` 41/41 (it caught the
+  retired duration figure quoted in the design spec, which was reworded),
+  `test_protocol_runtime.py`, `test_privacy.py` green.
+- Browser (Playwright, headless Chromium, fake camera/mic, local SQLite backend on 8010):
+  signed in as the demo patient and ran a **Comprehensive session end to end, 18 of 18** —
+  warm-up, M10 with ten real taps, exit dialog and carry on, review mode, M7 both hands,
+  rest → pause → continue, PHQ-2 and medicines, **reload at step 7 → welcome back → resumed
+  at 7 of 18**, word encoding, four ocular steps skipped, SVV stopped, fall gate skipped,
+  recall with three words picked, PPG skipped, completion, Finish → home. No horizontal
+  overflow at 320/375/390/414/768/1024/1280; no interactive target under 44px on any
+  journey screen; zero console errors. Same run under `prefers-reduced-motion: reduce`.
+  A second run: exit at step 2 → history shows `steps_completed: 1 of 18`,
+  `completed: false`; a fresh start offers no stale resume; reload at step 2 → "start
+  again from the beginning" clears the snapshot and returns to the welcome.
+- **Not verified:** a physical phone (camera steps were skipped, not performed); the
+  ocular, balance and PPG screens were driven only to their framing state.
+
 ## 2026-09-01 — Premium dashboards everywhere; the patient gets a calendar and a history
 
 Committed to `main` and pushed by the owner; Railway healthy (`verify_deploy.sh` 7/7

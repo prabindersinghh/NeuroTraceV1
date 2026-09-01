@@ -37,10 +37,12 @@ interface Props {
   onExit?: () => void;
   /** The oculomotor field wants the page dark behind it. */
   dark?: boolean;
+  /** Left of the controls: the view-only Back / Forward on a step. */
+  leading?: ReactNode;
   children: ReactNode;
 }
 
-export function JourneyShell({ sceneKey, progress, onPause, onExit, dark = false, children }: Props) {
+export function JourneyShell({ sceneKey, progress, onPause, onExit, dark = false, leading, children }: Props) {
   const { t } = useI18n();
   const [prefs] = usePrefs();
 
@@ -59,12 +61,10 @@ export function JourneyShell({ sceneKey, progress, onPause, onExit, dark = false
         dark && "bg-slate-950 text-slate-100",
       )}
     >
-      {(onPause || onExit) && (
-        <header className="mb-3 flex items-center justify-between gap-3">
-          <p className={cn("text-label", dark ? "text-slate-400" : "text-muted-foreground")}>
-            {t("pathEyebrow")}
-          </p>
-          <div className="flex items-center gap-2">
+      {(onPause || onExit || leading) && (
+        <header className="mb-3 flex min-h-11 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">{leading}</div>
+          <div className="flex shrink-0 items-center gap-2">
             {onPause && (
               <button
                 type="button"

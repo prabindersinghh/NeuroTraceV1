@@ -11,7 +11,7 @@
  * utterance; a retry of the same step is not.
  */
 import { Volume2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useI18n } from "@/lib/i18n";
 import { isSpeechSupported, speak } from "@/lib/speech-synthesis";
@@ -30,6 +30,10 @@ interface Props {
 
 export function Instruction({ text, large = false, demo, speakOnMount = true, className }: Props) {
   const { t, lang } = useI18n();
+  // The manifest names a clip for every task and the files arrive one at a time, so a
+  // clip is shown only once the browser has actually decoded a frame of it. Before this
+  // a missing clip rendered as an empty bordered box under every instruction.
+  const [clipReady, setClipReady] = useState(false);
 
   useEffect(() => {
     if (speakOnMount) speak(text, lang);
@@ -61,9 +65,14 @@ export function Instruction({ text, large = false, demo, speakOnMount = true, cl
       </div>
       {demo && (
         <video
-          src={demo} autoPlay loop muted playsInline
+          src={demo} autoPlay loop muted playsInline preload="metadata"
           aria-label={t("watchHow")}
-          className="max-h-44 w-full rounded-xl border border-line object-cover"
+          onLoadedData={() => setClipReady(true)}
+          onError={() => setClipReady(false)}
+          className={cn(
+            "max-h-44 w-full rounded-xl border border-line object-cover",
+            !clipReady && "hidden",
+          )}
         />
       )}
     </div>

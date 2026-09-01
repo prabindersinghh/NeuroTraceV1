@@ -146,12 +146,7 @@ export function StepOcular({ task, seconds, raw, onDone, onError }: Props) {
         }, 33);
       } // gaze_holding: the dot stays at centre.
 
-      timer = setInterval(() => {
-        setRemaining((r) => {
-          if (r <= 1) { finish(); return 0; }
-          return r - 1;
-        });
-      }, 1000);
+      timer = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
     })();
 
     return () => {
@@ -162,6 +157,12 @@ export function StepOcular({ task, seconds, raw, onDone, onError }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task]);
+
+  // The capture closes when the countdown lands — in an effect, never inside the
+  // updater, which runs during render and must not update the parent.
+  useEffect(() => {
+    if (running && remaining <= 0) finish();
+  }, [running, remaining, finish]);
 
   return (
     <div className="relative flex min-h-[60vh] flex-col">

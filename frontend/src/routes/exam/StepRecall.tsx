@@ -75,19 +75,18 @@ export function StepRecall({ mode, seconds, onDone }: Props) {
   useEffect(() => {
     if (mode !== "encode") return;
     speak(words.shown.join(", "), lang, { rate: 0.75, queue: true });
-    const timer = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(timer);
-          onDone({ encoding_shown: 5, encoding_seconds: seconds }, { ok: true });
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
+    const timer = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
+
+  // Acts when the countdown lands, outside any updater: an updater runs during render,
+  // and a parent's state must never change from inside a child's render.
+  useEffect(() => {
+    if (mode !== "encode" || remaining > 0) return;
+    onDone({ encoding_shown: 5, encoding_seconds: seconds }, { ok: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, remaining]);
 
   const submitRecall = useCallback(() => {
     const hits = words.shown.filter((w) => picked.has(w)).length;

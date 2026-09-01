@@ -88,11 +88,17 @@ export function StepPronator({ seconds, onDone, onError }: Props) {
     setPhase("capture");
     const timer = setInterval(() => {
       setRemaining((r) => {
-        if (r <= 1) { clearInterval(timer); finish(); return 0; }
-        return r - 1;
+        if (r <= 1) clearInterval(timer);
+        return Math.max(0, r - 1);
       });
     }, 1000);
-  }, [finish]);
+  }, []);
+
+  // The capture closes when the countdown lands — in an effect, never inside the
+  // updater, which runs during render and must not update the parent.
+  useEffect(() => {
+    if (phase === "capture" && remaining <= 0) finish();
+  }, [phase, remaining, finish]);
 
   return (
     <div className="flex flex-col gap-3">

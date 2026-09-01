@@ -250,7 +250,23 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-09-01 · **Frontend revamp + dashboard instrumentation DEPLOYED**
+**Last updated:** 2026-09-02 · **The patient journey is built on branch
+`feat/journey-experience` — NOT merged, NOT deployed.** The check-in is one path of lights
+with chapters (D-063): welcome + warm-up, chapter intros with a rest offer, a spoken
+repeatable instruction card, the light in place of the circle, a ring in place of every
+countdown numeral, comfort switches (read aloud / less movement / bigger text), a neutral
+ending, and **resume after a reload** (`lib/journeyStore.ts`). The protocol, positions,
+timings, stimuli and scorers are untouched. Two live defects were found and fixed on the
+way: **a Comprehensive session ended at step 5 of 18** because the questionnaire step
+submitted the whole session after D-044 moved it to position 5 (D-061), and the five recall
+words were spoken and immediately cancelled. Design proposal:
+`docs/superpowers/specs/2026-09-02-journey-experience-design.md`. Verified: vitest
+181/181, tsc, build, oxlint baseline, the backend copy scanners, and a full 18-of-18
+Comprehensive session driven in headless Chromium at seven widths including a mid-session
+reload (see the 2026-09-02 CHANGELOG entry). **Not run on a physical phone.** To ship:
+merge `--no-ff`, deploy the frontend, run `verify_deploy.sh`; no migration.
+
+Previous: 2026-09-01 · **Frontend revamp + dashboard instrumentation DEPLOYED**
 (pushed to `main`, Railway `verify_deploy.sh` 7/7, Vercel serving the new bundle — verified
 live at 1900px with zero console errors). This session's slice: a serious "software chrome"
 design language app-wide (mono eyebrow / fluid title / hairline rule via `PageHeader`,

@@ -628,20 +628,6 @@ export function ProtocolRunner({ practice = false }: Props) {
     );
   }
 
-  if (paused) {
-    return (
-      <JourneyShell sceneKey="paused" progress={progress}>
-        <Moment
-          title={t("pausedTitle")}
-          body={t("pausedBody")}
-          primary={{ label: t("resume"), onClick: togglePause }}
-        >
-          <ComfortControls className="mx-auto w-full max-w-sm text-left" />
-        </Moment>
-      </JourneyShell>
-    );
-  }
-
   if (confirmExit) {
     const summary = exitSummary(index, steps.length);
     return (
@@ -662,6 +648,21 @@ export function ProtocolRunner({ practice = false }: Props) {
           primary={{ label: t("exitCancel"), onClick: () => setConfirmExit(false) }}
           secondary={{ label: t("exitConfirm"), onClick: () => void exitSession() }}
         />
+      </JourneyShell>
+    );
+  }
+
+  if (paused) {
+    return (
+      // Someone who paused and then decides to stop should not have to resume first.
+      <JourneyShell sceneKey="paused" progress={progress} onExit={() => setConfirmExit(true)}>
+        <Moment
+          title={t("pausedTitle")}
+          body={t("pausedBody")}
+          primary={{ label: t("resume"), onClick: togglePause }}
+        >
+          <ComfortControls className="mx-auto w-full max-w-sm text-left" />
+        </Moment>
       </JourneyShell>
     );
   }
@@ -710,28 +711,33 @@ export function ProtocolRunner({ practice = false }: Props) {
       onPause={togglePause}
       onExit={() => setConfirmExit(true)}
       dark={dark}
-    >
-      {/* Back is offered from the second step onward. It is a way to SEE what you did. */}
-      {(canGoBack(view.index) || view.mode === "review") && (
-        <nav aria-label={t("reviewNavLabel")} className="mb-4 flex items-center gap-2">
+      // Back is offered from the second step onward. It is a way to SEE what you did.
+      leading={(canGoBack(view.index) || view.mode === "review") && (
+        <nav aria-label={t("reviewNavLabel")} className="flex items-center gap-1">
           <button type="button"
             onClick={() => setViewIndex((v) => stepBack(v))}
             disabled={!canGoBack(view.index)}
-            className="focus-ring tactile inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-base text-muted-foreground disabled:opacity-40">
+            aria-label={t("stepBack")}
+            className={[
+              "focus-ring tactile inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-base disabled:opacity-40",
+              dark ? "text-slate-300" : "text-muted-foreground",
+            ].join(" ")}>
             <ArrowLeft className="h-5 w-5" aria-hidden />
-            {t("stepBack")}
+            <span className="hidden min-[420px]:inline">{t("stepBack")}</span>
           </button>
           {view.mode === "review" && (
             <button type="button"
               onClick={() => setViewIndex((v) => stepForward(v, index))}
               disabled={!canGoForward(view.index, index)}
-              className="focus-ring tactile inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-4 text-base disabled:opacity-40">
-              {t("stepForward")}
+              aria-label={t("stepForward")}
+              className="focus-ring tactile inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg border border-line px-2 text-base disabled:opacity-40">
+              <span className="hidden min-[420px]:inline">{t("stepForward")}</span>
               <ArrowRight className="h-5 w-5" aria-hidden />
             </button>
           )}
         </nav>
       )}
+    >
 
       {view.mode === "review" && (
         <div role="status"
