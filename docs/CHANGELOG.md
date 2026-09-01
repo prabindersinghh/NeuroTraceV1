@@ -4,6 +4,52 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-09-01 — Premium dashboards everywhere; the patient gets a calendar and a history
+
+Committed to `main` and pushed by the owner; Railway healthy (`verify_deploy.sh` 7/7
+against production) and Vercel confirmed serving the new bundle (live login at 1900px:
+metrics row and week strips render, zero console/page errors). **No migration** — head
+stays `0020`.
+
+### The patient's calendar and history (new feature)
+`GET /sessions/{patient_id}/history` returns `SessionRead` rows only — **no band, score,
+deviation, z or drivers**, because this feeds the surface the patient looks at every
+morning and a calendar that grades them is the "app says I am declining" experience this
+product refuses to build. Authorised through `get_patient_for_user` like every scoped
+route; added to `FOREIGN_ROUTES` so the cross-tenant boundary sweep covers it; a payload
+test pins the banned keys absent and newest-first ordering; limit clamps to 1..366.
+
+The patient home is now a two-column laptop dashboard: today's session + actions left,
+a wall calendar + recent history right. Date logic is a pure module
+(`frontend/src/lib/calendar.ts`, 8 tests): **local** day keys (00:30 IST is that date,
+not UTC's yesterday), done-beats-stopped on retry days, Monday-first whole weeks, and a
+streak that stays alive through yesterday so it never reads broken before today's
+check-in. History rows say the session type; a first cut reused the "Today is…" string
+and produced "31 Aug — Today is the short check-in".
+
+### Dashboards instrumented ("still dashboards are basic")
+- Caregiver roster: metrics row (people / check-ins this week / setup pending); each card
+  gains a 7-day check-in strip and last check-in line. **Adherence only, no verdicts** —
+  a colour-coded band on a roster card would read as a daily grade for someone's parent
+  with no room to qualify it. Per-patient history fetch is non-fatal by design.
+- Caregiver dashboard: four metrics above the narrative (check-ins recorded / last
+  check-in / medicines with 30-day rate / personal baseline, amber only while learning).
+  The duplicate medicines pill went.
+- Operations: hand-rolled `Stat` now delegates to the shared `Metric`; five ad-hoc
+  micro-labels became the `text-label` token.
+- `PageHeader` (mono eyebrow, fluid title, hairline rule) on the caregiver dashboard,
+  Operations, speech review, ASHA households, family home and family access. Onboarding
+  and Enrol keep their step-flow headers on purpose; the printable report keeps its
+  masthead.
+
+### Verified
+Backend: full suite exit 0 (background run, judged by exit code); targeted
+history-endpoint tests 38 passed. Frontend: vitest 139 (14 files), `tsc -b` clean,
+`npm run build` clean, oxlint 9 (baseline). Playwright local at 1900px: six screens with
+correct eyebrow/title, no horizontal overflow, zero console errors; mobile 320/375/768:
+no overflow, no sub-12px text. Live: `verify_deploy.sh` 7/7 (band sequence identical),
+history endpoint on production returns 5 rows, banned keys none, newest-first true.
+
 ## 2026-08-31 — UX: leaving a session, choosing a language, and five defects only the running app showed
 
 Branch `feat/ux-navigation-language`, off `main`. **Merged `--no-ff` and deployed**

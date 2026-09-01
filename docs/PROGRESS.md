@@ -250,7 +250,23 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-08-31 · **The UX branch is merged to `main` and DEPLOYED**
+**Last updated:** 2026-09-01 · **Frontend revamp + dashboard instrumentation DEPLOYED**
+(pushed to `main`, Railway `verify_deploy.sh` 7/7, Vercel serving the new bundle — verified
+live at 1900px with zero console errors). This session's slice: a serious "software chrome"
+design language app-wide (mono eyebrow / fluid title / hairline rule via `PageHeader`,
+one `Metric` readout, one `.tactile` spring press system, traced in-repo SVG of the
+supplied logo per INV-11); the patient home is a two-column laptop dashboard with a
+check-in **wall calendar** and history list fed by the new **verdict-free**
+`GET /sessions/{patient_id}/history` (no band/score/deviation — pinned by test, route in
+the FOREIGN_ROUTES authz sweep); the caregiver roster and patient dashboard carry metrics
+rows and 7-day adherence strips (adherence only — bands stay one click away on the
+dashboard). **No migration** — head stays `0020`. Backend suite green (exit 0), frontend
+vitest 139 / tsc / build / oxlint-baseline green. Known gaps, deliberate: Onboarding/Enrol
+keep step-flow headers; the printable report keeps its masthead; `Landing.tsx` is still
+English-only; `GET /patients` carries no band so the roster card shows none (not fabricated
+client-side).
+
+Previous state (2026-08-31): **The UX branch is merged to `main` and DEPLOYED**
 (`25d856a`, Railway SUCCESS, `verify_deploy.sh` 7/7). Mid-test exit and view-only back,
 a language screen before demo/login, and a first-run tour. **No migration** — head stays
 `0020` and no column changed, so this deployed as code only and D-058's coordinated release
