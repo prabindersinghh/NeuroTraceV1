@@ -40,9 +40,10 @@ days, so the test began failing on 2026-08-31 by itself. Its clock is relative n
   `journey.test.ts`, `journeyStore.test.ts`); `vite build` clean; the hardcoded-string scan
   extended to `components/journey/*.tsx`; the confirm-neutrality lexicon extended to the
   new ending strings.
-- Backend scanners against the new source: `test_regulatory_claims.py` 41/41 (it caught the
-  retired duration figure quoted in the design spec, which was reworded),
-  `test_protocol_runtime.py`, `test_privacy.py` green.
+- Backend: **full suite exit 0** (background run, judged by exit code) after the
+  wearable test's clock was made relative; the scanners against the new source and docs:
+  `test_regulatory_claims.py` 41/41 (it caught the retired duration figure quoted in the
+  design spec, which was reworded), `test_protocol_runtime.py`, `test_privacy.py` green.
 - Browser (Playwright, headless Chromium, fake camera/mic, local SQLite backend on 8010):
   signed in as the demo patient and ran a **Comprehensive session end to end, 18 of 18** —
   warm-up, M10 with ten real taps, exit dialog and carry on, review mode, M7 both hands,
