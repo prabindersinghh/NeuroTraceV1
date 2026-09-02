@@ -43,6 +43,9 @@ os.environ.setdefault(
 )
 os.environ.setdefault("JWT_SECRET", "test-only-secret-not-used-in-production-0123456789")
 os.environ.setdefault("ENV", "test")
+# The suite logs in hundreds of times from one client address; the limiter would lock it
+# out by the second file. test_auth_hardening.py switches it on per test.
+os.environ.setdefault("AUTH_RATE_LIMIT", "false")
 os.environ.setdefault("SEED", "42")
 
 import pytest  # noqa: E402

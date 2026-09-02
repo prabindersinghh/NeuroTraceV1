@@ -303,6 +303,29 @@ class User(Base):
     )
 
 
+class RefreshToken(Base):
+    """One row per refresh token ever issued — the server-side half of a session.
+
+    A JWT is self-validating, which is exactly why one could not be revoked: until this
+    table a stolen refresh token stayed good for its full fourteen days and logout was a
+    client-side deletion. Now `/auth/refresh` consults the row, rotates it, and treats a
+    revoked token being presented as reuse (the family is revoked). Holds no clinical data
+    and nothing a person typed; cascades with the user.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    jti: Mapped[str] = mapped_column(sa.String(32), unique=True, index=True, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), **_TS)
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    #: Set on rotation, so a chain of refreshes is reconstructible from the audit side.
+    replaced_by_jti: Mapped[str | None] = mapped_column(sa.String(32))
+
+
 class Patient(Base):
     __tablename__ = "patients"
 

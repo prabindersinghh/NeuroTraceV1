@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 14
+    # Sliding-window limits on /auth/login, /auth/register and /auth/refresh. Off in the
+    # test suite (conftest), which logs in hundreds of times from one client address.
+    auth_rate_limit: bool = True
 
     # --- cors ---
     frontend_origin: str = "http://localhost:5173"
@@ -84,6 +87,22 @@ class Settings(BaseSettings):
                 params.append((key, value))
             v = urlunsplit(parts._replace(query=urlencode(params)))
         return v
+
+    @model_validator(mode="after")
+    def _refuse_a_dev_secret_outside_development(self) -> "Settings":
+        # The default secret is in this file, so a deployment that never set JWT_SECRET is
+        # signing every token with a value anyone can read on GitHub. Refusing to boot is
+        # the only failure mode an operator cannot miss; a warning in the logs was already
+        # the status quo and was never read.
+        if self.env in ("development", "test"):
+            return self
+        if self.jwt_secret == "change-me-in-env-file" or len(self.jwt_secret) < 32:
+            raise ValueError(
+                f"JWT_SECRET is the development default or shorter than 32 characters "
+                f"(ENV={self.env}). Set JWT_SECRET to a random value, e.g. "
+                "`openssl rand -hex 32`, before running outside development."
+            )
+        return self
 
     @property
     def cors_origins(self) -> list[str]:

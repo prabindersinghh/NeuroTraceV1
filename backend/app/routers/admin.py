@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import require_roles
-from ..auth.password import hash_password
+from ..auth.password import hash_password, password_problem
 from ..db import get_session
 from ..schemas import ProvisionUser
 from ..models import (
@@ -266,6 +266,8 @@ async def provision_user(payload: ProvisionUser, admin: Admin, db: Session) -> d
     written to the append-only audit trail (INV-8).
     """
     email = payload.email.lower().strip()
+    if problem := password_problem(payload.password, email):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, problem)
     if await db.scalar(select(User).where(User.email == email)) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists")
 

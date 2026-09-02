@@ -71,12 +71,20 @@ the backdoor D-041 refuses, wearing an org-chart costume. `test_no_admin_respons
 patient_identifying_data` was extended to link a real doctor to a real patient before
 asserting zero patient content leaks, so the tempting shape is covered.
 
-## auth.py — 6 routes
+## auth.py — 8 routes
 
-`POST /auth/register` and `POST /auth/login` are public by necessity; `/auth/config` returns
-static config. All others return only the caller's own record. Registration
-**server-enforces** `role in {caregiver, patient}` — a client-supplied `clinician` or
-`admin` is rejected, which is the D-040 fix.
+`POST /auth/register` and `POST /auth/login` are public by necessity (rate-limited per
+address, login on failures only); `/auth/config` returns static config. All others return
+only the caller's own record. Registration **server-enforces** `role in {caregiver,
+patient}` — a client-supplied `clinician` or `admin` is rejected, which is the D-040 fix.
+
+`POST /auth/refresh` now consults `refresh_tokens`: rotates on success, refuses unknown /
+expired / revoked tokens, and revokes the user's whole family when a revoked token is
+replayed. `POST /auth/logout {refresh_token}` — no bearer, the token is the credential —
+revokes it and returns 204 whether or not it existed. `POST /auth/password` (bearer) checks
+the current password, applies `password_problem()`, re-hashes, revokes every other session
+and returns a fresh pair. None of these touch a patient row; the only data they read or
+write is the caller's own `users` row and `refresh_tokens` rows keyed on it.
 
 ## patients.py — 7 routes
 

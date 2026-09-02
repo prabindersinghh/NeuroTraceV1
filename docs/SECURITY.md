@@ -2,7 +2,7 @@
 
 Auth model, role matrix, CORS, secrets, backup/recovery, and incident response.
 
-Last updated: 2026-08-28. Companion documents: `ENDPOINT_DATA_AUDIT.md` (every route and
+Last updated: 2026-09-02. Companion documents: `ENDPOINT_DATA_AUDIT.md` (every route and
 its gate), `DATA_INVENTORY.md` (what is stored and how it is deleted), `SBOM.md`
 (dependencies and their advisory notes).
 
@@ -14,9 +14,40 @@ its gate), `DATA_INVENTORY.md` (what is stored and how it is deleted), `SBOM.md`
 `/auth/register`, refreshed at `/auth/refresh`. Lifetimes are configurable and exposed
 (without secrets) at `/auth/config`.
 
+**Refresh tokens are recorded, rotated and revocable** (migration 0021, `refresh_tokens`).
+Every issued refresh token's `jti` has a row; `/auth/refresh` refuses a token with no row,
+an expired one, or a revoked one, and on success marks the presented token revoked
+(`replaced_by_jti`) and issues a fresh pair. A **revoked token being presented is treated
+as reuse** — two parties hold the session — and every active refresh token of that user is
+revoked. `POST /auth/logout {refresh_token}` revokes one token; it needs no bearer (the
+token is the credential) and answers 204 for unknown tokens too, so it enumerates nothing.
+`POST /auth/password {current_password, new_password}` (bearer) re-hashes, revokes every
+other session, and returns a fresh pair for the caller. Access tokens stay stateless and
+short-lived (30 min default); revocation takes effect at the next refresh.
+
+**Rate limits** (`app/auth/ratelimit.py`, in-process sliding windows, `AUTH_RATE_LIMIT=true`
+by default): login counts **failures only** — 5 per (address, email) and 20 per address in
+15 minutes, cleared by a success — register 10 per address per hour, refresh 60 per address
+per minute. Over the limit is 429 with `Retry-After`. The address is the first
+`X-Forwarded-For` entry (Railway fronts the app), else the socket peer. Login also runs the
+bcrypt verify against a dummy hash when the email is unknown, so timing does not reveal
+which accounts exist. In-process is correct for one replica; move the windows to Redis when
+`numReplicas` in `railway.json` exceeds one.
+
+**The development JWT secret is refused outside development.** `Settings` raises at import
+when `ENV` is anything but `development`/`test` and `JWT_SECRET` is the in-repo default or
+shorter than 32 characters, so a deployment that forgot the variable does not boot rather
+than signing every token with a value anyone can read on GitHub.
+
+**Security headers** on every response: `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`; `/auth/*` additionally
+`Cache-Control: no-store` so a token pair never sits in an HTTP cache.
+
 **Passwords**: bcrypt at 12 rounds via `passlib`, truncated explicitly at 72 bytes so a long
 password cannot raise. See `SBOM.md` finding 2 — `passlib` is unmaintained and this is why
-`bcrypt` is pinned at 4.0.1.
+`bcrypt` is pinned at 4.0.1. Minimum 8 characters (pydantic), plus `password_problem()`:
+not the email address or its local part, and not one of the 25 most common passwords —
+applied at registration, admin provisioning and password change (422 with a plain reason).
 
 **Registration is role-restricted server-side.** `/auth/register` accepts `caregiver` and
 `patient` only. `clinician`, `asha_worker` and `admin` are provisioned by
@@ -171,9 +202,9 @@ Migration safety is the recovery property that has actually been exercised here:
 
 ## Known gaps
 
-- **No rate limiting** on `/auth/login`. Brute-force protection relies on bcrypt cost alone.
-  Worth adding before real-patient deployment.
-- **No account lockout** or failed-attempt tracking.
+- ~~No rate limiting on `/auth/login`; no failed-attempt tracking~~ — **added 2026-09-02**
+  (see Authentication). Still in-process: a multi-replica deployment needs the windows in
+  Redis before the limits mean what they say.
 - **No live dependency-advisory scan** has been run — see `SBOM.md`.
 - ~~`python-multipart` is installed but unused~~ — **removed** (D-052). INV-1 is now
   structurally enforced: the library FastAPI needs in order to accept an upload at all is

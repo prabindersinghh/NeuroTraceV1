@@ -44,6 +44,7 @@ audit row while destroying the linkage that makes it useful.
 | Table | Holds | Retention | Deletion path |
 |---|---|---|---|
 | `users` | account: email, password hash, role, full name, language | Life of the account | Not touched by patient erasure — a caregiver may manage several patients. Account deletion is a separate operator action. |
+| `refresh_tokens` | one row per refresh token ever issued: `user_id`, the token's `jti`, issued/expires/revoked timestamps, `replaced_by_jti` | Life of the account | **No clinical data and nothing a person typed** — token identifiers only, no token itself. `ON DELETE CASCADE` from `users`, so deleting the account removes them. Not touched by patient erasure. |
 | `patients` | enrolment, stroke details, deployment tier, exclusions, ASHA assignment, `calibration_json` (device calibration **and** the face-identity vector), `baseline_state`, `erased_at` | Until erasure, then a stripped tombstone kept indefinitely | `erase_patient_data()` clears every identifying field in place. |
 | `clinician_profiles` | clinician's name, qualification, registration number, authority, specialty, affiliation | Life of the clinician account | Staff metadata, not patient data. Unaffected by patient erasure. |
 | `patient_clinician_links` | who may see this patient, `linked_at`/`unlinked_at`, `consent_ref` | Indefinite — **revoked, never deleted** | Erasure sets `unlinked_at` with reason `patient data erased`. The row survives so the history of who could see this patient stays recoverable (INV-8). |
