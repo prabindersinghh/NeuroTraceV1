@@ -76,8 +76,12 @@ function LandingOrHome() {
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
+  const location = useLocation();
   if (!ready) return <LoadingState />;
-  if (!user) return <Navigate to="/login" replace />;
+  // Remember where they were going. A caregiver who opened a dashboard link from a
+  // message used to land on the home screen after signing in and had to find it again;
+  // the sign-in screen validates this before honouring it (`safeReturnPath`).
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return <>{children}</>;
 }
 

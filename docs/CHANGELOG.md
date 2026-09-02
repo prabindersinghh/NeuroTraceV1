@@ -4,6 +4,81 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-09-02 (later) — Authentication: hardened server-side, redesigned client-side
+
+Branch `feat/journey-experience`, commits after the journey work. **Not merged, not
+deployed.** Decisions D-064, D-065. **Migration `0021`** adds `refresh_tokens` (INV-7: a
+new table, no rows touched).
+
+### Backend (`backend/app/auth/*`, `routers/auth.py`, `main.py`, `config.py`)
+- Refresh tokens are recorded by `jti`, **rotated on every `/auth/refresh`**, and a replay
+  of a rotated token revokes the whole account's live tokens. New `POST /auth/logout`
+  (204, idempotent) and `POST /auth/password` (re-hash, revoke every other session, return
+  a fresh pair).
+- **Rate limits**, stdlib sliding window: login 5 failures / 15 min per (ip, email) and 20
+  per ip; register 10 / hour per ip; refresh 60 / min per ip. 429 with `Retry-After`.
+  `AUTH_RATE_LIMIT=false` for the test suite only.
+- The default JWT secret **refuses to boot** outside `development` / `test`.
+- `password_problem()`: not the email, not the local part, not one of 25 common passwords
+  — applied to register, admin provisioning and password change (422).
+- Unknown-email logins verify against a dummy hash so timing is flat.
+- Security headers on every response; `Cache-Control: no-store` on `/auth/*`.
+- `tests/test_auth_hardening.py`, 17 tests.
+
+### Frontend (`src/lib/api.ts`, `auth.tsx`, `authForm.ts`, `neural.ts`, `components/auth/*`, `routes/Login.tsx`, `routes/Register.tsx`)
+- **Three defects fixed.** (1) A refresh the server rejected cleared storage but never told
+  `AuthProvider`, so the shell stayed "signed in" while every request 401'd; the API client
+  now announces `SESSION_EXPIRED` and the sign-in screen explains why it is being shown.
+  (2) A reload while offline signed the patient out (any `/auth/me` failure cleared the
+  session); only a 401 does now. (3) The demo button bypassed the provider and reloaded the
+  window; it is a provider method. Also: return-to-intended-path after sign-in (validated,
+  same-origin only), cross-tab sign-out, a 20 s request timeout distinguishable from
+  being offline, `POST /auth/logout` on sign out.
+- **Errors are string keys, never the server's English**: every status the auth screens can
+  meet maps to a sentence that exists in EN/HI/PA (`authErrorKey`, pinned by
+  `i18n.test.ts`).
+- **Redesign.** `AuthShell` (form left, a calm panel right with the neural field and the
+  three trust lines that are true of this codebase; a band above the form on a phone,
+  dropped on short viewports), blur-then-clear validation with `aria-describedby` /
+  `aria-invalid`, a password eye toggle, a four-step strength meter (advice, not a gate),
+  a two-option role group with a sentence for clinicians instead of an option the server
+  refuses, "Signing in…" / "Signed in" states in a live region, an offline notice, and a
+  520 ms "Signed in" beat during which the field converges before the route changes.
+- **The neural field** (D-064): canvas 2D, 96 / 60 / 44 / 0 nodes by device, one rAF loop
+  that stops off-screen and in background tabs, 30 fps cap on phones, static under reduced
+  motion, no parallax on touch, zero dependencies.
+- `vercel.json`: `Content-Security-Policy`, `X-Frame-Options: DENY`, HSTS.
+- `LandingNav`'s "Open the demo" pointed at `/register`; it points at `/login`.
+- The repomix bundle was untracked and ignored (it tripped INV-11 and INV-13).
+
+### Verified
+- Backend: **full suite exit 0** (`pytest -q`, background run), after the fork's targeted run
+  of 209 tests exit 0; `alembic upgrade head` on a fresh SQLite and rendered for Postgres
+  (`test_migration_portability.py`).
+- Frontend: `tsc -b` exit 0; **vitest 208/208** (36 new: `authForm`, `neural`, `api`
+  session-boundary tests with a stubbed `fetch`); `npm run build` exit 0; oxlint adds no
+  warnings in the new files.
+- Headless Chromium against the dev server and the local backend: blur validation, wrong
+  password → translated sentence, focus returns to the password, eye toggle, sign-in →
+  520 ms beat → `/`, `POST /auth/logout` on sign out, return-to `/dashboard/:id`, session
+  expiry banner after a rejected refresh, register short/strong/common/duplicate password
+  paths, 6 failures → the rate-limit sentence, demo → dashboard, Hindi and Punjabi. Seven
+  widths (320 → 1680): no horizontal overflow, tab order email → password → eye → submit
+  → demo → create account. Reduced motion: canvas byte-identical across 800 ms. With
+  `getContext` stubbed to null: sign-in unaffected.
+- **CSP**: `dist/` served with the `vercel.json` headers; sign-in, demo dashboard, the
+  practice exam route and `/diagnostics` loading FaceMesh and PoseLandmarker — **zero
+  violations**.
+- **Lighthouse 12** (Playwright's Chromium, default mobile throttling) against the
+  production build served with the `vercel.json` headers — sign-in / sign-up:
+  performance **85 / 82**, accessibility **100 / 100**, best practices **100 / 100**, SEO
+  91 / 91 (the robots audit was reading `index.html` through the SPA rewrite;
+  `public/robots.txt` added after the run). CLS 0, TBT 0 ms, FCP 3.2 s / LCP 3.5 s on the
+  simulated 4G — the cost is the eager entry chunk that carries the landing page and the
+  sign-in screen together, which `App.tsx` keeps eager on purpose; splitting them is the
+  route to 90+ and is recorded as remaining, not done.
+- **Not run:** a physical phone, the deployed instance.
+
 ## 2026-09-02 — The patient journey: one path of lights over the unchanged 18-step protocol
 
 Branch `feat/journey-experience`, off `main`. **Not merged, not deployed.** Design proposal

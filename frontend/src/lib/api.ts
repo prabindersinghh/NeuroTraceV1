@@ -44,13 +44,36 @@ const USER_KEY = "neurotrace.user";
 
 export class ApiError extends Error {
   status: number;
+  /** Set only when `status` is 0: WHY the request never got an answer. */
+  kind?: "network" | "timeout";
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, kind?: "network" | "timeout") {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.kind = kind;
   }
 }
+
+/**
+ * How the session's end reaches the rest of the app.
+ *
+ * `request()` learns that a session is over — a refresh token the server rejected —
+ * deep inside a call that some dashboard made. It used to clear storage and return, so
+ * `AuthProvider` still held a user, the shell still showed "Sign out", and every screen
+ * failed in its own way with "could not validate credentials" until the next reload.
+ * Now it also says so, once, and the provider listens. A DOM event target rather than a
+ * React context because this file has no React in it and must stay that way.
+ */
+export const AUTH_EVENTS = new EventTarget();
+export const SESSION_EXPIRED = "session-expired";
+
+/**
+ * How long a request may take before it is reported as such. Long enough for a cold
+ * Railway container to wake and for a 2G tower to answer; short enough that a sign-in
+ * button does not spin forever on a connection that has silently died.
+ */
+const REQUEST_TIMEOUT_MS = 20_000;
 
 // --------------------------------------------------------------------------- token store
 export function getTokens(): TokenPair | null {
@@ -97,26 +120,53 @@ async function refreshTokens(): Promise<TokenPair | null> {
 
   refreshInFlight ??= (async () => {
     try {
-      const res = await fetch(`${BASE}/auth/refresh`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ refresh_token: current.refresh_token }),
-      });
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(`${BASE}/auth/refresh`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refresh_token: current.refresh_token }),
+        });
+      } catch (err) {
+        // The network failed, not the session. A patient reloading the app in airplane
+        // mode must stay signed in; the caller sees an offline error instead.
+        throw err instanceof ApiError ? err : new ApiError(0, "Cannot reach the NeuroTrace server. Check your connection.", "network");
+      }
       if (!res.ok) {
+        // The server refused the refresh token: expired, revoked, or rotated away by
+        // another device. The session is over, and everyone needs to know.
         clearSession();
+        AUTH_EVENTS.dispatchEvent(new Event(SESSION_EXPIRED));
         return null;
       }
       const next = (await res.json()) as TokenPair;
       setTokens(next);
       return next;
-    } catch {
-      return null;
     } finally {
       refreshInFlight = null;
     }
   })();
 
   return refreshInFlight;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === "AbortError";
+    throw new ApiError(
+      0,
+      timedOut
+        ? "The NeuroTrace server is taking too long to answer."
+        : "Cannot reach the NeuroTrace server. Check your connection.",
+      timedOut ? "timeout" : "network",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function errorMessage(res: Response): Promise<string> {
@@ -150,21 +200,18 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     if (token) headers.authorization = `Bearer ${token}`;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      method,
-      headers,
-      body: json !== undefined ? JSON.stringify(json) : undefined,
-    });
-  } catch {
-    throw new ApiError(0, "Cannot reach the NeuroTrace server. Check your connection.");
-  }
+  const res = await fetchWithTimeout(`${BASE}${path}`, {
+    method,
+    headers,
+    body: json !== undefined ? JSON.stringify(json) : undefined,
+  });
 
   if (res.status === 401 && auth && retry) {
+    // A refresh that cannot reach the server throws an offline error from here, which is
+    // the right answer: the caller was not signed out, it was disconnected. A refresh the
+    // server REJECTS returns null, having already cleared the session and announced it.
     const refreshed = await refreshTokens();
     if (refreshed) return request<T>(path, { ...opts, retry: false });
-    clearSession();
   }
 
   if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
@@ -232,6 +279,14 @@ export const api = {
     request<AuthResponse>("/auth/login", { method: "POST", json: payload, auth: false }),
 
   me: () => request<AuthResponse["user"]>("/auth/me"),
+
+  /** Revokes the refresh token server-side. The token is the credential, so no bearer. */
+  logout: (refreshToken: string) =>
+    request<void>("/auth/logout", { method: "POST", json: { refresh_token: refreshToken }, auth: false }),
+
+  /** Re-issues a session; every OTHER refresh token of the account is revoked by the server. */
+  changePassword: (payload: { current_password: string; new_password: string }) =>
+    request<AuthResponse>("/auth/password", { method: "POST", json: payload }),
 
   // --- patients ---
   listPatients: () => request<Patient[]>("/patients"),

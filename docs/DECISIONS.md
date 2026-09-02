@@ -1195,3 +1195,45 @@ structural fall gate are unchanged and still pinned by `taskFlow.test.ts`.
 Deliberately not done: sound design beyond speech (no audio assets — a tracked binary trips
 INV-11's scanner, and a required sound would exclude the people speech already serves),
 WebGL or canvas of any kind, and a countdown that reads as a deadline — the ring fills.
+
+### D-064 — the sign-in screen's neural field is a canvas, not a WebGL library
+
+**2026-09-02.** The authentication screens were rebuilt around a neuroscience visual: a
+network of nodes on a brain-shaped shell in three dimensions, joined to their nearest
+neighbours, with signals travelling the joins and the whole thing responding to the form —
+attentive when a field has focus, structured on the password, busy while the server checks,
+converging once signed in. It is drawn with `CanvasRenderingContext2D` and a
+four-multiplication perspective projection (`frontend/src/lib/neural.ts`, tested;
+`components/auth/NeuralField.tsx` draws). Three.js was considered and rejected on the same
+grounds as D-039 rejected GSAP: ~150 kB gzipped for a hundred dots and a few hundred
+lines, on a bundle that shares a service worker with a clinical PWA precaching a 4 MB model.
+
+The gating is clinical, not taste. D-038 already says parallax is a documented trigger for
+people with vertigo, who are in scope; the sign-in screen is a signed-out surface but a
+patient uses it every morning. So: no pointer tilt on coarse pointers, one static frame under
+`prefers-reduced-motion`, at most 30 fps on a phone, nothing drawn off-screen or in a
+background tab, and zero nodes on ≤2 cores or Data Saver. The palette is the token blue on
+white — alpha and radius carry depth, no gradient, no shadow (index.css's rule holds). It is
+`aria-hidden`, the caption says it measures nothing, and the form never depends on it: with
+`getContext` returning null the page is the same form without a picture.
+
+### D-065 — sessions stay bearer tokens; the refresh token is now rotated and revocable
+
+**2026-09-02.** Moving to HttpOnly cookies was considered and not done. The API and the
+app are on different origins (Railway, Vercel), so a cookie session means `SameSite=None`,
+credentialed CORS, and a CSRF token on every mutating route — a second authentication
+architecture, for a gain that a CSP mostly delivers on its own. The tokens stay in
+`localStorage` behind a `Content-Security-Policy` that allows scripts from the app's origin
+only (`frontend/vercel.json`; MediaPipe needs `wasm-unsafe-eval` and blob workers, verified
+under the policy with both models loading and zero violations).
+
+What changed instead, server-side (`backend/app/routers/auth.py`, migration `0021`): every
+refresh token is recorded by `jti`; `/auth/refresh` rotates it and refuses a token already
+used — a replay revokes every live token of that account, because a token presented twice
+has been copied; `/auth/logout` revokes; `/auth/password` re-hashes and revokes every other
+session. Login, register and refresh are rate-limited in memory (correct for
+`railway.json`'s single replica; Redis when that changes). The dev JWT secret refuses to
+boot outside `development`/`test`. Client-side, a refresh the server rejects now tells the
+provider (`AUTH_EVENTS`), so the shell signs out instead of failing every request until a
+reload; a refresh that cannot reach the server does NOT sign out — an offline patient stays
+signed in, which the airplane-mode demo depends on.

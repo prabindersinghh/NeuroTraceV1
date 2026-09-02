@@ -77,8 +77,10 @@ export function LandingNav() {
           <Link to="/login" className="focus-ring rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
             Log in
           </Link>
+          {/* The demo lives on the sign-in screen (one tap, no form). This pointed at
+              /register, where a visitor was asked to invent an account to see a demo. */}
           <Link
-            to="/register"
+            to="/login"
             className="focus-ring rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
             Open the demo

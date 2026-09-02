@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /exam/
+Disallow: /report/
+Disallow: /clinic
+Disallow: /admin

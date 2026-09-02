@@ -173,6 +173,7 @@ export const STRINGS = {
     pa: "ਤੁਹਾਡੀ ਪਹਿਲੀ ਜਾਂਚ ਇੱਥੇ ਦਿਖੇਗੀ।",
   },
   signInEyebrow: { en: "Secure sign-in", hi: "सुरक्षित साइन-इन", pa: "ਸੁਰੱਖਿਅਤ ਸਾਈਨ-ਇਨ" },
+  skipToContent: { en: "Skip to content", hi: "सीधे सामग्री पर जाएँ", pa: "ਸਿੱਧਾ ਸਮੱਗਰੀ 'ਤੇ ਜਾਓ" },
   clinicEyebrow: { en: "Clinician", hi: "चिकित्सक", pa: "ਡਾਕਟਰ" },
   // ---- the caregiver roster's own instrumentation. Adherence only: how much has been
   // done, never how it scored. Bands belong on the patient dashboard, behind a click. ----
@@ -472,6 +473,167 @@ export const STRINGS = {
     en: "Loads Ramesh, 67 — three weeks of history ending in an alert.",
     hi: "रमेश, 67 — तीन हफ़्ते का इतिहास, अंत में अलर्ट।",
     pa: "ਰਮੇਸ਼, 67 — ਤਿੰਨ ਹਫ਼ਤਿਆਂ ਦਾ ਇਤਿਹਾਸ, ਅੰਤ ਵਿੱਚ ਅਲਰਟ।",
+  },
+  // ---- the sign-in and sign-up screens ----
+  signInTitle: { en: "Welcome back", hi: "फिर से स्वागत है", pa: "ਫਿਰ ਤੋਂ ਜੀ ਆਇਆਂ ਨੂੰ" },
+  registerTitle: { en: "Create your account", hi: "अपना खाता बनाएँ", pa: "ਆਪਣਾ ਖਾਤਾ ਬਣਾਓ" },
+  registerLead: {
+    en: "For the person who does the daily check-in, or the family member who set it up.",
+    hi: "उस व्यक्ति के लिए जो रोज़ाना जाँच करता है, या उस परिवारजन के लिए जिसने इसे शुरू किया।",
+    pa: "ਉਸ ਵਿਅਕਤੀ ਲਈ ਜੋ ਰੋਜ਼ਾਨਾ ਜਾਂਚ ਕਰਦਾ ਹੈ, ਜਾਂ ਉਸ ਪਰਿਵਾਰਕ ਮੈਂਬਰ ਲਈ ਜਿਸਨੇ ਇਹ ਸ਼ੁਰੂ ਕੀਤਾ।",
+  },
+  authEyebrow: {
+    en: "Post-stroke recovery · measured at home",
+    hi: "स्ट्रोक के बाद रिकवरी · घर पर मापी गई",
+    pa: "ਸਟ੍ਰੋਕ ਤੋਂ ਬਾਅਦ ਰਿਕਵਰੀ · ਘਰ ਵਿੱਚ ਮਾਪੀ ਗਈ",
+  },
+  authHeadline: {
+    en: "Your own normal, measured every day.",
+    hi: "आपका अपना सामान्य स्तर, हर दिन मापा हुआ।",
+    pa: "ਤੁਹਾਡਾ ਆਪਣਾ ਆਮ ਪੱਧਰ, ਹਰ ਰੋਜ਼ ਮਾਪਿਆ ਹੋਇਆ।",
+  },
+  authLead: {
+    en: "A three-minute check-in on an ordinary phone. It learns what is usual for one person, and says so when something changes.",
+    hi: "एक साधारण फ़ोन पर तीन मिनट की जाँच। यह एक व्यक्ति का सामान्य स्तर सीखती है, और कुछ बदलने पर बताती है।",
+    pa: "ਇੱਕ ਸਧਾਰਨ ਫ਼ੋਨ 'ਤੇ ਤਿੰਨ ਮਿੰਟ ਦੀ ਜਾਂਚ। ਇਹ ਇੱਕ ਵਿਅਕਤੀ ਦਾ ਆਮ ਪੱਧਰ ਸਿੱਖਦੀ ਹੈ, ਅਤੇ ਕੁਝ ਬਦਲਣ 'ਤੇ ਦੱਸਦੀ ਹੈ।",
+  },
+  trustOnDevice: {
+    en: "Analysis runs on the phone. The server receives numbers, never video or audio.",
+    hi: "विश्लेषण फ़ोन पर ही होता है। सर्वर को सिर्फ़ संख्याएँ मिलती हैं, वीडियो या ऑडियो कभी नहीं।",
+    pa: "ਵਿਸ਼ਲੇਸ਼ਣ ਫ਼ੋਨ 'ਤੇ ਹੀ ਹੁੰਦਾ ਹੈ। ਸਰਵਰ ਨੂੰ ਸਿਰਫ਼ ਅੰਕ ਮਿਲਦੇ ਹਨ, ਵੀਡੀਓ ਜਾਂ ਆਡੀਓ ਕਦੇ ਨਹੀਂ।",
+  },
+  trustAlert: {
+    en: "No alert unless a change persists, appears in more than one domain, and has a side.",
+    hi: "अलर्ट तभी, जब बदलाव बना रहे, एक से ज़्यादा क्षेत्रों में दिखे, और उसकी एक तरफ़ हो।",
+    pa: "ਅਲਰਟ ਤਾਂ ਹੀ, ਜਦੋਂ ਬਦਲਾਅ ਬਣਿਆ ਰਹੇ, ਇੱਕ ਤੋਂ ਵੱਧ ਖੇਤਰਾਂ ਵਿੱਚ ਦਿਖੇ, ਅਤੇ ਉਸਦਾ ਇੱਕ ਪਾਸਾ ਹੋਵੇ।",
+  },
+  trustLangs: {
+    en: "English, Hindi and Punjabi, read aloud.",
+    hi: "अंग्रेज़ी, हिंदी और पंजाबी, बोलकर सुनाई जाती हैं।",
+    pa: "ਅੰਗਰੇਜ਼ੀ, ਹਿੰਦੀ ਅਤੇ ਪੰਜਾਬੀ, ਬੋਲ ਕੇ ਸੁਣਾਈਆਂ ਜਾਂਦੀਆਂ ਹਨ।",
+  },
+  fieldCaption: {
+    en: "A network of signals, responding to the person in front of it. An illustration — it measures nothing.",
+    hi: "संकेतों का एक जाल, जो सामने बैठे व्यक्ति पर प्रतिक्रिया देता है। सिर्फ़ एक चित्र — यह कुछ नहीं मापता।",
+    pa: "ਸੰਕੇਤਾਂ ਦਾ ਇੱਕ ਜਾਲ, ਜੋ ਸਾਹਮਣੇ ਬੈਠੇ ਵਿਅਕਤੀ 'ਤੇ ਪ੍ਰਤੀਕਿਰਿਆ ਦਿੰਦਾ ਹੈ। ਸਿਰਫ਼ ਇੱਕ ਤਸਵੀਰ — ਇਹ ਕੁਝ ਨਹੀਂ ਮਾਪਦਾ।",
+  },
+  backToSite: { en: "Back to the site", hi: "साइट पर वापस", pa: "ਸਾਈਟ 'ਤੇ ਵਾਪਸ" },
+  optionalHint: { en: "Optional", hi: "वैकल्पिक", pa: "ਵਿਕਲਪਿਕ" },
+  showPassword: { en: "Show password", hi: "पासवर्ड दिखाएँ", pa: "ਪਾਸਵਰਡ ਦਿਖਾਓ" },
+  hidePassword: { en: "Hide password", hi: "पासवर्ड छिपाएँ", pa: "ਪਾਸਵਰਡ ਲੁਕਾਓ" },
+  roleHelpPatient: {
+    en: "I do the daily check-in myself",
+    hi: "मैं रोज़ाना जाँच ख़ुद करता/करती हूँ",
+    pa: "ਮੈਂ ਰੋਜ਼ਾਨਾ ਜਾਂਚ ਖ਼ੁਦ ਕਰਦਾ/ਕਰਦੀ ਹਾਂ",
+  },
+  roleHelpCaregiver: {
+    en: "I look after someone and follow their trend",
+    hi: "मैं किसी की देखभाल करता/करती हूँ और उनका रुझान देखता/देखती हूँ",
+    pa: "ਮੈਂ ਕਿਸੇ ਦੀ ਦੇਖਭਾਲ ਕਰਦਾ/ਕਰਦੀ ਹਾਂ ਅਤੇ ਉਹਨਾਂ ਦਾ ਰੁਝਾਨ ਵੇਖਦਾ/ਵੇਖਦੀ ਹਾਂ",
+  },
+  roleClinicianNote: {
+    en: "Clinicians and health workers are set up by their hospital or programme. Ask your administrator for an account.",
+    hi: "चिकित्सकों और स्वास्थ्य कर्मियों के खाते उनका अस्पताल या कार्यक्रम बनाता है। खाते के लिए अपने प्रशासक से कहें।",
+    pa: "ਡਾਕਟਰਾਂ ਅਤੇ ਸਿਹਤ ਕਰਮਚਾਰੀਆਂ ਦੇ ਖਾਤੇ ਉਹਨਾਂ ਦਾ ਹਸਪਤਾਲ ਜਾਂ ਪ੍ਰੋਗਰਾਮ ਬਣਾਉਂਦਾ ਹੈ। ਖਾਤੇ ਲਈ ਆਪਣੇ ਪ੍ਰਸ਼ਾਸਕ ਨੂੰ ਕਹੋ।",
+  },
+  strengthLabel: { en: "Password strength", hi: "पासवर्ड की मज़बूती", pa: "ਪਾਸਵਰਡ ਦੀ ਮਜ਼ਬੂਤੀ" },
+  strengthTooShort: { en: "Too short", hi: "बहुत छोटा", pa: "ਬਹੁਤ ਛੋਟਾ" },
+  strengthOk: { en: "Okay", hi: "ठीक है", pa: "ਠੀਕ ਹੈ" },
+  strengthGood: { en: "Good", hi: "अच्छा", pa: "ਚੰਗਾ" },
+  strengthStrong: { en: "Strong", hi: "मज़बूत", pa: "ਮਜ਼ਬੂਤ" },
+  signingIn: { en: "Signing in…", hi: "साइन इन हो रहा है…", pa: "ਸਾਈਨ ਇਨ ਹੋ ਰਿਹਾ ਹੈ…" },
+  creatingAccount: { en: "Creating your account…", hi: "आपका खाता बन रहा है…", pa: "ਤੁਹਾਡਾ ਖਾਤਾ ਬਣ ਰਿਹਾ ਹੈ…" },
+  loadingDemo: { en: "Preparing the demo…", hi: "डेमो तैयार हो रहा है…", pa: "ਡੈਮੋ ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ…" },
+  signedIn: { en: "Signed in", hi: "साइन इन हो गया", pa: "ਸਾਈਨ ਇਨ ਹੋ ਗਿਆ" },
+  sessionExpiredTitle: { en: "Your session ended", hi: "आपका सत्र समाप्त हो गया", pa: "ਤੁਹਾਡਾ ਸੈਸ਼ਨ ਖ਼ਤਮ ਹੋ ਗਿਆ" },
+  sessionExpiredBody: {
+    en: "Sign in again to carry on where you were.",
+    hi: "जहाँ थे वहीं से जारी रखने के लिए फिर से साइन इन करें।",
+    pa: "ਜਿੱਥੇ ਸੀ ਉੱਥੋਂ ਜਾਰੀ ਰੱਖਣ ਲਈ ਦੁਬਾਰਾ ਸਾਈਨ ਇਨ ਕਰੋ।",
+  },
+  offlineNotice: {
+    en: "You are offline. Signing in needs a connection.",
+    hi: "आप ऑफ़लाइन हैं। साइन इन के लिए इंटरनेट चाहिए।",
+    pa: "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਸਾਈਨ ਇਨ ਲਈ ਇੰਟਰਨੈੱਟ ਚਾਹੀਦਾ ਹੈ।",
+  },
+  // Field problems. Shown under the field, after the person has left it.
+  errEmailRequired: { en: "Enter your email", hi: "अपना ईमेल लिखें", pa: "ਆਪਣਾ ਈਮੇਲ ਲਿਖੋ" },
+  errEmailInvalid: {
+    en: "That does not look like an email address",
+    hi: "यह ईमेल पता जैसा नहीं लगता",
+    pa: "ਇਹ ਈਮੇਲ ਪਤੇ ਵਰਗਾ ਨਹੀਂ ਲੱਗਦਾ",
+  },
+  errPasswordRequired: { en: "Enter your password", hi: "अपना पासवर्ड लिखें", pa: "ਆਪਣਾ ਪਾਸਵਰਡ ਲਿਖੋ" },
+  errPasswordShort: {
+    en: "Use at least 8 characters",
+    hi: "कम से कम 8 अक्षर इस्तेमाल करें",
+    pa: "ਘੱਟੋ-ਘੱਟ 8 ਅੱਖਰ ਵਰਤੋ",
+  },
+  errPasswordLong: {
+    en: "Use at most 128 characters",
+    hi: "अधिकतम 128 अक्षर इस्तेमाल करें",
+    pa: "ਵੱਧ ਤੋਂ ਵੱਧ 128 ਅੱਖਰ ਵਰਤੋ",
+  },
+  errPasswordIsEmail: {
+    en: "Your password cannot be your email address",
+    hi: "पासवर्ड आपका ईमेल पता नहीं हो सकता",
+    pa: "ਪਾਸਵਰਡ ਤੁਹਾਡਾ ਈਮੇਲ ਪਤਾ ਨਹੀਂ ਹੋ ਸਕਦਾ",
+  },
+  // What went wrong with the server, in plain words. Never the server's own text.
+  errWrongCredentials: {
+    en: "That email and password do not match. Check both and try again.",
+    hi: "यह ईमेल और पासवर्ड मेल नहीं खाते। दोनों जाँचकर फिर कोशिश करें।",
+    pa: "ਇਹ ਈਮੇਲ ਅਤੇ ਪਾਸਵਰਡ ਮੇਲ ਨਹੀਂ ਖਾਂਦੇ। ਦੋਵੇਂ ਜਾਂਚ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  errEmailTaken: {
+    en: "An account with this email already exists. Sign in instead.",
+    hi: "इस ईमेल से खाता पहले से है। इसके बजाय साइन इन करें।",
+    pa: "ਇਸ ਈਮੇਲ ਨਾਲ ਖਾਤਾ ਪਹਿਲਾਂ ਤੋਂ ਹੈ। ਇਸਦੀ ਬਜਾਏ ਸਾਈਨ ਇਨ ਕਰੋ।",
+  },
+  errRoleProvisioned: {
+    en: "That kind of account is set up by an administrator, not here.",
+    hi: "इस तरह का खाता प्रशासक बनाता है, यहाँ नहीं बनता।",
+    pa: "ਇਸ ਤਰ੍ਹਾਂ ਦਾ ਖਾਤਾ ਪ੍ਰਸ਼ਾਸਕ ਬਣਾਉਂਦਾ ਹੈ, ਇੱਥੇ ਨਹੀਂ ਬਣਦਾ।",
+  },
+  errPasswordWeak: {
+    en: "Choose a different password. That one is too easy to guess.",
+    hi: "कोई और पासवर्ड चुनें। यह अनुमान लगाने में बहुत आसान है।",
+    pa: "ਕੋਈ ਹੋਰ ਪਾਸਵਰਡ ਚੁਣੋ। ਇਹ ਅੰਦਾਜ਼ਾ ਲਗਾਉਣ ਵਿੱਚ ਬਹੁਤ ਸੌਖਾ ਹੈ।",
+  },
+  errWrongCurrentPassword: {
+    en: "Your current password is not right.",
+    hi: "आपका मौजूदा पासवर्ड सही नहीं है।",
+    pa: "ਤੁਹਾਡਾ ਮੌਜੂਦਾ ਪਾਸਵਰਡ ਸਹੀ ਨਹੀਂ ਹੈ।",
+  },
+  errDemoOff: {
+    en: "The demo is switched off on this server.",
+    hi: "इस सर्वर पर डेमो बंद है।",
+    pa: "ਇਸ ਸਰਵਰ 'ਤੇ ਡੈਮੋ ਬੰਦ ਹੈ।",
+  },
+  errOffline: {
+    en: "Cannot reach NeuroTrace. Check your connection and try again.",
+    hi: "न्यूरोट्रेस से संपर्क नहीं हो पा रहा। अपना इंटरनेट जाँचकर फिर कोशिश करें।",
+    pa: "ਨਿਊਰੋਟ੍ਰੇਸ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ ਹੋ ਰਿਹਾ। ਆਪਣਾ ਇੰਟਰਨੈੱਟ ਜਾਂਚ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  errTimeout: {
+    en: "The server is taking too long to answer. Try again in a moment.",
+    hi: "सर्वर जवाब देने में बहुत समय ले रहा है। थोड़ी देर बाद फिर कोशिश करें।",
+    pa: "ਸਰਵਰ ਜਵਾਬ ਦੇਣ ਵਿੱਚ ਬਹੁਤ ਸਮਾਂ ਲੈ ਰਿਹਾ ਹੈ। ਥੋੜ੍ਹੀ ਦੇਰ ਬਾਅਦ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  errTooManyAttempts: {
+    en: "Too many attempts. Wait a few minutes, then try again.",
+    hi: "बहुत बार कोशिश हो चुकी। कुछ मिनट रुककर फिर कोशिश करें।",
+    pa: "ਬਹੁਤ ਵਾਰ ਕੋਸ਼ਿਸ਼ ਹੋ ਚੁੱਕੀ। ਕੁਝ ਮਿੰਟ ਰੁਕ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  errServer: {
+    en: "Something went wrong on our side. Please try again shortly.",
+    hi: "हमारी तरफ़ कुछ गड़बड़ हुई। कृपया थोड़ी देर बाद फिर कोशिश करें।",
+    pa: "ਸਾਡੇ ਵੱਲੋਂ ਕੁਝ ਗੜਬੜ ਹੋਈ। ਕਿਰਪਾ ਕਰਕੇ ਥੋੜ੍ਹੀ ਦੇਰ ਬਾਅਦ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  errAuthGeneric: {
+    en: "That did not work. Please try again.",
+    hi: "यह काम नहीं किया। कृपया फिर कोशिश करें।",
+    pa: "ਇਹ ਕੰਮ ਨਹੀਂ ਕੀਤਾ। ਕਿਰਪਾ ਕਰਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
 
   // --- caregiver ---

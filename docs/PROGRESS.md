@@ -184,8 +184,8 @@ and `FamilyAccess` (owning-caregiver only; warns before the form that adding a m
 the full picture, requires a reason to revoke, shows revoked links rather than hiding them,
 and says plainly that a new member cannot sign in yet). Copy says "family", not "caretaker".
 
-**Still to do:** the auth pass (invite flow, credentials — accounts are created disabled
-until then).
+**Still to do:** the invite flow. The credentials half of the auth pass is done (2026-09-02,
+below); family accounts are still created disabled until an invite can set a password.
 
 **Recovered from a session crash:** a teardown mid-write corrupted `docs/SECURITY.md` and
 `docs/DATA_INVENTORY.md` with fragments of compiled Python. Caught by inspecting the files,
@@ -250,7 +250,27 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-09-02 · **The patient journey is built on branch
+**Last updated:** 2026-09-02 (later) · **Authentication hardened and redesigned, on branch
+`feat/journey-experience` — NOT merged, NOT deployed.** Server: refresh tokens rotated and
+revocable (migration `0021`, `refresh_tokens`), `POST /auth/logout`, `POST /auth/password`,
+in-memory rate limits on login/register/refresh, a common-password check, the dev JWT
+secret refused outside development/test, security headers (D-065). Client: three real
+defects fixed — a rejected refresh never signed the shell out, an offline reload signed the
+patient out, the demo button hard-reloaded — plus return-to-path, cross-tab sign-out, a
+request timeout, and every auth error as an EN/HI/PA sentence rather than the server's
+text. New sign-in and sign-up screens (`components/auth/*`): a canvas neural field that
+responds to the form and is gated for vertigo and reduced motion (D-064), blur validation,
+eye toggle, strength meter, two-role group. `vercel.json` now carries a CSP verified with
+MediaPipe loading under it. Verified: backend full suite exit 0, vitest 208/208, tsc, build,
+oxlint baseline, a headless walkthrough of every flow at seven widths, the CSP against
+`dist/` (see the CHANGELOG entry). **Not run: a physical phone, the deployed instance.**
+To ship: merge `--no-ff`, deploy backend (migration `0021` runs at boot), deploy frontend,
+run `verify_deploy.sh`. **Remaining, honestly:** no self-service password reset or email
+verification — there is no email provider in this system, and a fake "forgot password"
+link would be worse than none; family accounts still await the invite flow; bearer tokens
+remain in `localStorage` behind the CSP rather than in HttpOnly cookies (D-065 says why).
+
+Previous: 2026-09-02 · **The patient journey is built on branch
 `feat/journey-experience` — NOT merged, NOT deployed.** The check-in is one path of lights
 with chapters (D-063): welcome + warm-up, chapter intros with a rest offer, a spoken
 repeatable instruction card, the light in place of the circle, a ring in place of every
@@ -360,6 +380,28 @@ FINAL_PRODUCT_SPEC_v4 built; see [COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.
 line-by-line status (verified-live vs verified-in-tests vs pending).
 
 ---
+
+### The authentication pass — credentials half, as built (2026-09-02)
+
+What a stranger needs to know before touching `/auth`:
+
+- **Tokens.** Access (30 min) + refresh (14 days), both JWT HS256, both in the browser's
+  `localStorage` under `neurotrace.tokens`. Every refresh token's `jti` is a row in
+  `refresh_tokens`; `/auth/refresh` rotates (old row gets `revoked_at` + `replaced_by_jti`)
+  and a replay of a rotated token revokes the account's whole live set. `/auth/logout`
+  takes the refresh token in the body, no bearer. `/auth/password` revokes every OTHER
+  session. Rows cascade with the user (erasure unchanged).
+- **Rate limits** live in `app/auth/ratelimit.py`, in memory. Correct for one replica; the
+  `ponytail:` comment there names Redis as the upgrade when `numReplicas` > 1.
+- **The client** (`lib/api.ts`) tells `AuthProvider` when a refresh is REJECTED
+  (`AUTH_EVENTS` / `SESSION_EXPIRED`) and stays signed in when a refresh cannot reach the
+  server. Only a 401 from `/auth/me` on boot signs out. `lib/authForm.ts` maps every status
+  to a string key; the server's `detail` text is never shown.
+- **The screens** are `routes/Login.tsx` and `routes/Register.tsx` inside
+  `components/auth/AuthShell.tsx`; the visual is `components/auth/NeuralField.tsx` over
+  `lib/neural.ts`. Add a string to `STRINGS` in all three languages or `i18n.test.ts` fails.
+- **Not built:** password reset by email, email verification, the family invite flow. All
+  three need an email provider the system does not have; none is faked in the UI.
 
 ## CLINICAL_AMENDMENT_v3 — ALREADY IMPLEMENTED. DO NOT RE-EXECUTE.
 

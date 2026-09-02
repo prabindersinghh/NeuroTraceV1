@@ -11,6 +11,8 @@
  * IndexedDB and drains them when connectivity returns. Nothing queued here is media — the
  * queue holds numbers, so even a stolen phone with a full queue leaks no biometric data.
  */
+import { useEffect, useState } from "react";
+
 import type { ModuleFeatures, SessionType } from "./types";
 
 const DB_NAME = "neurotrace";
@@ -214,4 +216,14 @@ export function onConnectivityChange(handler: (online: boolean) => void): () => 
 
 export function isOnline(): boolean {
   return typeof navigator === "undefined" ? true : navigator.onLine;
+}
+
+/**
+ * Connectivity as React state. The sign-in screen uses it to say "you are offline" before
+ * the person types a password into a form that cannot be sent, rather than after.
+ */
+export function useOnline(): boolean {
+  const [online, setOnline] = useState(isOnline());
+  useEffect(() => onConnectivityChange(setOnline), []);
+  return online;
 }

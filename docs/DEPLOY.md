@@ -130,10 +130,15 @@ cannot risk it, Neon's paid tier disables suspend.
 | Variable | What goes in it |
 |---|---|
 | `DATABASE_URL` | the Neon **branch** string, for the first deploy |
-| `JWT_SECRET` | generate fresh: `openssl rand -hex 32`. Never the dev default |
+| `JWT_SECRET` | generate fresh: `openssl rand -hex 32`. Never the dev default — **the app refuses to boot** with the default (or anything under 32 characters) when `ENV` is not `development`/`test` |
 | `ENV` | `production` |
 | `FRONTEND_ORIGIN` | your frontend URL. Comma-separate if several. **This is what locks CORS** |
 | `DEMO_MODE` | `true` for the pitch. `false` for anything holding real data |
+| `AUTH_RATE_LIMIT` | leave unset (`true`). `false` exists for the test suite only |
+
+The frontend's `Content-Security-Policy` (`frontend/vercel.json`, `connect-src`) names the
+backend origin. If the Railway URL changes, change it there too, or every API call is
+blocked by the browser with no server-side trace.
 
 `PORT` is injected by Railway — do not set it.
 
