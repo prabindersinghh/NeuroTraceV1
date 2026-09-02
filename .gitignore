@@ -111,3 +111,8 @@ graphify-out/
 *.avi
 *.mkv
 *.webm
+
+# A repomix bundle is the whole tracked tree in one text file. That includes the privacy
+# test's own bait and the DECISIONS entry quoting the removed regulatory claim, so tracking
+# it trips INV-11 and INV-13 for the same reason graphify-out/ is not tracked. Regenerable.
+repomix-output.xml
