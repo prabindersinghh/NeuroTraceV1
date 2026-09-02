@@ -163,3 +163,54 @@ def test_the_model_records_what_breaks_the_fixed_position_assumption():
     for column in ("session_position", "elapsed_seconds_at_task_start",
                    "intensity", "paused_before_task"):
         assert column in ModuleResult.__table__.c, column
+
+
+# --------------------------------------------------------------- INV-12, stated as it is
+#: Daily-protocol tasks that `registry` marks `"caregiver"` in `task_devices`. Listing them
+#: is not approval; it is refusing to let the set change unnoticed.
+#:
+#: The registry author reasoned about exactly this (registry.py, above `romberg_eyes_closed`):
+#: eyes closed with a narrowed base is a deliberate destabilisation, so "caregiver-filmed" and
+#: "phone-propped" were split apart precisely because collapsing them "put a fall risk on the
+#: base tier". The requirement is therefore declared and intentional.
+#:
+#: What is NOT settled is enforcement. Every tier in `TIER_CAPABILITIES` — including
+#: TIER_1_PHONE, one person alone with a phone — declares a `caregiver` capability, and
+#: nothing anywhere verifies one is actually present when the protocol is served. INV-12 says
+#: fall-risk tasks never appear in an unsupervised schedule; today that holds by declaration
+#: rather than by a check.
+#:
+#: The existing `test_the_fall_risk_tasks_are_never_in_the_daily_protocol` cannot see this.
+#: It tests `session_plan.SUPERVISED_ONLY`, which omits `romberg_eyes_closed`,
+#: `standing_sway`, `tandem_stance` and `timed_up_and_go` — so it passes while two of them sit
+#: in the daily protocol. Neither that list nor `registry.SUPERVISED_TASKS` is read at
+#: runtime; both exist only to be asserted against, and they answer different questions.
+KNOWN_CAREGIVER_TASKS_IN_DAILY_PROTOCOL: frozenset[str] = frozenset({
+    "romberg_eyes_closed",
+    "tandem_stance",
+})
+
+
+def test_no_caregiver_requiring_task_joins_the_daily_protocol_unnoticed():
+    """Pin the set against the registry's own per-task requirement, not a hand-kept list.
+
+    Deliberately an equality. A task arriving needs a clinical decision rather than a list
+    update, and a task leaving is also something someone should notice — M9's lateral features
+    come from these, so dropping one silently un-lateralises the posterior domain.
+    """
+    from app.exam.registry import MODULES
+
+    requires_caregiver = {
+        task
+        for module in MODULES.values()
+        for task, capability in getattr(module, "task_devices", {}).items()
+        if capability == "caregiver"
+    }
+    present = {step.task for step in PROTOCOL} & requires_caregiver
+
+    assert present == KNOWN_CAREGIVER_TASKS_IN_DAILY_PROTOCOL, (
+        "the caregiver-requiring tasks in the daily protocol changed.\n"
+        f"  now present:  {sorted(present)}\n"
+        f"  recorded:     {sorted(KNOWN_CAREGIVER_TASKS_IN_DAILY_PROTOCOL)}\n"
+        "INV-12 says fall-risk tasks never appear in an unsupervised schedule."
+    )

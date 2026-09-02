@@ -1,0 +1,46 @@
+"""Public, lightweight surface for the isolated Awaaz ASR training runtime.
+
+This package verifies governance approvals and deliberately cannot create them.  There is
+no signing helper here, and none in ``runtime``: the private Ed25519 key belongs to the
+clinical approver and lives offline.  See ``docs/GOVERNANCE_KEYS.md``.
+"""
+
+from .runtime import (
+    APPROVED_PURPOSE,
+    PreflightError,
+    PrivacySafeRuntimeError,
+    RuntimeConfig,
+    SplitPlan,
+    TrainingRuntimeError,
+    build_group_phrase_disjoint_split,
+    build_phrase_disjoint_split,
+    main,
+    normalise_phrase,
+    preflight_real_training,
+    run_preflight,
+    run_synthetic_smoke,
+    run_training,
+    sha256_directory,
+    sha256_file,
+    verify_governance_receipt,
+)
+
+__all__ = [
+    "APPROVED_PURPOSE",
+    "PreflightError",
+    "PrivacySafeRuntimeError",
+    "RuntimeConfig",
+    "SplitPlan",
+    "TrainingRuntimeError",
+    "build_group_phrase_disjoint_split",
+    "build_phrase_disjoint_split",
+    "main",
+    "normalise_phrase",
+    "preflight_real_training",
+    "run_preflight",
+    "run_synthetic_smoke",
+    "run_training",
+    "sha256_directory",
+    "sha256_file",
+    "verify_governance_receipt",
+]

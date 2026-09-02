@@ -81,12 +81,25 @@ cd frontend && npm test      # JS <-> Python parity
 |---|---|
 | `test_engine.py` | median/MAD robustness, practice-session discard, quality rejection, lock condition, robust z, RCI, CUSUM accumulation and decay, both gates, IMPROVING, every confounder |
 | `test_exam_modules.py` | each of M1–M20 on a fixture; the forehead-sparing discriminator; that the asymmetry ratio separates unilateral from bilateral slowing; the Daily Pulse capture budget |
+| `test_exam_modules.py` | each of the 21 modules in `exam/registry.py::MODULES` on a fixture (this row said M1-M20 while the registry held 21; counted, not assumed); the forehead-sparing discriminator; that the asymmetry ratio separates unilateral from bilateral slowing; the Daily Pulse capture budget (D-045 corrected the earlier figure) |
 | `test_safety_slm.py` | FAST in three languages, acute bypass, forbidden-language sweep over the shipped source, band-match assertion, no-numbers-to-the-model assertion, guardrail fallback |
 | `test_session_pipeline.py` | the 21-day simulation; single-domain never alerts; two domains do; improvement never alerts; quality and identity annotation; a rogue model cannot change the band |
 | `test_api.py` | every endpoint, the enrolment gate, access control, FAST on every finalize, the acute bypass over HTTP |
 | `test_train.py` | the metrics contract (refuses to write without limitations), grouped CV, and the asymmetry claim as a regression test |
 | `test_migration.py` | `alembic upgrade head` produces exactly the models' schema, and downgrades cleanly |
 | `parity.test.ts` | the on-device extractors match Python feature-for-feature to 1e-9 relative |
+| `test_asr_runtime.py` + `test_asr_runtime_gates.py` | the Awaaz ASR training runtime's governance, path, privacy and split gates. The gates file is mutation-tested: 28 single-line deletions of safety checks in a scratch copy each turn the suite red |
+| `test_awaaz_offline_rl.py` (76 tests) | the offline policy comparison — deterministic-logger refusal, absolute config floors, the doubly-robust gate in both directions, deficient-support detection, the conservative improvement criterion, and that the deployment/experiment/claim flags cannot be set |
+| `test_awaaz_policy_logging.py` (24 tests) | the production logging contract — that stored rows round-trip into `LoggedFeedback` the safety gate accepts, that the recorded propensity is the probability of the action actually logged, that empirical sampling frequencies match the recorded propensities, and that a stored row carries no forbidden field or value |
+
+The full backend suite reports 1191 collected, 1188 passed, 3 expected skips and 0 failed,
+exit 0, measured after the policy-logging and offline-evaluation work described below
+landed, so it includes the current contents of `test_awaaz_policy_logging.py` (24
+tests) or `test_awaaz_offline_rl.py` (76). The post-change total has not been recorded here
+yet. The frontend reports 51 tests across 8 files. **Judge success by exit code**, and run
+the backend suite in the background — it takes longer than a ten-minute foreground timeout,
+and two concurrent pytest processes starve each other in a way that looks exactly like a
+hang.
 
 ### Regenerating the parity fixture
 
@@ -121,18 +134,92 @@ deterministic engine as one additional *feature*.
 
 ```bash
 cd backend
-python -m app.ml.train.asymmetry_discriminator                        # needs no data
-python -m app.ml.train.voice_dysarthria_clf --data data/torgo --controls data/librispeech
-python -m app.ml.train.rhythm_irregularity_clf --data data/physionet_af
+python -m app.ml.train.asymmetry_discriminator                       # synthetic only
+python -m app.ml.train.voice_dysarthria_clf \
+  --data ../data/raw/torgo \
+  --controls ../data/raw/librispeech/LibriSpeech/train-clean-100
+python -m app.ml.train.rhythm_irregularity_clf \
+  --data ../data/raw/physionet_af2017/training2017
 ```
 
-Place downloaded corpora under `backend/data/`. Access notes are in [DATASETS.md](DATASETS.md);
-TORGO needs registration and mPower needs a Synapse account.
+Place downloaded corpora under the repository-level, gitignored `data/raw/` directory.
+Access notes are in [DATASETS.md](DATASETS.md); TORGO needs registration and mPower needs a
+Synapse account.
 
 Each run writes `app/ml/train/artifacts/<model>.metrics.json` with ROC-AUC, sensitivity,
 specificity, confusion matrix, split method and a limitations note. `Metrics.save` refuses
 to write a file without limitations — an unqualified number is the thing this project exists
-not to produce.
+not to produce. Every tracked metrics artifact also carries a machine-readable `synthetic`
+boolean, so no artefact can be mistaken for evidence by a reader who skipped the prose.
+
+The model cards in `docs/models/` are rendered from those artifacts:
+
+```bash
+python -m app.ml.train.render_model_cards            # rewrite all five cards
+python -m app.ml.train.render_model_cards --check    # exit 1 if any card is stale
+```
+
+Only the `## Purpose` section is hand-written. It lives between
+`<!-- hand-written: purpose -->` markers and is carried through untouched; a card missing
+those markers fails closed rather than being regenerated without its prose.
+
+## The Awaaz ASR training runtime
+
+`app/ml/train/asr_runtime/` is a fail-closed LoRA/PEFT training runtime for MMS / Wav2Vec2
+CTC. **It has never trained anything.** No adapter exists and no WER or intelligibility
+number exists for Awaaz ASR anywhere in this repository; do not create one from the fact
+that the code runs. The synthetic dry-run writes a private manifest and no model and no
+clinical metric — the output directory contains exactly `manifest.json`.
+
+Real training additionally requires a consented archive, local base-model weights, a signed
+purpose-specific governance receipt, a GPU host, and a held-out human intelligibility
+evaluation. None of those exist here. Seven audit findings against this module are open and
+listed in `COMPLETION_CHECKLIST.md`; the first of them is that the receipt scheme proves
+possession of a key rather than approval by a reviewer (D-059).
+
+Its dependencies are optional and separate:
+
+```bash
+pip install -r requirements-train.txt      # a training host only, never the API
+```
+
+That file has **never been installed or verified in this repository** and is deliberately
+not part of `requirements.lock.txt`. torch, transformers and peft are lazily imported
+through `importlib` inside one function, so importing the runtime and booting the app both
+load zero heavy modules. Do not add numpy to it: numpy is pinned at 1.26.4 for the mediapipe
+numpy-1.x ABI, and a resolver that upgrades it to satisfy a torch build breaks FaceMesh with
+a segfault that looks like nothing to do with training. D-058.
+
+## Offline policy evaluation
+
+`app/ml/rl/` compares a candidate Awaaz ranker against a logged behaviour policy, offline
+and on synthetic logs only:
+
+```bash
+.venv/bin/python -m app.ml.rl.simulate --events 60 --seed 42
+```
+
+It is ranking-only and cannot generate words, alter confirmation, trigger speech, or touch
+an emergency flow.
+
+The production schema now records what an estimate needs. `awaaz_policy_events` is an
+append-only table holding one candidate-ranking decision per row — the opaque slate, the
+logged action, the probability the behaviour policy assigned to *that* action, the policy
+version, the confirmation outcome, and `logged_on` as a DATE. It has no patient column and no
+foreign key, deliberately (D-062). Two endpoints write it — the decision endpoint refuses
+without a purpose-specific `policy_logging_consent`, and the outcome endpoint can only close a
+decision that already passed that check — and **nothing calls them**: the frontend confirmation loop has to mint event ids and report outcomes before a
+single row exists. No real event has ever been logged.
+
+The ranker randomises to make the log identifiable at all, bounded to candidates within 0.05
+of the best score, at most two alternatives at a flat 0.08, top keeping at least 0.84, and
+only on the confirmation path (D-063). That is not online learning: nothing reads these rows
+at runtime and no ranking adapts. Watch `max_deterministic_event_rate` — it defaults to 0.10,
+so if real slates have a clear winner more than a tenth of the time the whole log is refused,
+and nobody has measured the near-tie rate.
+
+Read `PLAN_RL.md` before touching it, `docs/RESEARCH_OPE.md` for what the literature does and
+does not support, and D-057 / D-063 / D-064 / D-066 before relaxing a gate.
 
 ---
 
@@ -159,6 +246,8 @@ Send the access token as `Authorization: Bearer <token>`.
 | `GET` | `/clinic/patients` | clinician | Ranked by sustained deviation |
 | `POST` | `/clinic/alerts/{id}/acknowledge` | clinician | |
 | `GET` | `/report/{pid}` | non-patient | Structured exam report + method note |
+| `POST` | `/awaaz/{pid}/policy/decision` | patient access | Draw which near-tied candidate to show first and remember its propensity — consent-gated, confirmation path only, idempotent |
+| `POST` | `/awaaz/{pid}/policy/outcome` | patient access | Close that decision with what the patient did — one INSERT, then immutable |
 | `GET` | `/audit/{pid}` | non-patient | Access trail |
 | `POST` | `/demo/seed` | — (gated) | Build the demo dataset |
 | `GET` | `/health` | — | Liveness + database |

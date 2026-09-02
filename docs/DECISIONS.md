@@ -1227,7 +1227,7 @@ architecture, for a gain that a CSP mostly delivers on its own. The tokens stay 
 only (`frontend/vercel.json`; MediaPipe needs `wasm-unsafe-eval` and blob workers, verified
 under the policy with both models loading and zero violations).
 
-What changed instead, server-side (`backend/app/routers/auth.py`, migration `0021`): every
+What changed instead, server-side (`backend/app/routers/auth.py`, migration `0023`): every
 refresh token is recorded by `jti`; `/auth/refresh` rotates it and refuses a token already
 used — a replay revokes every live token of that account, because a token presented twice
 has been copied; `/auth/logout` revokes; `/auth/password` re-hashes and revokes every other
@@ -1238,6 +1238,330 @@ provider (`AUTH_EVENTS`), so the shell signs out instead of failing every reques
 reload; a refresh that cannot reach the server does NOT sign out — an offline patient stays
 signed in, which the airplane-mode demo depends on.
 
+---
+
+## Awaaz contract-foundation branch — decisions D-066 … D-077
+
+Merged from `anish/awaaz-contract-foundation` on 2026-09-02. **These twelve decisions were
+renumbered on integration.** The branch was cut before `main` reached D-057, and both lines
+then used D-054 and D-057..D-067 for entirely different decisions — `main`'s D-057 is the
+ORM/migration enum split, the branch's D-057 was the logging-policy refusal. Keeping both
+would have put two different decisions under one number, which is the one thing this file
+cannot afford.
+
+`main`'s numbering is authoritative and unchanged. The branch's decisions were moved up:
+
+| on the branch | here |
+|---|---|
+| D-054 | **D-066** |
+| D-057 | **D-067** |
+| D-058 | **D-068** |
+| D-059 | **D-069** |
+| D-060 | **D-070** |
+| D-061 | **D-071** |
+| D-062 | **D-072** |
+| D-063 | **D-073** |
+| D-064 | **D-074** |
+| D-065 | **D-075** |
+| D-066 | **D-076** |
+| D-067 | **D-077** |
+
+D-061 … D-065 are deliberately left free: the unmerged `feat/journey-experience` branch
+already carries decisions under those numbers, and renumbering the branch being integrated
+is cheaper than renumbering one that is already written and verified.
+
+Cross-references inside the Awaaz planning documents (`PENDING_WORK.md`, `PRD_AWAAZ.md`,
+`PLAN_RL.md`, `RESEARCH_OPE.md`, and the model cards) still cite the ORIGINAL branch
+numbers. They are resolvable through the table above; they were left alone deliberately,
+because those same numerals also name `main`'s own decisions in the shared documents and a
+blind sweep would have silently rewritten the wrong ones.
+
+---
+**D-066 · 2026-08-29 · Offline board access is a user-bound snapshot, not stale authorization.**
+Emergency speech already survives a dead backend, but normal phrase tiles disappeared and
+left a person with only the red crisis path. A successfully authenticated board load now
+saves its text/profile snapshot in a separate origin-scoped IndexedDB store keyed by both
+the authorized user and patient. Only a transport failure (`status=0`) may recover it. A
+401, 403, or 404 is an authoritative access decision and clears the board even when an
+older snapshot exists; patient ID alone is never treated as possession of the cache.
+
+The snapshot does not make network state changes offline. Phrase taps remain available
+because the person explicitly chose those words, but the UI states that browser speech was
+only attempted and the tap was not saved. Free text, practice capture, settings, phrase
+editing, and listener-capability actions are disabled until reconnection, while local
+emergency setup and deletion remain local. The installed browser voice is not promoted to
+the same guarantee as the caregiver-recorded emergency WAV: only the latter has a playback
+receipt and self-test proving it started on that device.
+
+*The five entries below were first written as D-055 through D-069 and renumbered to
+D-067 through D-071 once `main` was fetched and found to have already taken D-055 and D-056.
+The commit messages on this branch were already pushed and still cite the original numbers:
+their D-055 is this D-067, their D-056 is D-068, and their D-067 — the governance-receipt
+decision — is D-069. Recorded because a reader following a commit reference would otherwise
+land on somebody else's decision.*
+
+**D-067 · 2026-08-31 · A logging policy that did not randomise is refused, not estimated.**
+The offline comparison in `app/ml/rl/` previously accepted a log in which the behaviour
+policy assigned probability 1.0 to the action it took, and returned
+`candidate_better_offline` with a tight confidence interval. That answer was not merely
+optimistic, it was unidentifiable: under π₀(a|x)=1 no alternative action was ever
+observable, positivity fails, the importance weight collapses to π(a|x), and
+self-normalised inverse propensity scoring reduces to a re-weighted average of the same
+logged actions, so the bootstrap interval measures reward noise and nothing
+counterfactual. An unidentifiable comparison presented as a strong positive is the worst
+failure this module can have, because it looks like evidence.
+
+The gate is a rate rather than an any-1.0 test. A genuinely randomising logger can
+legitimately emit a certainty — a slate that screening left with one option, a hard
+tie-break — and an occasional certain event carries no information without invalidating the
+log. More than `max_deterministic_event_rate` (default 10%) of events at or above
+`deterministic_probability_threshold` (default 0.999) now returns the blocker
+`logging_policy_is_deterministic` and no estimate at all.
+
+The same reasoning made two other things non-negotiable. `EvaluationConfig` remains tunable
+but only toward strictness: absolute floors in `__post_init__` mean a reviewer can demand
+more events or a larger minimum effect, and nobody can construct a config that accepts a
+two-event comparison. And `deployment_allowed`, `online_experiment_allowed` and
+`clinical_claim_allowed` became read-only properties that always return false rather than
+fields, so no caller and no `dataclasses.replace` can produce a result object that appears to
+grant deployment.
+
+**D-068 · 2026-08-31 · The ASR training stack is optional and never an API dependency.**
+`app/ml/train/asr_runtime/` needs torch, transformers and peft. Putting those in
+`requirements.txt` would make roughly 2.5 GB of wheels a dependency of a web server that
+never calls them and would couple every Railway deploy to a stack only an offline training
+host uses. They live in `requirements-train.txt`, which is deliberately not part of
+`requirements.lock.txt` and has never been installed or verified in this repository — the
+pins there satisfy the minimums the runtime enforces, and are a starting point to be checked
+on the first real training host rather than a tested lock.
+
+The separation is enforced in code, not by convention. The heavy packages are pulled in
+through `importlib` inside `_load_ml_runtime()`, which runs only after every governance and
+data gate has passed, so importing `app.ml.train.asr_runtime` and booting the FastAPI app
+both load zero heavy modules. numpy is deliberately absent from the training requirements: it
+is pinned at 1.26.4 for the mediapipe 0.10.14 wheels on the numpy 1.x ABI, and a resolver
+that upgraded it to satisfy a torch build would break FaceMesh in a way that surfaces as a
+segfault in the face pipeline rather than as anything about training.
+
+**D-069 · 2026-08-31 · Training is gated on a receipt that does not yet prove governance.**
+Real adapter training refuses to start without a signed, purpose-specific receipt naming the
+patient, the archive hash and the base-model hash, and every one of those is compared with a
+constant-time check before any media is read. This is the right shape: the expensive mistake
+is training on a corpus nobody approved, and the cheap one is a job that will not start.
+
+The receipt is a symmetric HMAC, `governance_receipt_signature` is exported public API, and
+the pinned trust root comes from environment variables the same operator sets. So an
+operator can mint their own approval, and what the signature actually proves is possession
+of a key the training host already holds — not that a reviewer looked at anything. This is
+recorded here rather than quietly relied upon, because the entire fail-closed design leans
+on that one artifact. The fix is an asymmetric scheme, Ed25519 with the public key pinned in
+tracked config, so signing authority and running authority are different capabilities. Until
+then no receipt should be described anywhere as evidence of approval.
+
+**D-070 · 2026-08-31 · Private corpora and model artifacts are gitignored by allow-list.**
+The rules for `data/` and `artifacts/` were deny-lists, and a deny-list of a category this
+open fails the moment someone adds a filename nobody thought of. It already had:
+`data/raw/` and `data/exports/` were ignored while `data/mpower/` was not, even though the
+asymmetry trainer's own docstring tells you to put real mPower records there; and under
+`artifacts/**` a rule that enumerated weight extensions left a patient `.wav`, a `.gguf`, a
+`tokenizer.json` and any README stageable inside a per-patient adapter directory. A patient
+WAV under `artifacts/` is precisely the INV-1 failure this repository exists to prevent.
+
+Both directories are now ignored wholesale and the reviewed files are named back in:
+`data/README.md`, and the five `*.metrics.json` fixtures. Subdirectories stay ignored
+entirely, because git does not descend into an excluded directory, so a per-patient adapter
+directory cannot be re-admitted by accident. Awaaz export matching was widened at the same
+time, since a rule that knew only about `.tar` let `.tar.gz`, `.tgz` and `.zip` through. The
+inversion was checked against the tracked file list so that no file already under version
+control was dropped.
+
+**D-071 · 2026-08-31 · Model cards are generated except one hand-written section.**
+The claim that the model cards could not drift was written in this repository before any
+generator existed, which is exactly the kind of unsupported statement the documents are
+supposed to catch. `python -m app.ml.train.render_model_cards` now renders each card from
+its `artifacts/<model>.metrics.json`, `--check` exits 1 on a stale card, and a test
+re-renders all five and compares byte-for-byte, so every number, split description and
+limitation in a card comes from the artifact rather than from someone's memory of it.
+
+Purpose could not be generated, because it is the one part of a card that explains what the
+model is for and why it is allowed to exist, and a metrics file does not contain that. It is
+hand-written between `<!-- hand-written: purpose -->` markers and carried through untouched;
+a card missing the markers fails closed rather than being regenerated without its prose. The
+honest statement is therefore narrower than the one it replaces: the generated body cannot
+drift, and the Purpose section still can, because nothing generates it.
+
+**D-072 · 2026-08-31 · The policy-event log has no patient column and no foreign key.**
+`awaaz_policy_events` is the first table in this schema that does not hang off `patients.id`.
+That is the decision, not an omission. A row that can be joined to a patient is a per-person
+record of what that person tried to say and which of the machine's guesses they refused, and
+an offline UX estimate does not justify keeping one. The cost is real and is stated wherever
+the table is described: without a patient column there is no patient-level split before
+fitting, so the repeated-speaker dependence in `offline.LIMITATIONS` cannot be addressed from
+this log, and cohort or subgroup work on this table is not possible at all.
+
+The same reasoning fixes the time column. `logged_on` is a DATE rather than a timestamp
+because a microsecond timestamp would join effectively one-to-one onto `audit_log.ts` and
+`utterance_log.ts`, both of which do carry `patient_id`; the join would hand back the exact
+identifier the table was built without, and no column of this table would have had to name a
+patient for that to happen. A day is the coarsest granularity that still supports a retention
+or deletion sweep, and it is indexed for that purpose only. For the same reason the two audit
+rows the router writes record the actor, the patient, the policy id and the consent fact but
+deliberately omit the event id and every candidate id, so the audit trail stays a many-to-many
+neighbour of the log rather than an exact join key into it.
+
+The table is append-only (INV-8): the sampled decision waits in process memory until the
+interaction finishes, so the outcome is known before the single INSERT and no code path
+updates or deletes a row. A restart drops pending decisions and those events are never
+logged, which is the correct direction to fail — losing an observation is recoverable,
+inventing one is not. The decision endpoint refuses without a purpose-specific
+`policy_logging_consent` flag per PRD §10.2, and the outcome endpoint carries no consent field
+of its own because it can only close a decision that already passed that check; both are
+idempotent in either direction.
+
+One merge hazard is recorded here rather than discovered later. The migration's revision id
+is the descriptive `0014_awaaz_policy_events` rather than `0014`, because `main` already
+carries a different migration claiming revision `0014`, and this branch and `main` have
+independently used 0012, 0013 and 0014 for unrelated changes. Two revisions sharing an id do
+not merge; alembic resolves one and silently loses the other's ordering. A unique id makes
+this a branch point that can be told to merge instead of a collision nothing can see. The
+overlapping ids on the other three numbers are still unresolved and will need attention when
+this branch meets `main`.
+
+**D-073 · 2026-08-31 · Randomisation is bounded to near-ties and confined to confirmation.**
+IPS and SNIPS are unidentifiable under a deterministic logger, and `compare_policies` refuses
+such a log outright (D-067). Refusing bad logs is not the same as being able to produce good
+ones, so the ranker now samples which near-tied candidate it shows first and records the
+probability of the action it actually showed. That is the only way a product event can ever
+carry a usable denominator, and it is a change to what a patient sees, so it is bounded three
+ways rather than tuned.
+
+A candidate is explorable only when its score is within `NEAR_TIE_MARGIN` (0.05) of the best
+score. A clearly-better candidate is therefore never displaced — not rarely, never, because a
+worse candidate is assigned probability zero and cannot be drawn. Each of at most two
+alternatives carries a flat `EXPLORATION_EPSILON` of 0.08 and the top-ranked candidate keeps
+the remainder, so it holds at least 0.84 in the widest configuration the bound permits and
+`ExplorationBound` refuses any configuration leaving it below 0.75. Flat-per-alternative
+rather than epsilon-split-k is deliberate: a split shrinks as the slate grows and would push
+propensities under the estimator's own `MIN_LOGGED_PROBABILITY_FLOOR`, where a single event
+becomes a hundredfold weight.
+
+The third bound is where the safety argument actually lives. The decision endpoint refuses to
+randomise unless the caller declares the slate goes to the confirmation loop. Reordering
+options a person is about to read and choose between is a presentation change they override
+with a tap; reordering something that will be spoken without confirmation would be
+exploration on a disabled person's mouth, which INV-9 forbids and which no offline estimate
+is worth. The emergency flow is never ranked and never reaches this code.
+
+This is not online learning and must not be described as such. Nothing reads the logged rows
+at runtime, no model is fitted from them, and no ranking adapts from feedback. The
+distribution is a fixed function of scores the ranker already produced, and the rows exist so
+that a human can later run an offline comparison.
+
+**D-074 · 2026-08-31 · No cluster key is added; the clustering bias is made unmissable.**
+The reported interval comes from an event-level i.i.d. bootstrap, and Awaaz events are not
+i.i.d.: one speaker contributes many correlated events, so under positive intra-cluster
+correlation the true interval is wider than the printed one and the error runs in the
+optimistic direction — towards declaring the candidate better, which is the one direction
+this package exists to prevent. The textbook repair is a cluster bootstrap, which needs a
+per-speaker key. `docs/RESEARCH_OPE.md` §3.2 makes the case for one.
+
+We are not adding one, and the reason is not convenience. A grouping id that is stable across
+one speaker's events IS a pseudonymous patient identifier. The property that makes it useful
+for clustering — that all of one person's events collide — is exactly the property that makes
+it a re-identification handle, and no hashing, salting or truncation separates the two, since
+a per-event salt would destroy the very collisions the cluster bootstrap exists to exploit.
+"Opaque but stable per person" is a distinction of presentation, not of function, and INV-11
+is about function.
+
+So the limitation is not repaired; it is made impossible to skip. It is the FIRST entry of
+`offline.LIMITATIONS`, it names the direction of the bias rather than hedging, it is repeated
+in `IMPROVEMENT_DOES_NOT_GUARANTEE` so it travels on the decision object a reviewer reads,
+`UNCERTAINTY_BASIS` states the resampling scheme on every result, and
+`clustered_uncertainty_available` is a read-only property that is permanently false. A reader
+cannot obtain the verdict without the terms. Correcting this properly is a logging-contract
+and governance decision — `PLAN_RL.md` steps 3 to 5 — and not a change the estimator may make
+on its own authority.
+
+**D-075 · 2026-08-31 · The phrase board is a safety fallback, not the worst reward available.**
+`rewards.score_logged_action` charged the repair cost for a `phrase_board_fallback` on top of
+the negative preference the fallback already earned, so a fallback scored −1.0 while a plain
+rejection scored −0.8. Using the phrase board was therefore the single most negative outcome
+the reward function could assign. The phrase board is the designed safety route: PRD §20
+lists it as the mitigation for the device-performance risk and §22 makes offline phrase-board
+operation a condition of done. The reward function was pointing the ranker at keeping a
+patient wrestling with poor candidates rather than letting them reach the board that exists
+to protect them — optimising against the product's own safety design.
+
+Repair cost now applies only to a correction, where the patient engaged with the candidate
+and then had to fix it, which is real interaction cost that the reward should see. Fallback
+and rejection both score −0.8. This is a correctness fix, not a weight change: no tuning of
+`RewardConfig` could have removed the inversion, because both terms fired on the same event.
+
+It is recorded as a decision rather than a bugfix line because of how it was found. Nothing
+optimises this reward today, so nothing had exploited it and no test failed. It surfaced only
+from writing the literature brief in `docs/RESEARCH_OPE.md` and tracing the reward by hand
+for each outcome value (§7.4). A reward function nobody is currently optimising is exactly
+the kind of code that is never read adversarially, and that is the argument for reading it
+adversarially before something does.
+
+**D-076 · 2026-08-31 · Doubly robust is opt-in in both directions and never the headline.**
+PRD §11 defers doubly-robust estimation until a separately validated outcome model exists.
+That deferral is now enforced by the type system rather than by prose. The doubly-robust path
+accepts an outcome model only as a `ValidatedOutcomeModel`, which cannot be constructed
+without an `OutcomeModelValidation` whose six fields all lack defaults, so
+`OutcomeModelValidation()` is not a sentence anyone can write by accident; the gate then
+refuses a non-grouped split, a model fitted on the evaluation events, a holdout below fifty
+events, and a calibration error above 0.25, and those two constants take no configuration
+because there is no reviewer who may reasonably demand less evidence before a reward model is
+allowed to stand in for observed rewards.
+
+The request is symmetric and a mismatch blocks the whole comparison. Asking for doubly robust
+without a model must not quietly return a SNIPS number under a DR heading, and supplying a
+model without asking must not switch the estimator underneath a caller who did not request
+it; neither confusion has a safe default, so neither gets one. SNIPS stays the headline
+structurally rather than by convention: `headline_estimator` is a read-only property
+returning `snips` and the diagnostic's `role` is a read-only `secondary_diagnostic_only`.
+Neither is a constructor parameter, so no caller and no `dataclasses.replace` can promote the
+diagnostic. If the two numbers disagree, that disagreement is the finding, and the response
+is to improve the outcome model and re-review rather than to relabel which number was
+primary.
+
+Two related tightenings landed under the same reasoning. Support deficiency is now detected
+rather than assumed absent — `overlap_rate` measures whether the candidate covers the logger,
+which is the opposite question, so a separate quantity flags candidate mass sitting where the
+log provably could not have looked, gated at 2% by default under a 10% ceiling. What it
+computes is a provable lower bound on support deficiency, not a measurement of it: a zero
+means "nothing provable", never "nothing there", and the exact quantity needs slate-wide
+propensities the contract does not yet record. And the improvement criterion is no longer the
+single inequality `lower > minimum_effect`. It now requires the interval's lower bound to
+clear the minimum effect, the point estimate to clear it too, and the improvement to survive
+deleting the single most influential logged event — because a self-normalised ratio with one
+dominant weight is that event's reward with extra steps, and a bootstrap that redraws that
+event in most replicates carries its influence in the body of the distribution rather than in
+the tail where anyone would look for it.
+
+**D-077 · 2026-08-31 · Supersedes D-069: the governance receipt is Ed25519, not an HMAC.**
+D-069 recorded that training was gated on a receipt that did not actually prove governance,
+because the scheme was a symmetric HMAC, the signing function shipped with the package that
+verified it, and the pinned trust root arrived in environment variables the training operator
+set. It closed by saying no receipt should be described anywhere as evidence of approval
+until that changed. It has now changed, and D-069 is superseded rather than edited.
+
+Receipts are Ed25519. Verifying no longer confers the ability to sign, and
+`governance_receipt_signature` is gone from the shipped package entirely — the thing that
+checks an approval no longer carries the thing that mints one. The public halves live in a
+tracked `governance_public_keys.json` located by a module constant, never an environment
+variable and never a command-line argument, so the trust root cannot be swapped without a
+reviewed commit. Both halves were necessary: Ed25519 alone would have left the operator free
+to generate a keypair and point the runtime at their own public key, which is the same bypass
+in a better algorithm.
+
+The file ships with no keys, so the runtime refuses every real command with
+`governance_trust_root_missing`. That is the correct state and not a placeholder to be
+cleared casually: adding a key is a governance act, and whoever can run training must not be
+the person who commits it, or the boundary the file exists to create is defeated. The
+procedure for a clinical owner to generate a keypair offline and publish only the public half
+is in `docs/GOVERNANCE_KEYS.md`. What remains open is custody, not code.
 ### D-078 — the reader's language wins over the patient record, everywhere
 
 **2026-09-02.** The FAST card was rendered server-side from `patient.languages[0]`, so a
@@ -1279,7 +1603,7 @@ claim: the point that was an unmeasured morning is the same point that becomes a
 day, and a household. Geometry is `lib/cortex.ts` (pure, tested in Node); the renderer is
 `components/landing/CortexField.tsx`.
 
-**D-039 and D-064 are upheld, not overridden.** The brief that prompted this asked for
+Both **D-039** and **D-064** are upheld here, not overridden. The brief that prompted this asked for
 three.js and GSAP by name. Both were declined for the reasons already written down: ~150 kB
 and ~90 kB gzipped on a signed-out page that shares a service worker with a clinical PWA
 already precaching 45 MB of models, for a page whose own argument is that this product runs

@@ -1,0 +1,10 @@
+# Isolated, reproducible dependency contract for the governance-gated ASR trainer.
+# Keep this file in sync with runtime.PINNED_DEPENDENCY_VERSIONS and upgrade only
+# after the compatibility, privacy, and deterministic-smoke suites pass together.
+numpy==1.26.4
+torch==2.4.1
+transformers==4.44.2
+peft==0.12.0
+accelerate==0.34.2
+safetensors==0.4.5
+cryptography==43.0.1

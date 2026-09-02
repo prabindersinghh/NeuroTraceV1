@@ -14,7 +14,7 @@ its gate), `DATA_INVENTORY.md` (what is stored and how it is deleted), `SBOM.md`
 `/auth/register`, refreshed at `/auth/refresh`. Lifetimes are configurable and exposed
 (without secrets) at `/auth/config`.
 
-**Refresh tokens are recorded, rotated and revocable** (migration 0021, `refresh_tokens`).
+**Refresh tokens are recorded, rotated and revocable** (migration 0023, `refresh_tokens`).
 Every issued refresh token's `jti` has a row; `/auth/refresh` refuses a token with no row,
 an expired one, or a revoked one, and on success marks the presented token revoked
 (`replaced_by_jti`) and issues a fresh pair. A **revoked token being presented is treated

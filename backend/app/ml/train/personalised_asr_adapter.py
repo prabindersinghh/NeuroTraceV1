@@ -1,5 +1,10 @@
 """Per-patient ASR adapter — LoRA fine-tuning from harvested pairs. Awaaz D3/D5.
 
+IMPLEMENTATION STATUS: this executable is a synthetic drift/spec simulation, not a LoRA
+trainer. ``--archive`` verifies the complete local export and then exits without writing an
+adapter or non-synthetic metrics. That fail-closed boundary remains until real base-model
+fine-tuning, evaluation splits, registry, and deployment are implemented.
+
 WHY A PER-PATIENT ADAPTER AT ALL
 --------------------------------
 General ASR fails on dysarthric speech in a specific and dangerous way: it produces output
@@ -46,7 +51,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import DATA_DIR, MODELS_DIR, SEED
+from .awaaz_archive import verify_awaaz_training_archive
+from .common import MODELS_DIR, SEED, redact_patient_label
 
 #: LoRA rank. Small on purpose: a few million parameters trains on ~200 utterances without
 #: memorising them, and ships to a phone.
@@ -187,13 +193,25 @@ def main() -> None:
     parser.add_argument("--pairs", type=int, default=200)
     parser.add_argument("--day", type=int, default=90)
     parser.add_argument("--out", type=Path, default=MODELS_DIR)
-    parser.add_argument("--data", type=Path, default=DATA_DIR / "raw" / "harvested")
+    parser.add_argument(
+        "--archive", type=Path,
+        help="Verify a local Awaaz tar. Real LoRA training is intentionally not implemented.",
+    )
     args = parser.parse_args()
 
-    rng = np.random.default_rng(SEED)
-    synthetic = not args.data.exists()
+    if args.archive is not None:
+        verified = verify_awaaz_training_archive(args.archive)
+        print(f"verified {len(verified.pairs)} local Awaaz pairs; no media was extracted")
+        raise SystemExit(
+            "Real LoRA training is not implemented. No adapter or non-synthetic metrics "
+            "were written."
+        )
 
-    spec = build_spec(args.patient, args.pairs)
+    rng = np.random.default_rng(SEED)
+    synthetic = True
+
+    # The artifact is tracked, so it records a redacted label, never what was typed.
+    spec = build_spec(redact_patient_label(args.patient), args.pairs)
 
     # Day-30 reference: the patient's settled post-stroke speech.
     reference_pairs = synthetic_pairs(rng, args.pairs, error_rate=0.20)
@@ -205,7 +223,7 @@ def main() -> None:
     live_view = synthetic_pairs(rng, args.pairs, error_rate=0.21)  # adapter compensating
 
     report = DriftReport(
-        patient_id=args.patient, day=args.day,
+        patient_id=redact_patient_label(args.patient), day=args.day,
         wer_live=evaluate(live_view),
         wer_frozen=evaluate(frozen_view),
         wer_frozen_at_reference=wer_reference,
@@ -232,16 +250,18 @@ def main() -> None:
             "conversation, and the two must not be compared.",
         ],
     }
-    if synthetic:
-        payload["limitations"].insert(0, (
-            "SYNTHETIC RUN. No harvested audio was present, so the figures below are "
-            "generated and mean nothing clinically. They demonstrate the pipeline only."))
+    payload["limitations"].insert(0, (
+        "SYNTHETIC RUN. The executable trainer is a simulation scaffold; the figures below "
+        "are generated and mean nothing clinically. A real archive is verified and then "
+        "refused until LoRA fine-tuning is implemented."))
 
     args.out.mkdir(parents=True, exist_ok=True)
     path = args.out / "personalised_asr_adapter.metrics.json"
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print(f"  patient          {args.patient}")
+    # Patient-derived identifiers are allowed inside the private artifact contract but
+    # never in process output, which is routinely copied into shared CI/host logs.
+    print("  patient          [redacted]")
     print(f"  pairs            {args.pairs}")
     print(f"  WER live         {report.wer_live:.3f}")
     print(f"  WER frozen       {report.wer_frozen:.3f}  (day-{REFERENCE_ADAPTER_DAY} "

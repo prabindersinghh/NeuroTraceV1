@@ -18,6 +18,15 @@ import type {
   AshaHousehold,
   AshaSessionResult,
   AuthResponse,
+  AwaazCard,
+  AwaazCardCreatePayload,
+  AwaazEmergencyResult,
+  AwaazEmergencyPayload,
+  AwaazPolicyDecision,
+  AwaazPolicyDecisionPayload,
+  AwaazPolicyOutcomePayload,
+  AwaazReviewLabelPayload,
+  AwaazSpeakPayload,
   Battery,
   ClinicPatientRow,
   Dashboard,
@@ -361,18 +370,52 @@ export const api = {
   // --- Awaaz ---
   awaazBoard: (patientId: string) =>
     request<import("./types").AwaazBoard>(`/awaaz/${patientId}/board`),
-  awaazSpeak: (patientId: string, payload: {
-    card_id?: string; text?: string; candidates?: string[]; lang?: string;
-  }) =>
+  awaazAddCard: (patientId: string, payload: AwaazCardCreatePayload) =>
+    request<AwaazCard>(`/awaaz/${patientId}/cards`, {
+      method: "POST", json: payload,
+    }),
+  awaazDeleteCard: (cardId: string) =>
+    request<{ detail: string }>(`/awaaz/cards/${cardId}`, { method: "DELETE" }),
+  awaazSpeak: (patientId: string, payload: AwaazSpeakPayload) =>
     request<import("./types").AwaazSpeakResult>(`/awaaz/${patientId}/speak`, {
       method: "POST", json: payload,
     }),
-  awaazEmergency: (patientId: string) =>
-    request<unknown>(`/awaaz/${patientId}/emergency`, { method: "POST" }),
+  /**
+   * Candidate-ranking policy logging (AWA-FR-014). Opaque ids and scores only — never
+   * text. The decision endpoint answers 409 when `policy_logging_consent` is absent, which
+   * is an expected state and not an error the patient may ever be shown.
+   */
+  awaazPolicyDecision: (patientId: string, payload: AwaazPolicyDecisionPayload) =>
+    request<AwaazPolicyDecision>(`/awaaz/${patientId}/policy/decision`, {
+      method: "POST", json: payload,
+    }),
+  awaazPolicyOutcome: (patientId: string, payload: AwaazPolicyOutcomePayload) =>
+    // The response is the stored row; the client has no use for it beyond the ack.
+    request<unknown>(`/awaaz/${patientId}/policy/outcome`, {
+      method: "POST", json: payload,
+    }),
+  awaazUpdateProfile: (patientId: string, payload: { endpoint_silence_seconds?: number }) =>
+    request<import("./types").AwaazProfile>(`/awaaz/${patientId}/profile`, {
+      method: "PATCH", json: payload,
+    }),
+  awaazDeleteAudioPair: (captureId: string) =>
+    request<{ detail: string }>(`/awaaz/audio-pairs/${captureId}`, { method: "DELETE" }),
+  awaazEmergency: (patientId: string, payload: AwaazEmergencyPayload) =>
+    request<AwaazEmergencyResult>(`/awaaz/${patientId}/emergency`, {
+      method: "POST", json: payload,
+    }),
 
   awaazMintListener: (patientId: string, payload: { display_name: string; lang?: string; ttl_minutes?: number }) =>
     request<{ token: string; display_name: string; expires_at: string; path: string }>(
       `/awaaz/${patientId}/listener`, { method: "POST", json: payload }),
+  awaazActiveListener: (patientId: string) =>
+    request<{
+      active: boolean; token?: string; lang?: string; expires_at?: string; path?: string;
+    }>(`/awaaz/${patientId}/listener`),
+  awaazRevokeListener: (token: string) =>
+    request<{ detail: string }>(`/awaaz/listener/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
   /** No auth: the unguessable token IS the capability. */
   listenerView: (token: string) =>
     request<{
@@ -382,9 +425,9 @@ export const api = {
     }>(`/awaaz/listen/${token}`, { auth: false }),
   awaazReviewQueue: (patientId: string) =>
     request<{ items: unknown[]; total_candidates: number }>(`/awaaz/${patientId}/review`),
-  awaazLabel: (utteranceId: string, correctedText: string) =>
+  awaazLabel: (utteranceId: string, payload: AwaazReviewLabelPayload) =>
     request<{ detail: string }>(`/awaaz/review/${utteranceId}`, {
-      method: "POST", json: { corrected_text: correctedText },
+      method: "POST", json: payload,
     }),
 
   saveIdentitySignature: (patientId: string, signature: unknown) =>

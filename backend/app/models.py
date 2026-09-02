@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -886,7 +886,7 @@ class PhraseCard(Base):
     slot: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
     #: Cards sort by use, so what matters surfaces without the patient hunting for it.
     use_count: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
-    #: Emergency cards are pre-rendered and cached, and never reordered away.
+    #: Emergency cards stay pinned; pre-rendered offline audio is a separate pending asset.
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
@@ -942,10 +942,26 @@ class UtteranceLog(Base):
     confirmed: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     confidence: Mapped[float | None] = mapped_column(sa.Float)
     is_emergency: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
-    #: The caregiver's evening correction (D4). (text -> corrected_text) IS the labelled
-    #: training pair for the personalised adapter; nothing else stores it.
+    #: The caregiver's verified text label (D4). It becomes a training target only after
+    #: an audio capture is associated with this utterance.
     corrected_text: Mapped[str | None] = mapped_column(sa.String(500))
     reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    #: Identifier of a WAV retained in this browser's on-device IndexedDB vault. This is a
+    #: receipt/link only: the database has no media column and the API never receives bytes.
+    audio_capture_id: Mapped[str | None] = mapped_column(
+        sa.String(36), unique=True, index=True)
+    audio_duration_seconds: Mapped[float | None] = mapped_column(sa.Float)
+    #: Integrity metadata lets a future exporter verify the local WAV before training.
+    audio_sha256: Mapped[str | None] = mapped_column(sa.String(64))
+    audio_size_bytes: Mapped[int | None] = mapped_column(sa.Integer)
+    #: Explicit consent actor and time. A recording without these fields is not a pair.
+    audio_consent_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="SET NULL"))
+    audio_consent_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    #: Truth about the local copy, updated when the person revokes and deletes it.
+    audio_retained_on_device: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    audio_deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     ts: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), default=utcnow,
         nullable=False)
@@ -1238,3 +1254,136 @@ class CaretakerChannel(Base):
     @property
     def active(self) -> bool:
         return self.revoked_at is None
+# ---------------------------------------------------------- Awaaz policy events (AWA-FR-014)
+# The counterfactual-logging contract. `app/ml/rl/` can already compare candidate-ranking
+# policies offline, but until this table existed NO product event was eligible: production
+# recorded no slate, no policy version, no propensity, and no confirmation outcome, so every
+# importance weight would have had an unknown denominator. PLAN_RL.md calls this out and
+# PRD_AWAAZ.md §11 makes it a precondition for any real offline evaluation.
+#
+# WHAT IS DELIBERATELY NOT HERE, and why it is not an oversight (INV-11):
+#   * no patient_id and no foreign key of any kind. Every other table in this schema hangs
+#     off `patients.id`; this one must not, because a row that can be joined to a patient is
+#     a per-person record of what they tried to say. The cost is real and is stated in the
+#     report: without a patient column we cannot split by patient before fitting, so the
+#     repeated-speaker dependence in `offline.LIMITATIONS` stays unaddressed. That is the
+#     correct trade -- an offline UX estimate does not justify a re-identifiable log.
+#   * no transcript, no candidate text, no lang, no card_id. Candidate contents live in the
+#     client's slate behind opaque UUIDs and never cross this boundary.
+#   * no audio, no audio hash, no capture id, no duration. INV-1 already forbids the bytes;
+#     a hash is still a per-utterance identifier that joins to `utterance_log`.
+#   * no latency, dwell, tap timing, or session duration. `rewards.RewardConfig` refuses to
+#     score them because they measure disability and fatigue; storing them would invite it.
+#   * no clinical outcome, band, or score.
+#   * no wall-clock timestamp. `logged_on` is a DATE. A microsecond timestamp here would
+#     join one-to-one against `audit_log.ts` and `utterance_log.ts`, both of which carry
+#     `patient_id` -- which would hand back the identifier this table exists without. A day
+#     is the coarsest granularity that still supports retention and deletion sweeps, and the
+#     audit rows this router writes deliberately omit the event id so the join stays
+#     many-to-many rather than exact.
+#
+# Append-only (INV-8): there is no code path that UPDATEs or DELETEs a row here. The outcome
+# is known before the single INSERT because the sampled decision waits in process memory
+# (see `routers/awaaz.py`) until the interaction finishes; a restart drops pending decisions
+# and those events are simply never logged, which errs the right way.
+
+#: Must equal `app.ml.rl.contracts.MAX_CANDIDATES`. Duplicated rather than imported so the
+#: request path does not pull the analysis package in at boot; `test_awaaz_policy_logging.py`
+#: asserts the two stay equal, because a slate this table accepts and the contract rejects
+#: would be silently unloggable.
+MAX_POLICY_CANDIDATES = 8
+MIN_POLICY_CANDIDATES = 2
+
+
+class PolicyEventOutcome(str, enum.Enum):
+    """The patient's explicit signal, and nothing else.
+
+    `no_explicit_signal` is recorded rather than dropped: an event whose row only exists
+    when the patient reacted would make the log a sample selected on the outcome. These rows
+    carry no reward and cannot become `ExplicitFeedback` -- inactivity is not a preference
+    -- so the exporter skips them, and the skip rate is itself a number a reviewer must look
+    at before believing an estimate.
+    """
+
+    selected = "selected"
+    rejected = "rejected"
+    corrected = "corrected"
+    phrase_board_fallback = "phrase_board_fallback"
+    no_explicit_signal = "no_explicit_signal"
+
+
+class PolicyFeedbackActor(str, enum.Enum):
+    """Values mirror `app.ml.rl.contracts.FeedbackActor` exactly.
+
+    Recorded because a caregiver tapping on the patient's behalf is not the patient's
+    communication preference, and the offline gate refuses those rows. Without the column we
+    would be unable to tell the two apart and would have to refuse the whole log.
+    """
+
+    patient = "patient"
+    caregiver = "caregiver"
+
+
+class AwaazPolicyEvent(Base):
+    """One candidate-ranking decision, its logged action, and its propensity."""
+
+    __tablename__ = "awaaz_policy_events"
+
+    #: The opaque event UUID the client minted when it rendered the slate. It is the primary
+    #: key AND the idempotency key: a retried outcome POST lands on the same row instead of
+    #: creating a second observation of one decision, which would double-count that event in
+    #: every importance-weighted sum.
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, **_UUID_PK)
+    #: The behaviour policy's version slug, constrained to `contracts._POLICY_ID`'s shape.
+    #: An estimate is only ever about a named logger; mixing two versions in one log without
+    #: being able to say so is how a "policy improvement" turns out to be a release boundary.
+    behavior_policy_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    #: The full offered slate as opaque candidate UUIDs, in the order the patient saw them:
+    #: index 0 is rank 0, which is the logged action. The whole slate is required, not just
+    #: the chosen one, because the evaluated policy has to be able to put mass on the actions
+    #: that were available and were not taken -- that support set is what overlap means.
+    candidate_action_ids: Mapped[list] = mapped_column(sa.JSON, nullable=False)
+    #: The action actually shown first. May differ from `top_ranked_action_id` after
+    #: exploration; that difference is the entire point of the table.
+    logged_action_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, nullable=False)
+    #: pi_0(logged_action_id | context) -- the probability THIS policy assigned to the action
+    #: it actually logged, never the top-ranked action's probability. `compare_policies`
+    #: divides by this number, so the wrong quantity here mis-specifies every weight and both
+    #: estimates come back wrong with no blocker firing.
+    logged_action_probability: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    #: What the scorer ranked first before sampling. Stored so a re-rank is declarable and
+    #: the contract's arithmetic check (a non-top action cannot carry probability above 0.5)
+    #: can run at export time -- the last point at which a mis-written propensity is visible.
+    top_ranked_action_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, nullable=False)
+    #: False when the slate had a single clear winner and no near-tie to explore among, so
+    #: the probability above is exactly 1.0. Flagged rather than refused: an occasional
+    #: certain event is legitimate, and `offline.py` fails the whole log closed with
+    #: `logging_policy_is_deterministic` once too many of them accumulate.
+    randomised: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    #: The coarse four-value enum `app/awaaz/safety.py` already uses. The offline gate admits
+    #: only `dysarthria_dominant`, so without it every row would be ineligible. Four buckets
+    #: over a whole cohort is not an identifier.
+    speech_profile: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    #: The confirmation gate as it stood for this event. Nothing here changes it; these are
+    #: an observation of INV-9, which is why an inconsistent combination is refused at write
+    #: time rather than stored and filtered later.
+    confirmation_required: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    confirmation_observed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    output_spoken: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    #: Always false from the product path -- the emergency flow is never ranked, never
+    #: randomised, and never logged here. The column exists so the exported record is total
+    #: and so any future writer has to set it deliberately rather than by omission.
+    emergency: Mapped[bool] = mapped_column(
+        sa.Boolean, default=False, nullable=False)
+    feedback_actor: Mapped[str] = mapped_column(sa.String(16), nullable=False)
+    outcome: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    #: Which candidate the patient chose, when they chose one. An opaque slate member.
+    selected_action_id: Mapped[uuid.UUID | None] = mapped_column(sa.Uuid)
+    #: Candidates explicitly dismissed. Negative evidence about the logged action, and the
+    #: only way "they scrolled past it" is distinguishable from "they never looked".
+    rejected_action_ids: Mapped[list] = mapped_column(
+        sa.JSON, default=list, nullable=False)
+    #: UTC day, not a timestamp. See the section note above: finer resolution reconstructs
+    #: the patient link this table is built to not have. Indexed because the only query this
+    #: table ever needs to serve besides a full export is a retention sweep.
+    logged_on: Mapped[date] = mapped_column(sa.Date, index=True, nullable=False)

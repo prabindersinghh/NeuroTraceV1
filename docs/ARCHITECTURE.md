@@ -11,7 +11,8 @@ right and this file is a bug.
   Patient's phone (PWA, offline-first)
     camera / mic / touch  ──► MediaPipe + DSP, ON DEVICE
                                     │
-                              raw media discarded here ◄── INV-1
+                       exam media discarded here ◄── INV-1
+                 consented Awaaz practice WAVs stay in local IndexedDB
                                     │
                               features (numbers only)
                                     │
@@ -55,6 +56,13 @@ per-request cost to users with intermittent data.
 | Frontend | React + Vite + TypeScript, PWA | — |
 | On-device vision | MediaPipe Tasks Vision 1.0.1, wasm from `node_modules` | D-010 |
 | ML training | Batch GPU by the hour, nightly/weekly | D-004 |
+| ASR adapter training | LoRA/PEFT over MMS / Wav2Vec2 CTC, offline host only, never run | D-058, D-059 |
+| Offline policy evaluation | SNIPS over synthetic logs, ranking only, no deployment path | D-057 |
+
+The last two rows describe code that exists and has produced nothing. No ASR adapter has
+been trained and no policy is authorised for any deployment path. Their dependencies are
+optional by design: `requirements-train.txt` is separate from `requirements.txt` and the
+heavy packages are lazily imported, so the API process never needs the GPU stack.
 
 ---
 
@@ -83,8 +91,29 @@ per-request cost to users with intermittent data.
 | `awaaz_profiles` | speech profile and auto-speak settings — gates INV-9 |
 | `phrase_cards` | the patient's phrase board |
 | `voice_samples` | voice-clone **metadata only**; the audio never enters this database |
-| `utterance_log` | what was spoken, and whether it was confirmed first |
+| `utterance_log` | what was spoken, whether confirmed; optional local-audio UUID/duration/integrity/consent/deletion receipt, never media |
+| `awaaz_policy_events` | one candidate-ranking decision, its logged action and that action's propensity — **no patient column and no foreign key** |
 | `audit_log` | append-only |
+
+`awaaz_policy_events` is the one table that does not hang off `patients.id`, deliberately
+(D-062). It exists so that a candidate ranker can be compared against the logged behaviour
+policy offline, and a row that could be joined to a patient would be a per-person record of
+what that person tried to say and which guesses they refused. `logged_on` is a DATE rather
+than a timestamp for the same reason: a microsecond timestamp would join effectively
+one-to-one onto `audit_log.ts` and `utterance_log.ts`, both of which do carry `patient_id`.
+The audit rows written alongside a policy event record the actor, patient, policy id and
+consent fact but deliberately omit the event id and every candidate id. The table is
+append-only under INV-8, and it holds no transcript, candidate text, audio, hash, latency,
+dwell time or clinical outcome.
+
+The cost of that design is real and belongs next to it: with no patient column there is no
+patient-level split before fitting, so repeated-speaker dependence in the offline estimator
+cannot be corrected from this log, and cohort or subgroup analysis on this table is not
+possible. Note also that the INV-11 test suite does not cover this table — INV-11 is tested
+against tracked repository content, not against schema shape — so the absence of a patient
+column here is held by review, by `test_awaaz_policy_logging.py`'s forbidden-field scan over
+a serialised row, and by the migration containing no foreign key, rather than by an invariant
+test named INV-11.
 
 **Face identity lives in `patients.calibration_json["identity"]`** — six ratios between
 bone-structure landmarks plus their spreads, computed on device at enrolment. No image, no
@@ -234,6 +263,17 @@ frames are converted to numbers on the phone and discarded. *This is the product
 privacy claim.* Since D-052 it is **structural**: `python-multipart` — the library FastAPI
 needs in order to accept an upload at all — is deliberately not a dependency, so a future
 `UploadFile` parameter fails at import rather than at review.
+has a binary column. Exam audio, video and frames are converted to numbers and discarded.
+Explicitly-consented Awaaz practice WAVs are the narrow local-retention case: they remain in
+origin-scoped IndexedDB and the server receives only a receipt that can be marked deleted.
+They leave protected app storage only when a person explicitly downloads an
+integrity-checked local archive after a sensitive-data warning; the app never sends that
+archive over a network. Server-side tooling that reads such an archive must keep it where it
+was: the verifier's snapshot used `tempfile.mkstemp` with no `dir=` and copied every
+consented WAV into the shared system temp directory, so it now snapshots beside the archive
+instead. Deleting the IndexedDB copy cannot revoke an already downloaded
+file, and the UI says so before export.
+*This is the product's central privacy claim.*
 
 **INV-2 · No ALERT without a lateralised finding.** Stroke is lateralised; Parkinson's is
 symmetric. Without this a PD patient generates our highest-confidence alert.

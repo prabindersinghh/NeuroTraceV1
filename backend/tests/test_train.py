@@ -12,6 +12,7 @@ motor module down to tap rate, this fails.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -22,8 +23,13 @@ from app.ml.train.asymmetry_discriminator import (
     _auc_for,
     _rate_matched_strong_hand,
     synthetic_cohort,
+    main as asymmetry_main,
 )
-from app.ml.train.common import SEED, Metrics, binary_metrics, grouped_cv_predict
+from app.ml.train.common import DATA_DIR, SEED, Metrics, binary_metrics, grouped_cv_predict
+from app.ml.train.voice_clone import main as voice_clone_main
+
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 # --------------------------------------------------------------------------- metrics
@@ -43,7 +49,8 @@ def test_binary_metrics_computes_the_standard_quantities():
 def test_metrics_refuses_to_publish_a_number_without_its_limits(tmp_path: Path):
     """An unqualified metric is exactly what this project exists not to produce."""
     common = dict(
-        model="m", dataset="d", n_total=10, n_positive=5, n_negative=5, n_groups=5,
+        model="m", synthetic=True, dataset="d", n_total=10, n_positive=5,
+        n_negative=5, n_groups=5,
         split="GroupKFold", roc_auc=0.9, sensitivity=0.9, specificity=0.9,
         precision=0.9, accuracy=0.9, threshold=0.5,
         confusion={"tp": 4, "fp": 1, "tn": 4, "fn": 1}, features=["a"],
@@ -60,7 +67,8 @@ def test_metrics_refuses_to_publish_a_number_without_its_limits(tmp_path: Path):
 
 def test_metrics_summary_leads_with_sensitivity_and_prints_limits():
     m = Metrics(
-        model="m", dataset="d", n_total=10, n_positive=5, n_negative=5, n_groups=5,
+        model="m", synthetic=True, dataset="d", n_total=10, n_positive=5,
+        n_negative=5, n_groups=5,
         split="GroupKFold", roc_auc=0.9, sensitivity=0.88, specificity=0.7,
         precision=0.8, accuracy=0.8, threshold=0.5,
         confusion={"tp": 4, "fp": 1, "tn": 4, "fn": 1}, features=["a"],
@@ -69,6 +77,48 @@ def test_metrics_summary_leads_with_sensitivity_and_prints_limits():
     text = m.summary()
     assert "sensitivity  0.880" in text
     assert "tiny cohort" in text
+
+
+def test_private_data_root_is_the_repository_gitignored_data_directory():
+    assert DATA_DIR == REPO / "data"
+
+
+def test_tracked_metric_artifacts_publish_machine_readable_data_status():
+    artifacts = REPO / "backend" / "app" / "ml" / "train" / "artifacts"
+    for path in sorted(artifacts.glob("*.metrics.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert isinstance(payload.get("synthetic"), bool), path.name
+        card = REPO / "docs" / "models" / f"{payload['model']}.md"
+        text = card.read_text(encoding="utf-8")
+        expected = "**Data: SYNTHETIC FIXTURES**" if payload["synthetic"] else "**Data: REAL DATA**"
+        assert expected in text, f"{card.name} contradicts {path.name}"
+
+
+def test_voice_clone_refuses_to_call_an_existing_path_training_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    out = tmp_path / "out"
+    sample = tmp_path / "consented-sample"
+    sample.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "voice_clone", "--data", str(sample), "--out", str(out),
+    ])
+    with pytest.raises(SystemExit, match="training is not implemented"):
+        voice_clone_main()
+    assert not out.exists()
+
+
+def test_mpower_flag_never_turns_a_synthetic_run_into_a_real_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    out = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", [
+        "asymmetry_discriminator", "--mpower", str(tmp_path / "missing"),
+        "--out", str(out),
+    ])
+    with pytest.raises(SystemExit, match="no metrics artifact was written"):
+        asymmetry_main()
+    assert not out.exists()
 
 
 # --------------------------------------------------------------------------- split
@@ -151,3 +201,50 @@ def test_the_rate_match_is_derived_not_hardcoded():
     factor = _rate_matched_strong_hand()
     assert 0.4 < factor < 1.0
     assert LESION_ASYMMETRY_RANGE[0] < LESION_ASYMMETRY_RANGE[1]
+
+
+# --------------------------------------------------------------------------- model cards
+def test_every_model_card_is_a_faithful_render_of_its_artifact():
+    """The cards claim they cannot drift from the metrics. This is that claim's teeth.
+
+    Only the rendered region is pinned — the hand-written `## Purpose` block is carried
+    through from the file, so this compares like with like and still fails if a number, a
+    limitation, the data status or the footer diverges from the JSON.
+    """
+    from app.ml.train.render_model_cards import (
+        CARDS_DIR, MODELS_DIR, HAND_WRITTEN_BEGIN, render_all,
+    )
+
+    rendered = render_all()
+    assert {p.stem for p in rendered} == {p.name.removesuffix(".metrics.json")
+                                          for p in MODELS_DIR.glob("*.metrics.json")}
+    # No card without an artifact — a card nobody can regenerate is prose again.
+    assert {p.name for p in CARDS_DIR.glob("*.md")} == {p.name for p in rendered}
+
+    for path, text in rendered.items():
+        assert path.read_text(encoding="utf-8") == text, (
+            f"{path.name} is stale — run `python -m app.ml.train.render_model_cards`"
+        )
+        assert HAND_WRITTEN_BEGIN in text
+
+
+def test_the_renderer_carries_every_limitation_and_refuses_an_empty_one():
+    from app.ml.train.render_model_cards import MODELS_DIR, render_card
+
+    for artifact in sorted(MODELS_DIR.glob("*.metrics.json")):
+        payload = json.loads(artifact.read_text(encoding="utf-8"))
+        card = render_card(payload, "## Purpose\nstub")
+        for limitation in payload["limitations"]:
+            assert f"- {limitation}" in card, artifact.name
+        expected = "**Data: SYNTHETIC FIXTURES**" if payload["synthetic"] else "**Data: REAL DATA**"
+        assert expected in card
+
+    with pytest.raises(ValueError, match="limitations"):
+        render_card({"model": "m", "synthetic": True, "limitations": []}, "## Purpose\nstub")
+
+
+def test_a_card_missing_its_hand_written_markers_fails_rather_than_inventing_a_purpose():
+    from app.ml.train.render_model_cards import hand_written_purpose
+
+    with pytest.raises(ValueError, match="hand-written"):
+        hand_written_purpose("# Model card — `m`\n\n## Purpose\nno markers here\n")

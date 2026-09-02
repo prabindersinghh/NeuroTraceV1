@@ -16,10 +16,10 @@
  * because a listener reads one line.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
-import { api } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { ApiError, api } from "@/lib/api";
+import { LISTENER_COPY, normaliseListenerLanguage } from "@/lib/awaazListener";
 
 interface ListenerView {
   display_name: string;
@@ -31,16 +31,26 @@ interface ListenerView {
 
 export default function Listen() {
   const { token = "" } = useParams();
-  const { t } = useI18n();
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<ListenerView | null>(null);
   const [dead, setDead] = useState(false);
+  const [connectionProblem, setConnectionProblem] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setView(await api.listenerView(token));
-    } catch {
-      // Expired, revoked, or never existed — all the same to a stranger, on purpose.
-      setDead(true);
+      setDead(false);
+      setConnectionProblem(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        // Expired, revoked, or never existed — all the same to a stranger, on purpose.
+        setDead(true);
+        setConnectionProblem(false);
+      } else {
+        // Keep the last good view during a transient outage. A dropped poll is not proof
+        // that the caregiver revoked the capability or that its TTL elapsed.
+        setConnectionProblem(true);
+      }
     }
   }, [token]);
 
@@ -53,19 +63,45 @@ export default function Listen() {
     return () => clearInterval(t);
   }, [load]);
 
+  const lang = normaliseListenerLanguage(view?.lang ?? searchParams.get("lang"));
+  const copy = LISTENER_COPY[lang];
+
+  useEffect(() => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = lang;
+    return () => { document.documentElement.lang = previous; };
+  }, [lang]);
+
   if (dead) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
-        <h1 className="text-title-fluid">{t("listenExpired")}</h1>
-        <p className="text-muted-foreground">{t("listenExpiredBody")}</p>
+      <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
+        {/* The listener page is opened by a stranger with no account and no language
+            preference of ours, so `lang` comes from the link and the copy is localised
+            (branch). The type token stays the app's own — reverting it to a raw size
+            would take this one screen back to the pre-DESIGN_LANGUAGE styling. */}
+        <h1 className="text-title-fluid">{copy.expiredTitle}</h1>
+        <p className="text-muted-foreground">
+          {copy.expiredBody}
+        </p>
       </main>
     );
   }
 
   if (!view) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
-        <p className="text-muted-foreground">{t("connecting")}</p>
+      <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-muted-foreground">
+          {connectionProblem ? copy.connectionFailed : copy.connecting}
+        </p>
+        {connectionProblem && (
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="min-h-12 rounded-xl border border-line px-5 font-medium"
+          >
+            {copy.retry}
+          </button>
+        )}
       </main>
     );
   }
@@ -76,27 +112,36 @@ export default function Listen() {
   );
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
+    <main lang={lang} className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
+      {connectionProblem && (
+        <p role="alert" className="rounded-xl border border-alert/40 bg-alert-soft p-3 text-sm text-alert">
+          {copy.updatesPaused}
+        </p>
+      )}
       <header>
-        <p className="text-sm text-muted-foreground">{t("listenWith")}</p>
+        <p className="text-sm text-muted-foreground">{copy.listeningWith}</p>
         <h1 className="text-title-fluid">{view.display_name}</h1>
       </header>
 
       {/* The single most useful thing to say right now. */}
       <section className="rounded-2xl border-2 border-accent/40 bg-accent/5 p-5">
-        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">{t("listenHowToHelp")}</p>
+        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">{copy.howToHelp}</p>
         <p className="mt-2 text-xl leading-snug">{view.coaching.line}</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">{t("listenSaid")}</p>
+        <p className="text-sm text-muted-foreground">{copy.whatTheySaid}</p>
         {view.recent.length === 0 ? (
           <p className="rounded-xl border border-line p-4 text-muted-foreground">
-            {t("listenNothing")}
+            {copy.nothingYet}
           </p>
         ) : (
           view.recent.map((u) => (
-            <p key={u.ts} className="rounded-xl border border-line p-4 text-xl">
+            <p
+              key={u.ts}
+              lang={normaliseListenerLanguage(u.lang)}
+              className="rounded-xl border border-line p-4 text-xl"
+            >
               {u.text}
             </p>
           ))
@@ -104,8 +149,8 @@ export default function Listen() {
       </section>
 
       <footer className="mt-auto space-y-2 pt-6 text-xs text-muted-foreground">
-        <p>{t("listenExpiresIn").replace("{n}", String(minutesLeft))}</p>
-        <p>{t("listenPrivacy")}</p>
+        <p>{copy.expiresIn(minutesLeft)}</p>
+        <p>{copy.privacy}</p>
       </footer>
     </main>
   );

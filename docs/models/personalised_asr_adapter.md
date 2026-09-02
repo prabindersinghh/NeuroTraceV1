@@ -2,10 +2,12 @@
 
 **Data: SYNTHETIC FIXTURES**
 
+<!-- hand-written: purpose -->
 ## Purpose
 Per-patient LoRA adapter over a frozen base, for Awaaz.
 
 **Crucially:** Decoding deliberately reduces language-model weight. General ASR fails on dysarthric speech by producing fluent, confident, WRONG output; we want acoustic faithfulness.
+<!-- end hand-written -->
 
 ## Training data
 - Dataset: n/a
@@ -15,10 +17,10 @@ Per-patient LoRA adapter over a frozen base, for Awaaz.
 
 ## Limitations
 
-- SYNTHETIC RUN. No harvested audio was present, so the figures below are generated and mean nothing clinically. They demonstrate the pipeline only.
+- SYNTHETIC RUN. The executable trainer is a simulation scaffold; the figures below are generated and mean nothing clinically. A real archive is verified and then refused until LoRA fine-tuning is implemented.
 - Trained on one patient's own speech. It is not a general model and must never be evaluated as one.
 - The frozen-adapter drift metric assumes the day-30 recordings were representative. A patient already deteriorating at day 30 has a compromised reference, exactly as with the frozen baseline in the monitoring engine.
 - Decoding uses a deliberately low language-model weight (0.15). Transcripts will read as less fluent than a general ASR system's, which is the intended trade: fluent-and-wrong is the failure mode this exists to avoid.
 - Word error rate on a phrase-board vocabulary is not word error rate on open conversation, and the two must not be compared.
 
-*Generated from `personalised_asr_adapter.metrics.json`. Re-run the training script to update — this card is derived, so it cannot drift from the metrics it describes.*
+*Generated from `personalised_asr_adapter.metrics.json` by `backend/app/ml/train/render_model_cards.py`; re-run the training script, then the renderer, to update. Only the `## Purpose` section above is hand-written — every other line on this page, including each limitation, is rendered from that artifact, and a test re-renders this file and compares it byte for byte. The rendered part cannot drift from the metrics it describes.*

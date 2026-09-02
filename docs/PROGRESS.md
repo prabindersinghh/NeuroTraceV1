@@ -302,7 +302,7 @@ pa → en → hi with the FAST card and emergency-number labels following each t
 
 **Previously (2026-09-02, later):** **Authentication hardened and redesigned, on branch
 `feat/journey-experience` — NOT merged, NOT deployed.** Server: refresh tokens rotated and
-revocable (migration `0021`, `refresh_tokens`), `POST /auth/logout`, `POST /auth/password`,
+revocable (migration `0023`, `refresh_tokens`), `POST /auth/logout`, `POST /auth/password`,
 in-memory rate limits on login/register/refresh, a common-password check, the dev JWT
 secret refused outside development/test, security headers (D-065). Client: three real
 defects fixed — a rejected refresh never signed the shell out, an offline reload signed the
@@ -314,7 +314,7 @@ eye toggle, strength meter, two-role group. `vercel.json` now carries a CSP veri
 MediaPipe loading under it. Verified: backend full suite exit 0, vitest 208/208, tsc, build,
 oxlint baseline, a headless walkthrough of every flow at seven widths, the CSP against
 `dist/` (see the CHANGELOG entry). **Not run: a physical phone, the deployed instance.**
-To ship: merge `--no-ff`, deploy backend (migration `0021` runs at boot), deploy frontend,
+To ship: merge `--no-ff`, deploy backend (migrations `0021`, `0022` and `0023` run at boot), deploy frontend,
 run `verify_deploy.sh`. **Remaining, honestly:** no self-service password reset or email
 verification — there is no email provider in this system, and a fake "forgot password"
 link would be worse than none; family accounts still await the invite flow; bearer tokens
@@ -335,6 +335,44 @@ words were spoken and immediately cancelled. Design proposal:
 Comprehensive session driven in headless Chromium at seven widths including a mid-session
 reload (see the 2026-09-02 CHANGELOG entry). **Not run on a physical phone.** To ship:
 merge `--no-ff`, deploy the frontend, run `verify_deploy.sh`; no migration.
+
+**Previously:** 2026-09-02 · **Awaaz contract-foundation merged into `main` — NOT
+pushed, NOT deployed.** 36 commits reconciled onto main after a ~90-commit divergence.
+**Migration head is now `0022`** (`0021` on-device audio receipts, `0022` Awaaz policy
+events). Two defects were caught before the commit and are the reason this was not a
+`-X theirs` merge: duplicate revision ids `0012`/`0013` across the two lines would have left
+Alembic with two heads and **crash-looped the container at boot**, and the branch's
+`0012_repair_role_constraint` would have rebuilt the `users.role` CHECK without
+`caretaker`, **silently breaking family access** — it was dropped, because main's `0018`
+already does that repair correctly.
+
+What the merge adds, all inside the existing `/awaaz/:patientId`, `/listen/:token` and
+`/review/:patientId` routes (no new route; `App.tsx` untouched): a `tel:108` link and
+long-press activation on the emergency path, an on-device recorded emergency phrase, an
+offline board snapshot in IndexedDB, consented on-device practice capture with a local tar
+export, personal phrase management, listener-link recovery and revocation, a Hindi/Punjabi
+listener page, and an opt-in policy-event log with no patient column and a 120-day sweep.
+Plus a dormant ML/RL and ASR-governance subsystem that no route can reach.
+
+**INV-1 re-verified, not assumed:** no upload endpoint, no media column in the migrated
+schema, audio never leaves IndexedDB, and main's deletion of `python-multipart` survived
+the merge.
+
+**Watch before deploying:** `services/emergency_notifications.py` is wired into
+`POST /awaaz/{id}/emergency`. It fails closed while `EMERGENCY_SMTP_HOST`/`_FROM` are blank,
+but setting them makes it send real email containing a patient name and GPS coordinates.
+`cryptography==43.0.1` is a new runtime requirement.
+
+Verified: backend full suite exit 0; `alembic upgrade head` clean to a single head with a
+caretaker INSERT proven to still work; frontend `tsc`, **vitest 180/180**, build, oxlint;
+and a headless drive of sign-in, dashboard, Awaaz board and review queue with zero console
+errors and the dashboard visually unchanged. **Not run:** a physical phone, the deployed
+instance, `verify_deploy.sh`.
+
+**Interacts with `feat/journey-experience`** (unmerged, carries the journey + auth work):
+that branch adds its own migration `0023_refresh_tokens` and decisions D-061..D-065. Its
+migration must be renumbered to `0023` before it merges; its decision numbers were
+deliberately left free here.
 
 Previous: 2026-09-01 · **Frontend revamp + dashboard instrumentation DEPLOYED**
 (pushed to `main`, Railway `verify_deploy.sh` 7/7, Vercel serving the new bundle — verified
@@ -403,6 +441,109 @@ Daily Pulse session** (caught by oxlint, not by any test). `UX-CHANGES.md` carri
 deferred items; **automatic offline drain is flagged there as a data-integrity fix, not
 polish** — an offline queue that never drains loses sessions silently. ·
 Earlier: two independent sessions landed the same day
+**Last updated:** 2026-08-31 · Awaaz now records the events an offline policy comparison
+needs, and has never recorded one. The new append-only `awaaz_policy_events` table stores one
+row per candidate-ranking decision — opaque event id (also the idempotency key), behaviour
+policy id, the full offered slate as opaque ids in rank order, the logged action, the
+probability the policy assigned to the action it actually logged, the top-ranked action, a
+`randomised` flag, the coarse speech profile, the three INV-9 confirmation booleans, the
+emergency flag, the feedback actor, the outcome enum, the selected and rejected actions, and
+`logged_on` as a DATE. It has no patient column and no foreign key at all, and the date is a
+day rather than a timestamp because a microsecond timestamp would join one-to-one onto
+`audit_log.ts` and `utterance_log.ts`, which do carry `patient_id`. The cost is real: no
+patient-level split before fitting is possible, so repeated-speaker dependence stays
+unaddressed and cohort work on this table cannot be done. The ranker now randomises among
+candidates within 0.05 of the best score — at most two alternatives at a flat 0.08 each, top
+keeps at least 0.84, confirmation path only — because IPS and SNIPS are unidentifiable under a
+deterministic logger. It is not online learning: nothing reads these rows at runtime and no
+ranking adapts. Nothing calls the two endpoints yet — the decision endpoint refuses without a
+purpose-specific logging consent and the outcome endpoint only closes a decision that passed
+it — so the frontend confirmation
+loop must still mint event ids and report outcomes before any row exists; no real product event
+has ever been logged and no policy is authorised for anything. A reward bug found by writing
+`docs/RESEARCH_OPE.md` is fixed: `phrase_board_fallback` was charged repair cost on top of its
+negative preference and scored −1.0 against a plain rejection's −0.8, making the designed
+safety fallback the worst outcome the reward could assign; repair cost now applies only to a
+correction and both score −0.8. Doubly-robust estimation is reachable only through a validated
+outcome model and blocks the whole comparison on a mismatch in either direction, with SNIPS
+kept as the headline by read-only property; support deficiency is detected as a provable lower
+bound gated at 2%; and the improvement criterion now needs the interval lower bound, the point
+estimate, and survival of deleting the most influential event. Clustering was resolved by
+deliberately not adding a cluster key — a grouping id stable across a speaker's events is a
+pseudonymous patient identifier — so the bias is instead the first entry of `LIMITATIONS`,
+names its direction (the true interval is wider, the error favours "candidate better"), and
+`clustered_uncertainty_available` is permanently false. Still open:
+`max_deterministic_event_rate` defaults to 0.10 and nobody has measured how often real slates
+are near-tied, so the whole log
+could be refused from day one; `no_explicit_signal` rows are logged but cannot become feedback
+and their skip rate must be inspected; there is no preregistration, privacy review, retention
+or deletion job for `logged_on`, or independent review; and `MINIMUM_EFFECT_FLOOR = 0.02`
+promises about ten times more resolution than the sample floors deliver, since at ESS 25 the
+smallest adjudicable delta is roughly 0.18. ·
+2026-08-31 · Awaaz personalised ASR now has a real training runtime that
+has trained nothing. `backend/app/ml/train/asr_runtime/` implements fail-closed,
+governance-gated LoRA/PEFT fine-tuning of an MMS / Wav2Vec2 CTC base
+(`SUPPORTED_MODEL_TYPES = {"wav2vec2"}`), and no adapter, WER, or intelligibility number
+exists for Awaaz anywhere in this repository. Its synthetic dry-run writes exactly one file,
+a private `manifest.json`, and no clinical metric. Reaching real training additionally
+requires a consented archive, local base-model weights, a signed purpose-specific governance
+receipt, a GPU host, and held-out human intelligibility evaluation, none of which exist
+here — so the blocker moved from missing code to missing governance and evidence, which is a
+smaller change than it sounds. Torch, transformers and peft are lazily imported through
+`importlib` inside one function; importing the runtime and booting the FastAPI app both load
+zero heavy modules, and the optional GPU pins live in `backend/requirements-train.txt`,
+which has never been installed or verified here and is deliberately outside
+`requirements.lock.txt`. An adversarial audit of that module left seven findings open —
+symmetric-HMAC receipts an operator can mint for themselves, a smoke path that escapes the
+output-path guard, a split with no size floor, an `epochs_completed` counter that can
+overstate a truncated epoch, an orphan-adapter window between two publish steps, a sanitizer
+blind to `target_text`, and a base-model snapshot in shared temp. They are written down in
+`COMPLETION_CHECKLIST.md` and `PLAN_AWAAZ.md` rather than fixed. `backend/app/ml/rl/` adds
+an offline-only, ranking-only policy-evaluation package with hard floors on every gate and
+read-only `deployment_allowed` / `online_experiment_allowed` / `clinical_claim_allowed`
+properties that always return false; a logging policy that did not randomise is now refused
+outright instead of returning a confident interval, and the production Awaaz schema records
+no slate, policy version, propensity, or outcome, so no current product event is eligible
+(`PLAN_RL.md`). The five model cards are now genuinely generated from
+`artifacts/*.metrics.json` by `render_model_cards.py`, with only the hand-written
+`## Purpose` section carried through between markers. Privacy work inverted `.gitignore`
+from a deny-list to an allow-list for `data/*` and `artifacts/**`, stopped `--patient` from
+reaching a tracked artifact or the console, and fixed an INV-1 leak where the archive
+verifier snapshotted consented WAVs into the shared system temp directory. ·
+2026-08-29 · An authenticated online Awaaz load now saves a user-and-
+patient-bound phrase-board snapshot. On a genuine network failure the saved tiles remain
+visible and tappable with an explicit unsaved/browser-voice disclosure; authorization
+responses never use the cache, and network-dependent actions remain disabled. Awaaz also
+has single-patient phrase-disjoint and multi-patient speaker/phrase-disjoint readiness
+planners, both planning-only with all model/evaluation claims false. Awaaz captures
+explicitly-consented 16 kHz practice WAVs
+into a browser-only IndexedDB vault and pairs them with the exact phrase card the patient
+taps. The API receives metadata receipts only, retries are idempotent, deletion is recorded,
+and optional silence auto-stop honours a patient-set 0.5–4.0 s pause. The fixed emergency
+phrase can now be caregiver-recorded, self-tested, and deleted locally; it starts before the
+network request, stays reachable on an offline boot with the last authenticated local identity,
+and the server records only the actual playback result. Long-press activation now ignores
+controls and scrolling, location is explicitly opt-in, and a configured-only SMTP adapter
+reports caregiver delivery only after provider acceptance. Production remains unconfigured
+until real SMTP credentials are installed and field-tested. Caregiver review can now add an
+explicitly consented fresh patient repeat: the 16 kHz WAV is previewable and retained only
+in local IndexedDB, its verified label is locked across retry, and the API receives only a
+complete integrity/consent receipt. Awaaz remains partial: there is no patient-speech ASR,
+original conversational-audio capture, adapter deployment, provider field test, or consented
+caregiver-number calling. A visible `tel:108` action now opens the phone app from both the
+connected and emergency-only offline Awaaz states without claiming that a call connected.
+The public listener capability now keeps its EN, HI, or PA language through share URL,
+loading/error/expired states, server-localized coaching, privacy copy, and per-utterance
+assistive-technology language. The active sharing URL now has a visible stop-sharing
+control; only a user authorized for that patient may revoke it, retry creates one audit row,
+and the public capability is immediately dead. Reload retrieves the current active link,
+while minting a replacement kills the prior link and preserves one active capability per
+patient. Consented local pairs can now be SHA-256 verified into a versioned tar only after the user acknowledges that the voice archive leaves protected app
+storage; NeuroTrace does not upload it. The backend can verify that tar without extraction and rejects unsafe paths,
+undeclared files, invalid associations, oversized/non-WAV data and hash mismatches. The
+adapter command then exits without writing a model or non-synthetic metrics. Previous
+project history follows. ·
+2026-08-24 (later still) · Two independent sessions landed the same day
 and were merged: an **admin console** (`/admin` — counts and the audit trail, never patient
 records) and a **privilege-escalation fix** (`/auth/register` let a stranger self-assign
 `clinician` and read every patient's name; registration is now caregiver/patient only,
@@ -597,18 +738,33 @@ and with the facial weakness the product measures. Flags a session, never blocks
 unenrolled is stored as verified. Threshold calibrated on synthetic geometry only and says
 so in the source. D-015, D-017.
 
-### Awaaz — D1 through D5
-- **D1** phrase board, emergency mode, auto-speak gate (INV-9).
-- **D2** listener mode: expiring revocable link, display name only, context-aware coaching
-  in three languages. **Screen built** — `Listen.tsx` at `/listen/:token`, no auth because
-  the unguessable token is the capability, and no name, band or history for a stranger.
-- **D4** passive learning: card taps give free labelled pairs; caregiver evening queue is
-  worst-first and capped at 12. **Screen built** — `ReviewQueue.tsx` at `/review/:patientId`;
-  "nothing to review" is shown as success, not emptiness. Both screens were unreachable
-  until Awaaz got quiet caregiver entry points below the speaking surface.
-- **D5** convergence: conversational features route into M4/M5; prompted-only features
-  (DDK, sustained phonation) are deliberately *not* inferred from free speech. Frozen
-  day-30 adapter catches decline the live adapter hides.
+### Awaaz — partial foundation across D1 through D5
+- **D1** phrase board and the INV-9 server gate exist. Candidate taps now complete a
+  distinct confirmation request and audit row. Emergency uses a fixed phrase without ASR;
+  a caregiver-recorded local WAV, visible self-test, deletion, and playback receipt now make
+  speech offline after setup. A 1.2-second blank-space hold reaches the same path, scroll
+  movement cancels it, and exact location is opt-in. A configured SMTP adapter reports true
+  only after acceptance; the deployed provider still needs credentials and a field test.
+  A localized, collapsed board manager now adds duplicate-safe personal phrases and removes
+  non-emergency tiles while keeping the patient-facing speaking surface uncluttered. A
+  successfully authorized board is cached against that exact user/patient pair so its
+  phrase tiles survive an offline reload; stale authorization cannot be recovered from it.
+- **D2** expiring listener capability and localized public screen exist. A link sees only
+  confirmed utterances created after it was minted, and the sharing UI can revoke it through
+  a patient-authorized, retry-idempotent endpoint. The active capability recovers after
+  reload and a replacement supersedes the previous URL. There is no live patient-speech
+  recognition source yet.
+- **D3** a real LoRA/PEFT training runtime for MMS / Wav2Vec2 CTC exists
+  (`backend/app/ml/train/asr_runtime/`) and has trained nothing; no adapter, WER, or
+  intelligibility number exists and no model runs in the product. It is unreachable without
+  a signed purpose-specific governance receipt, local base weights and a GPU host, and its
+  synthetic dry-run writes only a private manifest.
+- **D4** explicitly-consented card/audio pairs now stay in an on-device IndexedDB vault;
+  the server retains only UUID/duration/integrity/consent/deletion receipts. Worst-first text review
+  remains retryable, and an explicitly consented fresh repeat can pair the verified label
+  with a local WAV. Original unclear conversational audio is still not captured.
+- **D5** feature-routing and frozen-adapter drift algorithms exist as tested scaffolding;
+  there is no production audio ingestion or adapter lifecycle behind them.
 
 ### Frontend
 `CcgTrace` (clinical CCG layout), `DhiForm`, `VertigoLog`, `WearableLanes`, `AshaHome`
@@ -619,16 +775,46 @@ so in the source. D-015, D-017.
 
 ## Pending
 
-*(Awaaz D2–D5 and the ASHA / wearable / CCG / DHI / vertigo frontend surfaces were listed
-here and are now built — see the sections above. Left as a note because a Pending list that
-never shrinks is a list nobody reads.)*
-
 - **Voice cloning** is specified and validated (clip length, backend choice, safeguards)
   but does not train a voice.
+- **Awaaz ASR and learning loop** — card-tap audio association and consented local retention
+  now exist, as does caregiver-reviewed fresh-repeat audio association, and so does an
+  executable governance-gated LoRA/PEFT training runtime. Patient-speech recognition,
+  original conversational-audio capture, an actually trained adapter, adapter deployment,
+  and production inference do not. Nothing has been trained: there is no adapter file and no
+  WER or intelligibility number for Awaaz ASR anywhere in this repository, and there must
+  not be a model card for one until a governed run has happened and been reviewed. The
+  optional GPU stack (`backend/requirements-train.txt`) has never been installed or verified
+  here.
+- ~~**Seven open findings against `asr_runtime`**~~ — **ALL SEVEN FIXED.** Governance
+  receipts are Ed25519 with public halves pinned in tracked config (D-067 supersedes D-059);
+  the synthetic-smoke path now goes through the same containment funnel; splits carry a size
+  floor and ceiling and publish achieved fractions beside target ones; `epochs_completed`
+  counts only an exhausted epoch and the manifest distinguishes a truncated run; an
+  `.incomplete` sentinel closes the orphan-adapter window; the sanitizer screens
+  `target_text`; and the base-model snapshot no longer passes through shared temp. Each fix
+  is pinned by a test verified to fail when the fix is reverted. `PRD_AWAAZ.md` §9.3 carries
+  the table.
+- **Offline policy evaluation has no eligible input.** `backend/app/ml/rl/` runs offline and
+  synthetic only; the production Awaaz schema records no slate, policy version, logged
+  propensity, or outcome, so no current product event can be used. `docs/PLAN_RL.md`.
+- **Awaaz emergency completion** — configure and field-test the SMTP caregiver provider,
+  then add a consented caregiver phone/contact contract if direct caregiver dialing is
+  required. The explicit 108 dialer action exists. Offline playback and provider delivery
+  are reported successful only when the local WAV starts and SMTP accepts the recipient
+  respectively; opening a dialer is never reported as a completed call.
 - **ML models run on synthetic fixtures only.** All five. `docs/ML_STATUS.md` states this
-  per model, and the model cards are generated from the artifact metrics so they cannot
-  quietly claim otherwise. Three datasets need a human to request access.
-- **Clinician PDF export** — not built. The data endpoint it would render exists.
+  per model, and the model cards are rendered from `artifacts/*.metrics.json` by
+  `python -m app.ml.train.render_model_cards`, so the generated body cannot quietly claim
+  otherwise — `--check` exits 1 on a stale card and a test re-renders each one and compares
+  it byte-for-byte. The hand-written `## Purpose` section, delimited by
+  `<!-- hand-written: purpose -->` markers, is carried through untouched and is the one part
+  that can still drift. Three datasets need a human to request access.
+- **Clinician PDF export** — built as a browser print-to-PDF view, not as server-side
+  generation. `frontend/src/routes/ClinicianReport.tsx` carries the print layout and tells
+  the clinician to use the browser print dialog and choose Save as PDF; there is no PDF
+  endpoint in any router and none is needed for that approach. This entry previously read
+  "not built", which was true only of server-side rendering.
 - **CCG baseline side-by-side** — the trace renders; comparison against the patient's own
   earlier trace does not.
 - **Task demo videos** — `TaskShell` displays them and the flow is built around them, but
@@ -662,7 +848,15 @@ never shrinks is a list nobody reads.)*
    laterality features lives in the deferred walking and stepping tests. M3 oculomotor
    carries laterality for those patients. If M3 capture quality turns out to be poor in the
    field, phone-only patients lose posterior laterality entirely — that is the risk to watch.
-5. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
+5. **A governance receipt now proves approval, but nobody can issue one yet.** The scheme
+   is Ed25519: verifying no longer confers the ability to sign, the signing function is gone
+   from the shipped package, and public halves are pinned in tracked config rather than read
+   from operator-set environment variables. Both halves were needed — asymmetric crypto alone
+   would have left the operator free to pin their own public key. What remains open is
+   custody, not code: `governance_public_keys.json` ships empty, so the runtime refuses every
+   real command, and it stays that way until a clinical owner generates a keypair offline and
+   someone other than the training operator commits the public half. `GOVERNANCE_KEYS.md`.
+6. **Saccade velocity is undersampled at phone frame rates.** At 30 fps a saccade spans one
    to three frames, so peak velocity is an average that understates the true peak. Recorded
    and flagged (`velocity_confidence` 0.00 at 30 fps) rather than corrected. Latency is
    usable for trending; velocity is not comparable to published normative values.

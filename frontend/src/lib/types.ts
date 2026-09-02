@@ -426,10 +426,32 @@ export interface AwaazCard {
   is_emergency: boolean;
 }
 
+export interface AwaazCardCreatePayload {
+  text: string;
+  lang: Lang;
+  category: "personal";
+}
+
 export interface AwaazBoard {
   patient_id: string;
   profile: AwaazProfile;
   cards: AwaazCard[];
+}
+
+export interface AwaazSpeakPayload {
+  card_id?: string;
+  text?: string;
+  candidates?: string[];
+  lang?: string;
+  confidence?: number;
+  /** Set only after the person taps a candidate that was offered for confirmation. */
+  confirmed_candidate?: boolean;
+  /** UUID of a WAV kept in this browser's IndexedDB vault; the WAV never enters the API. */
+  audio_capture_id?: string;
+  audio_duration_seconds?: number;
+  audio_sha256?: string;
+  audio_size_bytes?: number;
+  audio_capture_consent?: boolean;
 }
 
 export interface AwaazSpeakResult {
@@ -441,4 +463,86 @@ export interface AwaazSpeakResult {
   candidates: string[];
   reason: string;
   requires_confirmation: boolean;
+  utterance_id: string | null;
+  /** A local audio receipt was registered; this does not mean media was uploaded. */
+  audio_pair_registered: boolean;
+}
+
+// --- candidate-ranking policy events (AWA-FR-014). Opaque ids and scores only: both
+// request models are `extra="forbid"` server-side precisely so no transcript, phrase text
+// or patient identifier can be smuggled onto this table. See `lib/awaazPolicyLog.ts`.
+export interface AwaazPolicyCandidatePayload {
+  candidate_id: string;
+  score: number;
+}
+
+export interface AwaazPolicyDecisionPayload {
+  /** Minted by the client when the slate was rendered; the server's idempotency key. */
+  event_id: string;
+  candidates: AwaazPolicyCandidatePayload[];
+  /** Only ever true. The server refuses to randomise anything off the confirmation path. */
+  requires_confirmation: true;
+  policy_logging_consent: true;
+}
+
+export interface AwaazPolicyDecision {
+  event_id: string;
+  behavior_policy_id: string;
+  /** Display order. Index 0 is the logged action. The client must not reorder this. */
+  offered_candidate_ids: string[];
+  logged_action_id: string;
+  logged_action_probability: number;
+  top_ranked_action_id: string;
+  randomised: boolean;
+  exploration_epsilon: number;
+  near_tie_margin: number;
+}
+
+export type AwaazPolicyOutcome =
+  | "selected"
+  | "rejected"
+  | "corrected"
+  | "phrase_board_fallback"
+  | "no_explicit_signal";
+
+export interface AwaazPolicyOutcomePayload {
+  event_id: string;
+  outcome: AwaazPolicyOutcome;
+  selected_action_id: string | null;
+  rejected_action_ids: string[];
+  confirmation_observed: boolean;
+  output_spoken: boolean;
+}
+
+export interface AwaazReviewLabelPayload {
+  corrected_text: string;
+  /** UUID of a caregiver-reviewed patient repeat held only in local IndexedDB. */
+  audio_capture_id?: string;
+  audio_duration_seconds?: number;
+  audio_sha256?: string;
+  audio_size_bytes?: number;
+  audio_capture_consent?: boolean;
+}
+
+export interface AwaazEmergencyResult {
+  patient_id: string;
+  spoken_text: string;
+  lang: string;
+  location: { lat: number; lon: number } | null;
+  caregiver_notified: boolean;
+  works_offline: boolean;
+  used_speech_recognition: boolean;
+  message: string;
+}
+
+export interface AwaazEmergencyPayload {
+  /** Client-generated correlation id for this deliberate activation. */
+  event_id: string;
+  /** True only after a patient-specific WAV stored on this device started playing. */
+  offline_audio_played: boolean;
+  /** Coordinates are present only after the person explicitly enables location sharing. */
+  location_consent: boolean;
+  lat?: number;
+  lon?: number;
+  location_accuracy_m?: number;
 }

@@ -2,10 +2,12 @@
 
 **Data: SYNTHETIC FIXTURES**
 
+<!-- hand-written: purpose -->
 ## Purpose
 Produce ONE advisory feature, `dysarthria_likelihood` in [0,1], as an additional input to the deterministic engine.
 
 **Crucially:** It never decides anything. It is one feature among measured ones, and it passes through the same baseline, gates and confounder handling as everything else.
+<!-- end hand-written -->
 
 ## Training data
 - Dataset: SYNTHETIC FIXTURES (no corpus present)
@@ -40,4 +42,4 @@ Confusion matrix:
 - The control corpora are read speech recorded in good conditions. A classifier may separate recording conditions rather than pathology.
 - The output is ONE feature into a deterministic engine. It never decides.
 
-*Generated from `voice_dysarthria_clf.metrics.json`. Re-run the training script to update — this card is derived, so it cannot drift from the metrics it describes.*
+*Generated from `voice_dysarthria_clf.metrics.json` by `backend/app/ml/train/render_model_cards.py`; re-run the training script, then the renderer, to update. Only the `## Purpose` section above is hand-written — every other line on this page, including each limitation, is rendered from that artifact, and a test re-renders this file and compares it byte for byte. The rendered part cannot drift from the metrics it describes.*

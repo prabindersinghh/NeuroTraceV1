@@ -1,0 +1,69 @@
+# NeuroTrace — OPTIONAL ASR adapter-training stack. Python 3.11.
+#
+# THIS FILE HAS NEVER BEEN INSTALLED OR VERIFIED IN THIS REPOSITORY. The pins below satisfy
+# the minimums that `app/ml/train/asr_runtime/runtime.py` enforces at runtime, but no run of
+# `pip install -r requirements-train.txt` has been executed here and no model has been
+# trained. Treat these versions as a starting point to be verified on the first real
+# training host, not as a tested lock. `requirements.lock.txt` is the verified set; this
+# file is deliberately not part of it.
+#
+# WHY IT IS SEPARATE FROM requirements.txt
+# ----------------------------------------
+# The API process must never need the GPU stack. `runtime.py` imports torch, transformers
+# and peft through `importlib` inside `_load_ml_runtime()`, which runs only after every
+# governance and data gate has passed — so importing `app.ml.train.asr_runtime`, or booting
+# uvicorn, pulls in none of this. Putting these packages in the main requirements would
+# quietly make ~2.5 GB of CUDA wheels a dependency of a web server that never calls them,
+# and would couple every deploy to a stack only an offline training host uses.
+#
+#   pip install -r requirements.txt            # API, tests, the whole existing suite
+#   pip install -r requirements-train.txt      # additionally, on a training host only
+#
+# NUMPY IS PINNED HERE ON PURPOSE, restating requirements.txt rather than relying on it.
+# numpy is held on the 1.x ABI for the mediapipe 0.10.14 wheels. Leaving it out of this file
+# does NOT protect that: pip is free to pull numpy 2.x while resolving a torch build, and
+# the breakage surfaces as a segfault in the face pipeline rather than as anything that
+# mentions training. Repeating the exact pin is what actually forecloses the upgrade, so the
+# two files must be changed together if the pin ever moves.
+#
+# Installing these does NOT make a trained model possible. That additionally requires a
+# consented Awaaz archive, local base-model weights, a signed purpose-specific governance
+# receipt, a GPU host, and a held-out human intelligibility evaluation. See docs/ML_STATUS.md.
+
+# ---------------------------------------------------------------- pins enforced in code
+# runtime.py carries PINNED_DEPENDENCY_VERSIONS and refuses to train unless the installed
+# version matches EXACTLY — not a floor, an equality. Every line below must stay identical
+# to that dict; changing one without the other surfaces as `dependencies_missing` or
+# `dependencies_incompatible` on the training host rather than as a readable error here.
+
+# Restates the requirements.txt pin so no resolver can upgrade it out from under mediapipe.
+numpy==1.26.4
+
+# CPU/CUDA build selection is host-specific. On a CUDA host install torch from the index
+# that matches the driver (see https://pytorch.org) BEFORE this file, so the pin resolves
+# against the right wheel rather than pulling the default build.
+torch==2.4.1
+
+# Wav2Vec2 / MMS CTC model classes and the feature extractor.
+transformers==4.44.2
+
+# LoRA. runtime.py uses LoraConfig + get_peft_model directly.
+peft==0.12.0
+
+# Required by the dependency gate, even though runtime.py runs its own optimisation loop
+# rather than a `Trainer`. This file briefly omitted accelerate, reasoning from which
+# modules runtime.py imports — the wrong contract to read. PINNED_DEPENDENCY_VERSIONS is
+# what the gate actually checks, so a host installing this file without accelerate fails
+# `dependencies_missing` before training starts. `datasets` is absent from both and stays out.
+accelerate==0.34.2
+
+# Adapter serialisation. The adapter is written as safetensors, never as a pickle.
+safetensors==0.4.5
+
+# Ed25519 verification of the governance approval receipt. runtime.py imports it lazily,
+# inside `_verify_ed25519_signature`, so importing the package still costs nothing; a host
+# without it refuses with `signature_runtime_missing` instead of skipping the check. This is
+# the only pin here that a *non*-training command can be blocked on, because the receipt is
+# verified before the corpus is opened. It is not in requirements.txt: the API process never
+# verifies a training approval.
+cryptography==43.0.1

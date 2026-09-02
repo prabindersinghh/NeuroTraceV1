@@ -4,16 +4,16 @@ PURELY ADDITIVE. One new table, no existing row touched (INV-7). Dialect-neutral
 construction — plain `op.create_table`, no raw SQL, no enum, so there is nothing for D-014's
 portability scan to catch and nothing for a real Postgres to parse differently.
 
-Revision ID: 0021
-Revises: 0020
+Revision ID: 0023
+Revises: 0022
 """
 from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0021"
-down_revision = "0020"
+revision = "0023"
+down_revision = "0022"
 branch_labels = None
 depends_on = None
 

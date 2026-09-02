@@ -101,6 +101,7 @@ def _run_synthetic(args) -> None:
     scores = binary_metrics(y.tolist(), prob.tolist(), threshold=0.5)
     metrics = Metrics(
         model="voice_dysarthria_clf",
+        synthetic=True,
         dataset="SYNTHETIC FIXTURES (no corpus present)",
         n_total=n, n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
         n_groups=n // 4, split="synthetic, grouped by speaker",
@@ -172,6 +173,7 @@ def main() -> None:
 
     metrics = Metrics(
         model="voice_dysarthria_clf",
+        synthetic=False,
         dataset=f"{args.data.name} (positive) vs {args.controls.name} (control)",
         n_total=len(y), n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
         n_groups=len(set(groups)), split=f"GroupKFold by speaker, {n_splits} folds",
