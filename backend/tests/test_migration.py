@@ -15,6 +15,7 @@ import pytest
 
 from app.db import Base
 from app import models  # noqa: F401  (registers tables)
+from app.models import Role
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -79,6 +80,20 @@ def test_migration_columns_match_the_models(migrated_db: Path):
         assert expected == schema[table.name], (
             f"{table.name}: models={sorted(expected)} db={sorted(schema[table.name])}"
         )
+
+
+def test_freshly_migrated_database_accepts_every_model_role(migrated_db: Path):
+    """Column parity misses stale CHECK constraints; exercise every value the ORM emits."""
+    con = sqlite3.connect(migrated_db)
+    try:
+        for index, role in enumerate(Role):
+            con.execute(
+                "INSERT INTO users (id, email, pw_hash, role) VALUES (?, ?, ?, ?)",
+                (f"{index + 1:032x}", f"role-{role.value}@example.test", "not-a-real-hash", role.value),
+            )
+        con.commit()
+    finally:
+        con.close()
 
 
 def test_downgrade_removes_the_schema(migrated_db: Path):

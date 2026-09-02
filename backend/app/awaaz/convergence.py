@@ -1,5 +1,13 @@
 """Awaaz D4/D5 — passive learning, and convergence with the monitoring engine.
 
+IMPLEMENTATION STATUS
+---------------------
+This module contains the queue, feature-routing, and drift algorithms. Phrase-card practice
+can now create a consented audio/target pair whose WAV stays in the browser's IndexedDB;
+the server stores only its receipt. Caregiver review can also pair a fresh patient repeat
+with the verified label under the same local-only contract. Original conversational audio,
+patient-speech ASR, and adapter training/deployment remain to be built.
+
 D4 — THE ENROLMENT PROBLEM
 --------------------------
 Personalised ASR needs labelled audio from the patient. The obvious way to get it is to ask
@@ -7,18 +15,14 @@ for it, and that is why Google's Project Relate stalls: you are asking a tired s
 survivor to read five hundred phrases before the product does anything for them. Most people
 never finish, and the ones who do are the least impaired.
 
-So we never ask. Two sources, both free:
+The intended collection design uses two low-burden sources:
 
-  TAPPED CARDS. When the patient taps "water" on the board, they very often say it aloud at
-  the same time — that is what people do. The tap gives us the target text and the
-  microphone gives us the audio. A labelled pair, obtained at the moment of ordinary use,
-  with nobody asked to do anything.
+  TAPPED CARDS. On-device capture pairs speech with the exact card the person tapped. The
+  local WAV is revocable; only UUID/duration/consent/deletion metadata reaches the server.
 
-  THE CAREGIVER'S EVENING TWO MINUTES. The app replays the day's unclear utterances and the
-  caregiver types what they actually meant. Families are the world's best interpreters of
-  their own relative's speech — better than any model — and this is the only way to harvest
-  that. It is also the point: caregivers of stroke survivors overwhelmingly report feeling
-  helpless, and this gives them something concrete that visibly helps.
+  THE CAREGIVER'S EVENING TWO MINUTES. The caregiver can verify unclear text and, with the
+  patient's explicit consent, capture one fresh repeat of the verified words. The local WAV
+  and the human label then form a genuine audio/target pair without media upload.
 
 D5 — EVERY UTTERANCE IS ALSO A MEASUREMENT
 ------------------------------------------

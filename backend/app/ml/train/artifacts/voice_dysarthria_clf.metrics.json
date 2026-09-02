@@ -1,5 +1,6 @@
 {
   "model": "voice_dysarthria_clf",
+  "synthetic": true,
   "dataset": "SYNTHETIC FIXTURES (no corpus present)",
   "n_total": 240,
   "n_positive": 120,
@@ -40,6 +41,6 @@
     "The output is ONE feature into a deterministic engine. It never decides."
   ],
   "seed": 42,
-  "trained_at": "2026-08-21T20:48:14+00:00",
-  "python": "3.11.0"
+  "trained_at": "2026-08-30T19:09:25+00:00",
+  "python": "3.11.14"
 }

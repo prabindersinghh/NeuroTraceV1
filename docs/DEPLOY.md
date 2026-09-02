@@ -135,6 +135,21 @@ cannot risk it, Neon's paid tier disables suspend.
 | `FRONTEND_ORIGIN` | your frontend URL. Comma-separate if several. **This is what locks CORS** |
 | `DEMO_MODE` | `true` for the pitch. `false` for anything holding real data |
 
+Optional Awaaz emergency email is disabled until all required values are present:
+
+| Variable | What goes in it |
+|---|---|
+| `EMERGENCY_SMTP_HOST` | SMTP relay hostname |
+| `EMERGENCY_SMTP_PORT` | Usually `587` for STARTTLS or `465` for SSL |
+| `EMERGENCY_SMTP_FROM` | Verified sender address |
+| `EMERGENCY_SMTP_USERNAME` | Relay username, if required |
+| `EMERGENCY_SMTP_PASSWORD` | Relay credential; set only in Railway secrets |
+| `EMERGENCY_SMTP_SECURITY` | `starttls` (default), `ssl`, or `none` for a trusted internal relay |
+
+Leaving host or sender blank keeps `caregiver_notified=false`. After configuration, run a
+real-device field test before treating delivery as operational; SMTP acceptance proves the
+relay accepted the recipient, not that a human read the message.
+
 `PORT` is injected by Railway — do not set it.
 
 ## 3 · First deploy — the real migration test

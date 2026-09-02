@@ -1,5 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, clearSession, getStoredUser, getTokens, setStoredUser, setTokens } from "./api";
+import {
+  api,
+  clearSession,
+  getStoredUser,
+  getTokens,
+  setStoredUser,
+  setTokens,
+} from "./api";
+import { shouldKeepStoredIdentity } from "./authOffline";
 import type { Role, User } from "./types";
 
 interface AuthValue {
@@ -30,8 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(fresh);
           setStoredUser(fresh);
         }
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        // An offline boot is not evidence that the saved session is invalid. Keep the last
+        // authenticated identity so local-only safety surfaces (especially the Awaaz
+        // emergency phrase) remain reachable. Authenticated API calls still fail closed,
+        // and a real 401 clears the session in api.ts.
+        if (!cancelled && !shouldKeepStoredIdentity(error)) {
           clearSession();
           setUser(null);
         }

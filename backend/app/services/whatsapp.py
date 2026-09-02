@@ -1,8 +1,8 @@
-"""Mock WhatsApp sender (TRD §2 / PRD non-goal: real integration is Tier 2).
+"""Deprecated unconfigured WhatsApp boundary.
 
-It is a real function with real behaviour — it logs a structured, PII-free record of the
-notification and reports success — it just does not call a provider yet. Swapping in the
-Cloud API later means replacing the body of `send_alert`, nothing else.
+This module used to log a message and return ``True`` without calling a provider. Nothing
+currently imports it, but leaving a mock-success function is a trap for the next caller.
+Real Awaaz delivery lives in ``emergency_notifications`` and is configured-only.
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ def send_alert(patient_id: uuid.UUID, band: str, message: str) -> bool:
     is never logged. The explanation text is medical-adjacent but not identifying.
     """
     logger.warning(
-        "whatsapp.alert patient_id=%s band=%s chars=%d", patient_id, band, len(message)
+        "whatsapp.unconfigured patient_id=%s band=%s chars=%d", patient_id, band, len(message)
     )
-    logger.info("whatsapp.alert.body patient_id=%s body=%r", patient_id, message)
-    return True
+    return False

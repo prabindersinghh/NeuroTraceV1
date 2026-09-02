@@ -25,9 +25,10 @@ from app.awaaz.safety import (
     decide,
     may_auto_speak,
 )
-from app.models import Patient, PhraseCard, Role, StrokeSide, User, UtteranceLog
+from app.models import AuditLog, Patient, PhraseCard, Role, StrokeSide, User, UtteranceLog
 
 NOW = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+AUDIO_RECEIPT = {"audio_sha256": "ab" * 32, "audio_size_bytes": 88_044}
 
 
 # ------------------------------------------------------------------ THE SAFETY GATE
@@ -159,6 +160,95 @@ async def test_the_emergency_card_cannot_be_deleted(session, client):
     assert r.status_code == 409
 
 
+async def test_a_personal_phrase_is_trimmed_appended_and_duplicate_safe(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    existing = (await client.get(
+        f"/awaaz/{patient.id}/board", headers=headers,
+    )).json()["cards"]
+
+    created = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "  Call   Dr Singh  ", "category": "personal",
+    }, headers=headers)
+
+    assert created.status_code == 201, created.text
+    card = created.json()
+    assert card["text"] == "Call   Dr Singh"
+    assert card["lang"] == "en"
+    assert card["slot"] == max(row["slot"] for row in existing) + 1
+    duplicate = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "call dr singh", "category": "personal",
+    }, headers=headers)
+    assert duplicate.status_code == 409
+    assert "already" in duplicate.text.lower()
+    blank = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "   ",
+    }, headers=headers)
+    assert blank.status_code == 422
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.card.add",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None and audit.meta_json is None
+
+
+async def test_the_phrase_board_is_bounded_so_it_remains_navigable(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    seeded = (await client.get(
+        f"/awaaz/{patient.id}/board", headers=headers,
+    )).json()["cards"]
+    session.add_all([
+        PhraseCard(
+            patient_id=patient.id,
+            text=f"Personal phrase {index}",
+            lang="en",
+            category="personal",
+            slot=len(seeded) + index,
+        )
+        for index in range(36 - len(seeded))
+    ])
+    await session.commit()
+
+    refused = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "One phrase too many",
+    }, headers=headers)
+
+    assert refused.status_code == 409
+    assert "36" in refused.text
+
+
+async def test_an_authorised_patient_can_remove_a_non_emergency_phrase(session, client):
+    caregiver, patient = await _patient(session)
+    caregiver_headers = await _headers(client, caregiver)
+    created = await client.post(f"/awaaz/{patient.id}/cards", json={
+        "text": "My personal phrase", "category": "personal",
+    }, headers=caregiver_headers)
+    patient_user = User(
+        email=f"patient-{uuid.uuid4().hex[:8]}@example.com",
+        pw_hash=hash_password("a-real-password"),
+        role=Role.patient,
+    )
+    session.add(patient_user)
+    await session.flush()
+    patient.user_id = patient_user.id
+    await session.commit()
+    patient_headers = await _headers(client, patient_user)
+
+    deleted = await client.delete(
+        f"/awaaz/cards/{created.json()['id']}", headers=patient_headers,
+    )
+
+    assert deleted.status_code == 200, deleted.text
+    assert await session.get(PhraseCard, uuid.UUID(created.json()["id"])) is None
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.card.delete",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None and audit.actor_id == patient_user.id
+    assert audit.meta_json is None
+
+
 async def test_a_new_profile_defaults_to_unassessed_and_auto_speak_off(session, client):
     caregiver, patient = await _patient(session)
     headers = await _headers(client, caregiver)
@@ -184,6 +274,226 @@ async def test_a_tapped_card_is_always_spoken(session, client):
     assert r.status_code == 200, r.text
     assert r.json()["speak_now"] is True
     assert r.json()["requires_confirmation"] is False
+
+
+async def test_a_consented_card_capture_registers_a_real_on_device_audio_pair(
+    session, client,
+):
+    """The target comes from the patient's tap; only a receipt crosses the API."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    water = next(c for c in cards if "water" in c["text"].lower())
+    capture_id = uuid.uuid4()
+
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": water["id"],
+        "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 2.75,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["audio_pair_registered"] is True
+    assert response.json()["utterance_id"]
+
+    row = await session.scalar(select(UtteranceLog).where(
+        UtteranceLog.audio_capture_id == str(capture_id)))
+    assert row is not None
+    assert row.text == water["text"]
+    assert row.card_id == uuid.UUID(water["id"])
+    assert row.audio_duration_seconds == 2.75
+    assert row.audio_sha256 == AUDIO_RECEIPT["audio_sha256"]
+    assert row.audio_size_bytes == AUDIO_RECEIPT["audio_size_bytes"]
+    assert row.audio_consent_by == caregiver.id
+    assert row.audio_consent_at is not None
+    assert row.audio_retained_on_device is True
+
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.audio_pair.register"))
+    assert audit is not None
+    assert audit.meta_json["storage"] == "on_device"
+    # No request/response field can carry the WAV; the receipt is metadata only.
+    assert "audio" not in response.json()
+
+
+async def test_an_audio_pair_requires_explicit_consent(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": cards[1]["id"],
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.5,
+        "audio_capture_consent": False,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 409
+    assert "consent" in response.text.lower()
+    assert await session.scalar(select(func.count(UtteranceLog.id))) == 0
+
+
+async def test_audio_is_not_paired_with_unverified_free_text(session, client):
+    """Without ASR or a card tap, typed text is not evidence of what the audio contains."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    response = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.5,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert response.status_code == 400
+    assert "phrase" in response.text.lower()
+
+
+async def test_retrying_the_same_capture_is_idempotent(session, client):
+    """A lost response must not create two pairs or count the card twice."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    card = cards[1]
+    payload = {
+        "card_id": card["id"], "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.25, "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }
+
+    first = await client.post(f"/awaaz/{patient.id}/speak", json=payload, headers=headers)
+    retry = await client.post(f"/awaaz/{patient.id}/speak", json=payload, headers=headers)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["utterance_id"] == first.json()["utterance_id"]
+    assert await session.scalar(select(func.count(UtteranceLog.id))) == 1
+    stored_card = await session.get(PhraseCard, uuid.UUID(card["id"]))
+    assert stored_card is not None and stored_card.use_count == 1
+
+
+async def test_revoking_a_local_pair_marks_its_receipt_deleted(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    capture_id = uuid.uuid4()
+    await client.post(f"/awaaz/{patient.id}/speak", json={
+        "card_id": cards[1]["id"], "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 1.25, "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+
+    deleted = await client.delete(f"/awaaz/audio-pairs/{capture_id}", headers=headers)
+    assert deleted.status_code == 200, deleted.text
+    row = await session.scalar(select(UtteranceLog).where(
+        UtteranceLog.audio_capture_id == str(capture_id)))
+    assert row is not None
+    assert row.audio_retained_on_device is False
+    assert row.audio_deleted_at is not None
+
+
+async def test_caregiver_review_can_pair_a_consented_local_patient_repeat(session, client):
+    """The reviewed text is the label; only a receipt for the local WAV crosses the API."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    row = UtteranceLog(
+        patient_id=patient.id,
+        text="wadar",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        confidence=0.31,
+    )
+    session.add(row)
+    await session.commit()
+    capture_id = uuid.uuid4()
+    payload = {
+        "corrected_text": "Water",
+        "audio_capture_id": str(capture_id),
+        "audio_duration_seconds": 1.75,
+        "audio_capture_consent": True,
+        **AUDIO_RECEIPT,
+    }
+
+    saved = await client.post(f"/awaaz/review/{row.id}", json=payload, headers=headers)
+    assert saved.status_code == 200, saved.text
+    await session.refresh(row)
+    assert row.corrected_text == "Water"
+    assert row.reviewed_at is not None
+    assert row.audio_capture_id == str(capture_id)
+    assert row.audio_duration_seconds == 1.75
+    assert row.audio_sha256 == AUDIO_RECEIPT["audio_sha256"]
+    assert row.audio_size_bytes == AUDIO_RECEIPT["audio_size_bytes"]
+    assert row.audio_consent_by == caregiver.id
+    assert row.audio_consent_at is not None
+    assert row.audio_retained_on_device is True
+
+    receipt_audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.audio_pair.register",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert receipt_audit is not None
+    assert receipt_audit.meta_json["source"] == "caregiver_review"
+    assert "audio" not in saved.json()
+
+    # A lost success response can be retried without making another pair or audit event.
+    retry = await client.post(f"/awaaz/review/{row.id}", json=payload, headers=headers)
+    assert retry.status_code == 200, retry.text
+    assert await session.scalar(select(func.count(UtteranceLog.id)).where(
+        UtteranceLog.audio_capture_id == str(capture_id),
+    )) == 1
+    assert await session.scalar(select(func.count(AuditLog.id)).where(
+        AuditLog.action == "awaaz.audio_pair.register",
+        AuditLog.patient_id == patient.id,
+    )) == 1
+
+
+async def test_review_audio_receipts_are_all_or_nothing_and_consent_bound(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    row = UtteranceLog(
+        patient_id=patient.id,
+        text="unclear",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        confidence=0.2,
+    )
+    session.add(row)
+    await session.commit()
+
+    unconsented = await client.post(f"/awaaz/review/{row.id}", json={
+        "corrected_text": "Water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_duration_seconds": 1.0,
+        **AUDIO_RECEIPT,
+    }, headers=headers)
+    assert unconsented.status_code == 422
+
+    partial = await client.post(f"/awaaz/review/{row.id}", json={
+        "corrected_text": "Water",
+        "audio_capture_id": str(uuid.uuid4()),
+        "audio_capture_consent": True,
+    }, headers=headers)
+    assert partial.status_code == 422
+    await session.refresh(row)
+    assert row.reviewed_at is None
+    assert row.audio_capture_id is None
+
+    emergency = UtteranceLog(
+        patient_id=patient.id,
+        text="I need help",
+        lang="en",
+        mode="auto",
+        confirmed=True,
+        is_emergency=True,
+    )
+    session.add(emergency)
+    await session.commit()
+    refused = await client.post(f"/awaaz/review/{emergency.id}", json={
+        "corrected_text": "I need help",
+    }, headers=headers)
+    assert refused.status_code == 409
+    await session.refresh(emergency)
+    assert emergency.reviewed_at is None
 
 
 async def test_recognised_speech_for_an_aphasic_patient_must_be_confirmed(session, client):
@@ -249,6 +559,47 @@ async def test_unclear_speech_is_confirmed_even_for_a_dysarthric_patient(session
     assert r.json()["speak_now"] is False
 
 
+async def test_a_confirmed_candidate_is_spoken_and_logged_as_confirmed(session, client):
+    """The candidate tap is the consent event, so the second request must complete rather
+    than returning the same confirmation prompt again."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    await client.patch(f"/awaaz/{patient.id}/profile",
+                       json={"speech_profile": "aphasia_dominant"}, headers=headers)
+
+    offered = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "Please call my daughter",
+        "confidence": 0.42,
+        "candidates": ["Please call my daughter", "Please call my doctor"],
+    }, headers=headers)
+    assert offered.json()["requires_confirmation"] is True
+
+    chosen = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "Please call my daughter",
+        "confidence": 0.42,
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert chosen.status_code == 200, chosen.text
+    assert chosen.json()["speak_now"] is True
+    assert chosen.json()["requires_confirmation"] is False
+    assert chosen.json()["text"] == "Please call my daughter"
+
+    rows = list(await session.scalars(
+        select(UtteranceLog).where(UtteranceLog.patient_id == patient.id)))
+    assert len(rows) == 1
+    assert rows[0].mode == "confirm"
+    assert rows[0].confirmed is True
+
+
+async def test_a_confirmed_candidate_requires_text(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    r = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert r.status_code == 400
+
+
 async def test_every_utterance_is_logged_with_whether_it_was_confirmed(session, client):
     """The audit trail for INV-9 — it must be possible to show, after the fact, that
     nothing was ever spoken unconfirmed on an aphasic patient's behalf."""
@@ -275,9 +626,72 @@ async def test_emergency_never_uses_speech_recognition(session, client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["used_speech_recognition"] is False
-    assert body["works_offline"] is True
-    assert body["caregiver_notified"] is True
+    # No client playback receipt means the API must not infer offline capability merely
+    # because a recording might exist in some browser.
+    assert body["works_offline"] is False
+    assert body["caregiver_notified"] is False
     assert body["spoken_text"] == "I need help"
+
+
+async def test_emergency_reports_and_audits_a_local_playback_receipt(session, client):
+    """The raw WAV stays on the phone; the server receives only what happened on tap."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+
+    r = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"offline_audio_played": True},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["works_offline"] is True
+    assert body["used_speech_recognition"] is False
+    assert body["caregiver_notified"] is False
+
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.emergency",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit is not None
+    assert audit.actor_id == caregiver.id
+    assert audit.meta_json["offline_audio_played"] is True
+    assert audit.meta_json["used_speech_recognition"] is False
+    assert audit.meta_json["location_shared"] is False
+    assert uuid.UUID(audit.meta_json["event_id"])
+
+
+async def test_emergency_reports_caregiver_delivery_only_after_provider_acceptance(
+    session, client, monkeypatch,
+):
+    from app.services.emergency_notifications import EmergencyDelivery
+
+    seen = {}
+
+    async def accept(**kwargs):
+        seen.update(kwargs)
+        return EmergencyDelivery(True, "smtp", "accepted")
+
+    monkeypatch.setattr("app.routers.awaaz.deliver_emergency", accept)
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    event_id = uuid.uuid4()
+    body = (await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"event_id": str(event_id)},
+        headers=headers,
+    )).json()
+
+    assert body["caregiver_notified"] is True
+    assert seen["recipient"] == caregiver.email
+    assert seen["patient_name"] == patient.name
+    assert seen["event_id"] == event_id
+    audit = await session.scalar(select(AuditLog).where(
+        AuditLog.action == "awaaz.emergency",
+        AuditLog.patient_id == patient.id,
+    ))
+    assert audit.meta_json["notification_provider"] == "smtp"
+    assert audit.meta_json["caregiver_notified"] is True
 
 
 async def test_emergency_speaks_the_patients_own_language(session, client):
@@ -306,6 +720,36 @@ async def test_emergency_records_location_when_offered(session, client):
     body = (await client.post(
         f"/awaaz/{patient.id}/emergency?lat=30.9&lon=75.85", headers=headers)).json()
     assert body["location"] == {"lat": 30.9, "lon": 75.85}
+
+
+async def test_emergency_accepts_only_explicitly_consented_body_location(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    body = (await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={
+            "location_consent": True,
+            "lat": 30.9,
+            "lon": 75.85,
+            "location_accuracy_m": 24.5,
+        },
+        headers=headers,
+    )).json()
+    assert body["location"] == {"lat": 30.9, "lon": 75.85, "accuracy_m": 24.5}
+
+    no_consent = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"lat": 30.9, "lon": 75.85},
+        headers=headers,
+    )
+    assert no_consent.status_code == 422
+
+    incomplete = await client.post(
+        f"/awaaz/{patient.id}/emergency",
+        json={"location_consent": True, "lat": 30.9},
+        headers=headers,
+    )
+    assert incomplete.status_code == 422
 
 
 # ------------------------------------------------------------------ endpointing
@@ -350,6 +794,106 @@ def test_the_listener_link_does_not_carry_the_enrolled_name():
     s = create_listener_session("patient-1", "my father")
     assert s.display_name == "my father"
     assert "patient-1" not in s.display_name
+
+
+async def test_listener_link_never_reveals_utterances_from_before_it_was_minted(
+    session, client,
+):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    session.add(UtteranceLog(
+        patient_id=patient.id,
+        text="This was said yesterday",
+        lang="en",
+        mode="confirm",
+        confirmed=True,
+        ts=NOW,
+    ))
+    await session.commit()
+
+    minted = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "en", "ttl_minutes": 30,
+    }, headers=headers)
+    assert minted.status_code == 200, minted.text
+    token = minted.json()["token"]
+
+    spoken = await client.post(f"/awaaz/{patient.id}/speak", json={
+        "text": "This is part of this conversation",
+        "lang": "en",
+        "confirmed_candidate": True,
+    }, headers=headers)
+    assert spoken.status_code == 200, spoken.text
+
+    view = await client.get(f"/awaaz/listen/{token}")
+    assert view.status_code == 200, view.text
+    assert [row["text"] for row in view.json()["recent"]] == [
+        "This is part of this conversation",
+    ]
+
+
+async def test_only_an_authorised_patient_user_can_revoke_a_listener_link(session, client):
+    caregiver, patient = await _patient(session)
+    owner_headers = await _headers(client, caregiver)
+    minted = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "en", "ttl_minutes": 30,
+    }, headers=owner_headers)
+    token = minted.json()["token"]
+
+    stranger = User(email=f"stranger-{uuid.uuid4().hex[:8]}@example.com",
+                    pw_hash=hash_password("a-real-password"), role=Role.caregiver)
+    session.add(stranger)
+    await session.commit()
+    stranger_headers = await _headers(client, stranger)
+
+    refused = await client.delete(f"/awaaz/listener/{token}", headers=stranger_headers)
+    assert refused.status_code == 403
+    assert (await client.get(
+        f"/awaaz/{patient.id}/listener", headers=stranger_headers,
+    )).status_code == 403
+    assert (await client.get(f"/awaaz/listen/{token}")).status_code == 200
+
+    revoked = await client.delete(f"/awaaz/listener/{token}", headers=owner_headers)
+    assert revoked.status_code == 200
+    assert (await client.get(f"/awaaz/listen/{token}")).status_code == 404
+
+    # Retrying after a lost response is safe and does not manufacture a second audit row.
+    assert (await client.delete(
+        f"/awaaz/listener/{token}", headers=owner_headers,
+    )).status_code == 200
+    audit_count = await session.scalar(
+        select(func.count()).select_from(AuditLog).where(
+            AuditLog.patient_id == patient.id,
+            AuditLog.action == "awaaz.listener.revoke",
+        )
+    )
+    assert audit_count == 1
+
+
+async def test_listener_link_is_recoverable_and_a_new_link_supersedes_it(session, client):
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    first = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "pa", "ttl_minutes": 30,
+    }, headers=headers)
+    first_token = first.json()["token"]
+
+    recovered = await client.get(f"/awaaz/{patient.id}/listener", headers=headers)
+    assert recovered.status_code == 200
+    assert recovered.json()["active"] is True
+    assert recovered.json()["token"] == first_token
+    assert recovered.json()["lang"] == "pa"
+
+    second = await client.post(f"/awaaz/{patient.id}/listener", json={
+        "display_name": "my father", "lang": "hi", "ttl_minutes": 30,
+    }, headers=headers)
+    second_token = second.json()["token"]
+    assert second_token != first_token
+    assert (await client.get(f"/awaaz/listen/{first_token}")).status_code == 404
+    assert (await client.get(f"/awaaz/listen/{second_token}")).status_code == 200
+
+    current = await client.get(f"/awaaz/{patient.id}/listener", headers=headers)
+    assert current.json()["token"] == second_token
+    assert current.json()["lang"] == "hi"
 
 
 def test_coaching_tells_the_listener_to_wait_during_a_long_pause():

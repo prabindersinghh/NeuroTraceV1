@@ -2,10 +2,12 @@
 
 **Data: SYNTHETIC FIXTURES**
 
+<!-- hand-written: purpose -->
 ## Purpose
 Detect irregular RR intervals and advise obtaining an ECG.
 
 **Crucially:** It must NEVER assert atrial fibrillation. AF is an ECG diagnosis made by a clinician; a wrist optical sensor and a logistic regression are not that.
+<!-- end hand-written -->
 
 ## Training data
 - Dataset: SYNTHETIC FIXTURES (no PhysioNet data present)
@@ -39,4 +41,4 @@ Confusion matrix:
 - The challenge data is single-lead ECG. We derive intervals from a PPG, which is noisier and far more motion-sensitive, so field performance will be lower.
 - Atrial fibrillation is an ECG diagnosis. This model informs an advisory to obtain an ECG and never asserts the diagnosis.
 
-*Generated from `rhythm_irregularity_clf.metrics.json`. Re-run the training script to update — this card is derived, so it cannot drift from the metrics it describes.*
+*Generated from `rhythm_irregularity_clf.metrics.json` by `backend/app/ml/train/render_model_cards.py`; re-run the training script, then the renderer, to update. Only the `## Purpose` section above is hand-written — every other line on this page, including each limitation, is rendered from that artifact, and a test re-renders this file and compares it byte for byte. The rendered part cannot drift from the metrics it describes.*

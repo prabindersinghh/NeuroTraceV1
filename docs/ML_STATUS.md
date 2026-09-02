@@ -5,7 +5,9 @@ One table. Every model. One column that says REAL DATA or SYNTHETIC, with no amb
 We will be asked this, and the honest answer is better than a good-looking one. Paraspeak
 published their word error rate and won on it.
 
-**Last verified:** 2026-08-23, by running every pipeline and reading its metrics file.
+**Last verified:** 2026-08-31, including the Awaaz archive, single-patient corpus-readiness,
+multi-patient cohort-readiness boundaries, the untrained ASR training runtime, and the Awaaz
+policy-event logging contract that has never recorded an event.
 The face identity check was added the same day and is listed here for the same reason
 everything else is: it makes a decision about a patient off a threshold, and the threshold
 is not calibrated on real data.
@@ -19,7 +21,7 @@ is not calibrated on real data.
 | `voice_dysarthria_clf` | **SYNTHETIC** | 0.987 (meaningless) | one advisory feature into the engine | TORGO + UASpeech access |
 | `rhythm_irregularity_clf` | **SYNTHETIC** | 0.973 (meaningless) | "get an ECG" advisory | PhysioNet AF — **openly downloadable, no excuse** |
 | `asymmetry_discriminator` | **SYNTHETIC** | 0.976 (meaningless) | the empirical basis for Gate 3 | mPower — **publicly available after certification** |
-| `personalised_asr_adapter` | **SYNTHETIC** | — | per-patient Awaaz ASR | harvested pairs from a real patient |
+| `personalised_asr_adapter` | **SYNTHETIC SCAFFOLD** | — | future per-patient Awaaz ASR | governance receipt issuance; local base-model weights and a GPU runtime; held-out evaluation; human-listener intelligibility; deployment approval |
 | `voice_clone` | **SYNTHETIC** | — | family-archive voice for Awaaz | a consented 2-minute clip |
 | `face_identity` (not a model — a threshold) | **SYNTHETIC CALIBRATION** | — | same-person check; flags a session as a confounder | enrolment pairs from real households |
 
@@ -27,6 +29,53 @@ is not calibrated on real data.
 classes were separated by construction; they measure nothing except that the pipeline runs
 end to end. Every metrics file carries `"synthetic": true` or a limitations note beginning
 `SYNTHETIC RUN`, so no artefact can be mistaken for evidence.
+
+The personalised-ASR command previously inferred `synthetic = false` from the mere
+existence of a data directory while still generating synthetic pairs. That path is removed.
+It now accepts a user-exported Awaaz tar only to validate member paths, schema, UUID
+associations, size bounds, RIFF/WAVE headers and SHA-256, then exits without writing an
+adapter or metrics.
+
+A real LoRA/PEFT training runtime for MMS / Wav2Vec2 CTC now exists at
+`backend/app/ml/train/asr_runtime/`, and its existence changes nothing in the table above.
+The runtime is executable and fail-closed; it has never been run against patient data and no
+adapter, WER, or intelligibility number exists for Awaaz ASR anywhere in this repository.
+Its synthetic dry-run writes a private manifest and no model and no clinical metric — the
+output directory contains exactly `manifest.json`. A real run additionally requires a
+consented archive, local base-model weights, a signed purpose-specific governance receipt, a
+GPU host, and a held-out human intelligibility evaluation, none of which exist here. The
+blocker is therefore governance and evaluation, not missing code, and no real-data claim is
+possible until a governed run has happened and been independently reviewed.
+The separate `awaaz_corpus_readiness` command may write aggregate counts and deterministic
+phrase-disjoint capture-ID assignments. Its claim flags remain false because planning a
+split is not training or evaluation. The `awaaz_cohort_readiness` command extends that
+boundary across separately verified patient archives: it assigns whole connected
+speaker/phrase components, blocks when shared board prompts leave fewer than three clean
+components, and discloses neither patient identity nor phrase text. It does not pool media,
+and the local export receipt does not establish consent for a pooled study.
+
+### The Awaaz ranking policy is not a model either, and there is no estimate
+
+`backend/app/ml/rl/` compares a candidate ranker against a logged behaviour policy offline.
+There is no model in the table above for it because nothing is trained: the package scores
+logged explicit feedback and computes a self-normalised inverse-propensity estimate, and its
+behaviour policy is a fixed function of scores the ranker already produced.
+
+As of 2026-08-31 the production logging contract exists — `awaaz_policy_events`, append-only,
+one row per candidate-ranking decision, holding the propensity of the action actually logged
+and no patient column. **No row has ever been written.** Nothing calls the two endpoints, no
+offline comparison has been run against real data, and every number produced by the package
+so far comes from `app.ml.rl.simulate` on synthetic events. `deployment_allowed`,
+`online_experiment_allowed` and `clinical_claim_allowed` are read-only properties that always
+return false.
+
+Three limits belong beside any future estimate from it. The interval assumes independent
+events while Awaaz events cluster by speaker, so the true interval is wider and the error runs
+toward "candidate better" (D-064). Support deficiency is reported as a provable lower bound,
+so a zero means "nothing provable" rather than "nothing there". And `MINIMUM_EFFECT_FLOOR =
+0.02` promises roughly ten times more resolution than the sample floors deliver — at an
+effective sample size of 25 the smallest adjudicable delta is about 0.18 — which is an open
+calibration question, not a solved one.
 
 ### The identity check is not a model, and is listed anyway
 
@@ -109,6 +158,16 @@ fails**. That silent-but-confident failure mode is why parity is pinned rather t
 One per model in `docs/models/`. Each states purpose, training data with n and source, split
 method, metrics, limitations, and — plainly — whether it runs on synthetic fixtures or real
 data.
+
+The cards are rendered from `app/ml/train/artifacts/*.metrics.json` by
+`python -m app.ml.train.render_model_cards`, so every number, split description and
+limitation in them comes from the artifact rather than from a person's memory of it. The one
+exception is the `## Purpose` section, which is hand-written and carried through untouched
+between `<!-- hand-written: purpose -->` markers; a card missing those markers fails closed
+rather than being silently regenerated without its prose. `--check` exits 1 on a stale card,
+and a test re-renders each card and compares it byte-for-byte, so the generated portion
+cannot drift from the artifact. The Purpose prose can still drift, because nothing generates
+it.
 
 The training harness refuses to write a metrics file with an empty limitations list. An
 unqualified number is the thing this project exists not to produce.

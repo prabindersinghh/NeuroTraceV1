@@ -1,5 +1,6 @@
 {
   "model": "asymmetry_discriminator",
+  "synthetic": true,
   "dataset": "synthetic cohort (rate-matched)",
   "n_total": 240,
   "n_positive": 120,
@@ -25,10 +26,10 @@
     "The default cohort is simulated. It demonstrates that the asymmetry ratio separates two groups that tap rate cannot, but it is not clinical evidence.",
     "The two groups are rate-matched by construction. Real Parkinson's patients are often slower overall, which would make rate look better than it deserves.",
     "The bilateral group carries normal handedness asymmetry, and the mildest simulated lesions overlap that distribution - which is why separation is strong but not perfect, and why the deployed system compares each patient against their own baseline asymmetry rather than against zero.",
-    "Validating against mPower (real Parkinson's tapping) is the next step and is what should appear in the pitch; pass --mpower once access is granted.",
+    "mPower alone cannot validate a Parkinson's-vs-stroke claim. The --mpower path verifies normalised records and then fails closed until a preregistered comparison against a separately consented stroke cohort is implemented.",
     "The ratio is unsigned. Which side is weak is a property of the patient's existing lesion and is already known at enrolment."
   ],
   "seed": 42,
-  "trained_at": "2026-08-21T20:45:23+00:00",
-  "python": "3.11.0"
+  "trained_at": "2026-08-30T19:09:37+00:00",
+  "python": "3.11.14"
 }

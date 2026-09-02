@@ -205,6 +205,46 @@ export const STRINGS = {
     hi: "लिंक फिर कॉपी करें",
     pa: "ਲਿੰਕ ਫਿਰ ਕਾਪੀ ਕਰੋ",
   },
+  awaazListenerActive: {
+    en: "This link can show new confirmed messages until it expires. Stop sharing when the conversation ends.",
+    hi: "यह लिंक समाप्त होने तक नए पुष्ट संदेश दिखा सकता है। बातचीत खत्म होने पर साझा करना बंद करें।",
+    pa: "ਇਹ ਲਿੰਕ ਮਿਆਦ ਖ਼ਤਮ ਹੋਣ ਤੱਕ ਨਵੇਂ ਪੁਸ਼ਟੀ ਕੀਤੇ ਸੁਨੇਹੇ ਦਿਖਾ ਸਕਦਾ ਹੈ। ਗੱਲਬਾਤ ਮੁੱਕਣ 'ਤੇ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਕਰੋ।",
+  },
+  awaazListenerCreated: {
+    en: "Listening link created. It is shown below.",
+    hi: "सुनने वाला लिंक बन गया है। यह नीचे दिख रहा है।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਬਣ ਗਿਆ ਹੈ। ਇਹ ਹੇਠਾਂ ਦਿਖ ਰਿਹਾ ਹੈ।",
+  },
+  awaazListenerCopied: {
+    en: "Listening link copied.",
+    hi: "सुनने वाला लिंक कॉपी हो गया।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ।",
+  },
+  awaazListenerCopyFailed: {
+    en: "The link is active but could not be copied automatically. Copy the address shown below.",
+    hi: "लिंक चालू है लेकिन अपने-आप कॉपी नहीं हुआ। नीचे दिखा पता कॉपी करें।",
+    pa: "ਲਿੰਕ ਚਾਲੂ ਹੈ ਪਰ ਆਪਣੇ ਆਪ ਕਾਪੀ ਨਹੀਂ ਹੋਇਆ। ਹੇਠਾਂ ਦਿਖਾਇਆ ਪਤਾ ਕਾਪੀ ਕਰੋ।",
+  },
+  awaazListenerRevoke: {
+    en: "Stop sharing this link",
+    hi: "यह लिंक साझा करना बंद करें",
+    pa: "ਇਹ ਲਿੰਕ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਕਰੋ",
+  },
+  awaazListenerRevoking: {
+    en: "Stopping sharing…",
+    hi: "साझा करना बंद हो रहा है…",
+    pa: "ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਹੋ ਰਿਹਾ ਹੈ…",
+  },
+  awaazListenerRevoked: {
+    en: "Listening link revoked. It can no longer be opened.",
+    hi: "सुनने वाला लिंक रद्द हो गया। अब इसे खोला नहीं जा सकता।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਰੱਦ ਹੋ ਗਿਆ। ਹੁਣ ਇਸਨੂੰ ਖੋਲ੍ਹਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ।",
+  },
+  awaazListenerRevokeFailed: {
+    en: "The link could not be revoked. Check the connection and try again.",
+    hi: "लिंक रद्द नहीं हो सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    pa: "ਲਿੰਕ ਰੱਦ ਨਹੀਂ ਹੋ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
   // The default listener name is deliberately not the patient's full name: a link can be
   // forwarded, and a stranger does not need their identity in order to help them.
   awaazListenerDefaultName: {
@@ -216,6 +256,56 @@ export const STRINGS = {
     en: "This evening's review",
     hi: "आज शाम की जाँच",
     pa: "ਅੱਜ ਸ਼ਾਮ ਦੀ ਜਾਂਚ",
+  },
+  awaazManagePhrasesTitle: {
+    en: "Manage the phrase board",
+    hi: "वाक्य बोर्ड बदलें",
+    pa: "ਵਾਕ ਬੋਰਡ ਬਦਲੋ",
+  },
+  awaazManagePhrasesHelp: {
+    en: "Add the words this person uses every day. This changes the tiles only; it does not train speech recognition.",
+    hi: "वे शब्द जोड़ें जो यह व्यक्ति रोज़ इस्तेमाल करता है। इससे केवल टाइल बदलती हैं; आवाज़ पहचान का प्रशिक्षण नहीं होता।",
+    pa: "ਉਹ ਸ਼ਬਦ ਜੋੜੋ ਜੋ ਇਹ ਵਿਅਕਤੀ ਹਰ ਰੋਜ਼ ਵਰਤਦਾ ਹੈ। ਇਸ ਨਾਲ ਸਿਰਫ਼ ਟਾਈਲਾਂ ਬਦਲਦੀਆਂ ਹਨ; ਆਵਾਜ਼ ਪਛਾਣ ਦੀ ਟ੍ਰੇਨਿੰਗ ਨਹੀਂ ਹੁੰਦੀ।",
+  },
+  awaazPhrasePlaceholder: {
+    en: "e.g. Call Dr Singh",
+    hi: "जैसे: डॉ. सिंह को बुलाओ",
+    pa: "ਜਿਵੇਂ: ਡਾ. ਸਿੰਘ ਨੂੰ ਬੁਲਾਓ",
+  },
+  awaazPhraseAdd: {
+    en: "Add phrase",
+    hi: "वाक्य जोड़ें",
+    pa: "ਵਾਕ ਜੋੜੋ",
+  },
+  awaazPhraseAdded: {
+    en: "Phrase added to the board.",
+    hi: "वाक्य बोर्ड में जोड़ दिया गया।",
+    pa: "ਵਾਕ ਬੋਰਡ ਵਿੱਚ ਜੋੜ ਦਿੱਤਾ ਗਿਆ।",
+  },
+  awaazPhraseAddFailed: {
+    en: "The phrase could not be added. It may already be on the board or the board may be full.",
+    hi: "वाक्य नहीं जोड़ा जा सका। यह पहले से बोर्ड पर हो सकता है या बोर्ड भरा हो सकता है।",
+    pa: "ਵਾਕ ਜੋੜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਇਹ ਪਹਿਲਾਂ ਹੀ ਬੋਰਡ ਉੱਤੇ ਹੋ ਸਕਦਾ ਹੈ ਜਾਂ ਬੋਰਡ ਭਰਿਆ ਹੋ ਸਕਦਾ ਹੈ।",
+  },
+  awaazPhraseRemove: {
+    en: "Remove",
+    hi: "हटाएँ",
+    pa: "ਹਟਾਓ",
+  },
+  awaazPhraseRemoveConfirm: {
+    en: "Remove this phrase from the board? Existing learning recordings are not deleted.",
+    hi: "यह वाक्य बोर्ड से हटाएँ? पहले से सहेजी सीखने की रिकॉर्डिंग नहीं मिटेंगी।",
+    pa: "ਇਹ ਵਾਕ ਬੋਰਡ ਤੋਂ ਹਟਾਉਣਾ ਹੈ? ਪਹਿਲਾਂ ਤੋਂ ਸੰਭਾਲੀਆਂ ਸਿੱਖਣ ਵਾਲੀਆਂ ਰਿਕਾਰਡਿੰਗਾਂ ਨਹੀਂ ਮਿਟਣਗੀਆਂ।",
+  },
+  awaazPhraseRemoved: {
+    en: "Phrase removed from the board.",
+    hi: "वाक्य बोर्ड से हटा दिया गया।",
+    pa: "ਵਾਕ ਬੋਰਡ ਤੋਂ ਹਟਾ ਦਿੱਤਾ ਗਿਆ।",
+  },
+  awaazPhraseRemoveFailed: {
+    en: "The phrase could not be removed. Check the connection and try again.",
+    hi: "वाक्य हटाया नहीं जा सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    pa: "ਵਾਕ ਹਟਾਇਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   },
   awaazTypeSpeak: {
     en: "Type what you want said aloud",
@@ -235,6 +325,181 @@ export const STRINGS = {
     pa: "ਜੋ ਕਹਿਣਾ ਹੈ ਉਸ 'ਤੇ ਟੈਪ ਕਰੋ। ਚੁਣਨ ਤੋਂ ਪਹਿਲਾਂ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਜਾਵੇਗਾ।",
   },
   awaazNone: { en: "None of these", hi: "इनमें से कोई नहीं", pa: "ਇਹਨਾਂ ਵਿੱਚੋਂ ਕੋਈ ਨਹੀਂ" },
+  awaazNotSaved: {
+    en: "It was spoken on this phone, but could not be saved. Check the connection.",
+    hi: "यह फ़ोन पर बोल दिया गया, लेकिन सहेजा नहीं जा सका। कनेक्शन जाँचें।",
+    pa: "ਇਹ ਫ਼ੋਨ 'ਤੇ ਬੋਲ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਸੰਭਾਲਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ।",
+  },
+  awaazConfirmFailed: {
+    en: "Nothing was spoken because confirmation could not be saved. Please try again.",
+    hi: "पुष्टि सहेजी नहीं जा सकी, इसलिए कुछ नहीं बोला गया। फिर कोशिश करें।",
+    pa: "ਪੁਸ਼ਟੀ ਸੰਭਾਲੀ ਨਹੀਂ ਜਾ ਸਕੀ, ਇਸ ਲਈ ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਗਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  awaazEmergencyDeliveryMissing: {
+    en: "A caregiver alert was not accepted for delivery. Call family or 108 directly.",
+    hi: "देखभालकर्ता अलर्ट भेजने के लिए स्वीकार नहीं हुआ। परिवार या 108 को सीधे कॉल करें।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਭੇਜਣ ਲਈ ਸਵੀਕਾਰ ਨਹੀਂ ਹੋਇਆ। ਪਰਿਵਾਰ ਜਾਂ 108 ਨੂੰ ਸਿੱਧਾ ਕਾਲ ਕਰੋ।",
+  },
+  awaazEmergencyDelivered: {
+    en: "Caregiver alert accepted for delivery.",
+    hi: "देखभालकर्ता अलर्ट भेजने के लिए स्वीकार हुआ।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਦਾ ਅਲਰਟ ਭੇਜਣ ਲਈ ਸਵੀਕਾਰ ਹੋਇਆ।",
+  },
+  awaazEmergencyOfflineMissing: {
+    en: "The saved offline phrase did not play. A browser voice was attempted; set up and test the offline phrase below.",
+    hi: "सहेजा हुआ ऑफ़लाइन संदेश नहीं चला। ब्राउज़र की आवाज़ की कोशिश की गई; नीचे ऑफ़लाइन संदेश सेट करके जाँचें।",
+    pa: "ਸੰਭਾਲਿਆ ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਨਹੀਂ ਚੱਲਿਆ। ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਆਵਾਜ਼ ਦੀ ਕੋਸ਼ਿਸ਼ ਕੀਤੀ ਗਈ; ਹੇਠਾਂ ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸੈੱਟ ਕਰਕੇ ਜਾਂਚੋ।",
+  },
+  awaazEmergencyOfflineReady: {
+    en: "The saved emergency phrase is ready on this device without internet.",
+    hi: "सहेजा हुआ आपातकालीन संदेश इस डिवाइस पर बिना इंटरनेट तैयार है।",
+    pa: "ਸੰਭਾਲਿਆ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਤਿਆਰ ਹੈ।",
+  },
+  awaazEmergencyHoldHint: {
+    en: "Or press and hold empty space for 1.2 seconds",
+    hi: "या खाली जगह को 1.2 सेकंड दबाकर रखें",
+    pa: "ਜਾਂ ਖਾਲੀ ਥਾਂ ਨੂੰ 1.2 ਸਕਿੰਟ ਦਬਾ ਕੇ ਰੱਖੋ",
+  },
+  awaazEmergencyHolding: {
+    en: "Keep holding for emergency…",
+    hi: "आपातकाल के लिए दबाए रखें…",
+    pa: "ਐਮਰਜੈਂਸੀ ਲਈ ਦਬਾਈ ਰੱਖੋ…",
+  },
+  awaazEmergencyCall108: {
+    en: "Open phone to call 108",
+    hi: "108 पर कॉल करने के लिए फ़ोन खोलें",
+    pa: "108 'ਤੇ ਕਾਲ ਕਰਨ ਲਈ ਫ਼ੋਨ ਖੋਲ੍ਹੋ",
+  },
+  awaazBoardOfflineUnavailable: {
+    en: "The rest of the communication board needs a connection right now. Emergency voice remains available above.",
+    hi: "बाकी संवाद बोर्ड को अभी कनेक्शन चाहिए। ऊपर आपातकालीन आवाज़ उपलब्ध है।",
+    pa: "ਬਾਕੀ ਸੰਚਾਰ ਬੋਰਡ ਨੂੰ ਹੁਣ ਕਨੈਕਸ਼ਨ ਚਾਹੀਦਾ ਹੈ। ਉੱਪਰ ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼ ਉਪਲਬਧ ਹੈ।",
+  },
+  awaazBoardOfflineReady: {
+    en: "Offline: saved phrase tiles are available. Taps use this phone's installed browser voice; activity and changes are not saved until the connection returns.",
+    hi: "ऑफ़लाइन: सहेजे हुए वाक्य उपलब्ध हैं। टैप इस फ़ोन की ब्राउज़र आवाज़ का उपयोग करते हैं; कनेक्शन लौटने तक गतिविधि और बदलाव सहेजे नहीं जाएँगे।",
+    pa: "ਆਫ਼ਲਾਈਨ: ਸੰਭਾਲੇ ਹੋਏ ਵਾਕ ਉਪਲਬਧ ਹਨ। ਟੈਪ ਇਸ ਫ਼ੋਨ ਦੀ ਬਰਾਊਜ਼ਰ ਆਵਾਜ਼ ਵਰਤਦੇ ਹਨ; ਕਨੈਕਸ਼ਨ ਵਾਪਸ ਆਉਣ ਤੱਕ ਸਰਗਰਮੀ ਅਤੇ ਬਦਲਾਅ ਸੰਭਾਲੇ ਨਹੀਂ ਜਾਣਗੇ।",
+  },
+  awaazOfflineActivityNotSaved: {
+    en: "The phrase was shown and browser speech was attempted, but this offline tap was not saved.",
+    hi: "वाक्य दिखाया गया और ब्राउज़र से बोलने की कोशिश हुई, लेकिन यह ऑफ़लाइन टैप सहेजा नहीं गया।",
+    pa: "ਵਾਕ ਦਿਖਾਇਆ ਗਿਆ ਅਤੇ ਬਰਾਊਜ਼ਰ ਰਾਹੀਂ ਬੋਲਣ ਦੀ ਕੋਸ਼ਿਸ਼ ਹੋਈ, ਪਰ ਇਹ ਆਫ਼ਲਾਈਨ ਟੈਪ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ।",
+  },
+  awaazEmergencySetupTitle: {
+    en: "Offline emergency voice",
+    hi: "ऑफ़लाइन आपातकालीन आवाज़",
+    pa: "ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼",
+  },
+  awaazEmergencyReady: {
+    en: "Saved on this device and ready without internet",
+    hi: "इस डिवाइस पर सहेजा गया और बिना इंटरनेट तैयार",
+    pa: "ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ ਅਤੇ ਇੰਟਰਨੈੱਟ ਤੋਂ ਬਿਨਾਂ ਤਿਆਰ",
+  },
+  awaazEmergencyNeedsSetup: {
+    en: "Not set up on this device",
+    hi: "इस डिवाइस पर सेट नहीं किया गया",
+    pa: "ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੈੱਟ ਨਹੀਂ ਕੀਤਾ ਗਿਆ",
+  },
+  awaazEmergencySetupIntro: {
+    en: "A caregiver should record this exact phrase once. It stays only on this device and plays before any network request.",
+    hi: "देखभालकर्ता इस संदेश को एक बार ठीक इसी तरह रिकॉर्ड करें। यह केवल इस डिवाइस पर रहता है और किसी नेटवर्क अनुरोध से पहले चलता है।",
+    pa: "ਦੇਖਭਾਲ ਕਰਨ ਵਾਲਾ ਇਹੀ ਸੁਨੇਹਾ ਇੱਕ ਵਾਰ ਰਿਕਾਰਡ ਕਰੇ। ਇਹ ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਰਹਿੰਦਾ ਹੈ ਅਤੇ ਕਿਸੇ ਨੈੱਟਵਰਕ ਬੇਨਤੀ ਤੋਂ ਪਹਿਲਾਂ ਚੱਲਦਾ ਹੈ।",
+  },
+  awaazEmergencyLocationLabel: {
+    en: "Share location on an emergency tap",
+    hi: "आपातकालीन टैप पर स्थान साझा करें",
+    pa: "ਐਮਰਜੈਂਸੀ ਟੈਪ 'ਤੇ ਟਿਕਾਣਾ ਸਾਂਝਾ ਕਰੋ",
+  },
+  awaazEmergencyLocationHelp: {
+    en: "Optional. Exact coordinates are requested only for an emergency and sent to the caregiver provider when connected.",
+    hi: "वैकल्पिक। सटीक स्थान केवल आपातकाल में माँगा जाता है और सेवा जुड़ी होने पर देखभालकर्ता को भेजा जाता है।",
+    pa: "ਵਿਕਲਪਿਕ। ਸਹੀ ਟਿਕਾਣਾ ਸਿਰਫ਼ ਐਮਰਜੈਂਸੀ ਵੇਲੇ ਮੰਗਿਆ ਜਾਂਦਾ ਹੈ ਅਤੇ ਸੇਵਾ ਜੁੜੀ ਹੋਣ 'ਤੇ ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਨੂੰ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।",
+  },
+  awaazEmergencyLocationRequesting: {
+    en: "Requesting this device's location…",
+    hi: "इस डिवाइस का स्थान माँगा जा रहा है…",
+    pa: "ਇਸ ਡਿਵਾਈਸ ਦਾ ਟਿਕਾਣਾ ਮੰਗਿਆ ਜਾ ਰਿਹਾ ਹੈ…",
+  },
+  awaazEmergencyLocationReady: {
+    en: "Location is ready for the next emergency tap.",
+    hi: "अगले आपातकालीन टैप के लिए स्थान तैयार है।",
+    pa: "ਅਗਲੇ ਐਮਰਜੈਂਸੀ ਟੈਪ ਲਈ ਟਿਕਾਣਾ ਤਿਆਰ ਹੈ।",
+  },
+  awaazEmergencyLocationUnavailable: {
+    en: "Location is unavailable. Emergency speech still works; check browser permission if you want to share it.",
+    hi: "स्थान उपलब्ध नहीं है। आपातकालीन आवाज़ फिर भी काम करती है; साझा करने के लिए ब्राउज़र अनुमति जाँचें।",
+    pa: "ਟਿਕਾਣਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਐਮਰਜੈਂਸੀ ਆਵਾਜ਼ ਫਿਰ ਵੀ ਕੰਮ ਕਰਦੀ ਹੈ; ਸਾਂਝਾ ਕਰਨ ਲਈ ਬ੍ਰਾਊਜ਼ਰ ਇਜਾਜ਼ਤ ਜਾਂਚੋ।",
+  },
+  awaazEmergencyLocationOff: {
+    en: "Emergency location sharing is off.",
+    hi: "आपातकालीन स्थान साझा करना बंद है।",
+    pa: "ਐਮਰਜੈਂਸੀ ਟਿਕਾਣਾ ਸਾਂਝਾ ਕਰਨਾ ਬੰਦ ਹੈ।",
+  },
+  awaazEmergencyTestRecorded: {
+    en: "The last self-test started successfully.",
+    hi: "पिछली स्व-जाँच सफलतापूर्वक शुरू हुई।",
+    pa: "ਪਿਛਲੀ ਸਵੈ-ਜਾਂਚ ਸਫਲਤਾਪੂਰਵਕ ਸ਼ੁਰੂ ਹੋਈ।",
+  },
+  awaazEmergencyNotTested: {
+    en: "Recorded, but not self-tested yet.",
+    hi: "रिकॉर्ड हो गया, लेकिन अभी स्व-जाँच नहीं हुई।",
+    pa: "ਰਿਕਾਰਡ ਹੋ ਗਿਆ, ਪਰ ਹਾਲੇ ਸਵੈ-ਜਾਂਚ ਨਹੀਂ ਹੋਈ।",
+  },
+  awaazEmergencyRecord: {
+    en: "Record phrase",
+    hi: "संदेश रिकॉर्ड करें",
+    pa: "ਸੁਨੇਹਾ ਰਿਕਾਰਡ ਕਰੋ",
+  },
+  awaazEmergencyRerecord: {
+    en: "Record again",
+    hi: "फिर रिकॉर्ड करें",
+    pa: "ਦੁਬਾਰਾ ਰਿਕਾਰਡ ਕਰੋ",
+  },
+  awaazEmergencyTest: {
+    en: "Test offline voice",
+    hi: "ऑफ़लाइन आवाज़ जाँचें",
+    pa: "ਆਫ਼ਲਾਈਨ ਆਵਾਜ਼ ਜਾਂਚੋ",
+  },
+  awaazEmergencyDelete: {
+    en: "Delete offline phrase",
+    hi: "ऑफ़लाइन संदेश मिटाएँ",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਮਿਟਾਓ",
+  },
+  awaazEmergencySavedTestNext: {
+    en: "Saved only on this device. Test it now before relying on it.",
+    hi: "केवल इस डिवाइस पर सहेजा गया। भरोसा करने से पहले अभी जाँचें।",
+    pa: "ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ। ਭਰੋਸਾ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਹੁਣੇ ਜਾਂਚੋ।",
+  },
+  awaazEmergencySetupFailed: {
+    en: "The offline phrase could not be saved. Try again and complete the self-test.",
+    hi: "ऑफ़लाइन संदेश सहेजा नहीं जा सका। फिर कोशिश करें और स्व-जाँच पूरी करें।",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸੰਭਾਲਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਅਤੇ ਸਵੈ-ਜਾਂਚ ਪੂਰੀ ਕਰੋ।",
+  },
+  awaazEmergencyTestFailed: {
+    en: "The offline phrase did not start. Record it again before relying on it.",
+    hi: "ऑफ़लाइन संदेश शुरू नहीं हुआ। भरोसा करने से पहले फिर रिकॉर्ड करें।",
+    pa: "ਆਫ਼ਲਾਈਨ ਸੁਨੇਹਾ ਸ਼ੁਰੂ ਨਹੀਂ ਹੋਇਆ। ਭਰੋਸਾ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਦੁਬਾਰਾ ਰਿਕਾਰਡ ਕਰੋ।",
+  },
+  awaazEmergencyTestPassed: {
+    en: "Self-test passed: the on-device phrase started playing.",
+    hi: "स्व-जाँच सफल: डिवाइस पर सहेजा संदेश चलना शुरू हुआ।",
+    pa: "ਸਵੈ-ਜਾਂਚ ਸਫਲ: ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲਿਆ ਸੁਨੇਹਾ ਚੱਲਣਾ ਸ਼ੁਰੂ ਹੋਇਆ।",
+  },
+  awaazEmergencyDeleteConfirm: {
+    en: "Delete the offline emergency phrase from this device? Emergency taps will fall back to the browser voice.",
+    hi: "इस डिवाइस से ऑफ़लाइन आपातकालीन संदेश मिटाएँ? आपातकालीन टैप ब्राउज़र की आवाज़ पर निर्भर होगा।",
+    pa: "ਇਸ ਡਿਵਾਈਸ ਤੋਂ ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਮਿਟਾਉਣਾ ਹੈ? ਐਮਰਜੈਂਸੀ ਟੈਪ ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਆਵਾਜ਼ 'ਤੇ ਨਿਰਭਰ ਹੋਵੇਗਾ।",
+  },
+  awaazEmergencyDeleted: {
+    en: "Offline emergency phrase deleted from this device.",
+    hi: "ऑफ़लाइन आपातकालीन संदेश इस डिवाइस से मिटा दिया गया।",
+    pa: "ਆਫ਼ਲਾਈਨ ਐਮਰਜੈਂਸੀ ਸੁਨੇਹਾ ਇਸ ਡਿਵਾਈਸ ਤੋਂ ਮਿਟਾ ਦਿੱਤਾ ਗਿਆ।",
+  },
+  awaazListenerFailed: {
+    en: "The listening link could not be created. Check the connection and try again.",
+    hi: "सुनने वाला लिंक नहीं बन सका। कनेक्शन जाँचकर फिर कोशिश करें।",
+    pa: "ਸੁਣਨ ਵਾਲਾ ਲਿੰਕ ਨਹੀਂ ਬਣ ਸਕਿਆ। ਕਨੈਕਸ਼ਨ ਜਾਂਚ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
   awaazAphasiaNote: {
     en: "This board only ever offers choices. It never speaks for you without your tap.",
     hi: "यह बोर्ड सिर्फ़ विकल्प देता है। आपके टैप के बिना कभी आपकी ओर से नहीं बोलता।",
@@ -244,6 +509,143 @@ export const STRINGS = {
     en: "Clear enough speech is said aloud automatically; anything uncertain asks first.",
     hi: "साफ़ बोली अपने आप बोल दी जाती है; अनिश्चित होने पर पहले पूछा जाता है।",
     pa: "ਸਾਫ਼ ਬੋਲੀ ਆਪਣੇ ਆਪ ਬੋਲ ਦਿੱਤੀ ਜਾਂਦੀ ਹੈ; ਅਨਿਸ਼ਚਿਤ ਹੋਣ 'ਤੇ ਪਹਿਲਾਂ ਪੁੱਛਿਆ ਜਾਂਦਾ ਹੈ।",
+  },
+  awaazPracticeTitle: {
+    en: "Help Awaaz learn naturally",
+    hi: "आवाज़ को स्वाभाविक रूप से सीखने में मदद करें",
+    pa: "ਆਵਾਜ਼ ਨੂੰ ਕੁਦਰਤੀ ਤਰੀਕੇ ਨਾਲ ਸਿੱਖਣ ਵਿੱਚ ਮਦਦ ਕਰੋ",
+  },
+  awaazPracticeIntro: {
+    en: "Record what you are trying to say, then tap the matching card. The recording stays only on this device.",
+    hi: "जो कहना चाहते हैं उसे रिकॉर्ड करें, फिर सही कार्ड दबाएँ। रिकॉर्डिंग केवल इसी डिवाइस पर रहती है।",
+    pa: "ਜੋ ਕਹਿਣਾ ਚਾਹੁੰਦੇ ਹੋ ਉਹ ਰਿਕਾਰਡ ਕਰੋ, ਫਿਰ ਸਹੀ ਕਾਰਡ ਦਬਾਓ। ਰਿਕਾਰਡਿੰਗ ਸਿਰਫ਼ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਰਹਿੰਦੀ ਹੈ।",
+  },
+  awaazCaptureConsent: {
+    en: "I agree to keep these practice recordings on this device for future personalisation. I can delete them anytime.",
+    hi: "मैं भविष्य में निजी बनाने के लिए अभ्यास रिकॉर्डिंग इस डिवाइस पर रखने के लिए सहमत हूँ। इन्हें कभी भी मिटा सकता/सकती हूँ।",
+    pa: "ਮੈਂ ਭਵਿੱਖ ਦੇ ਨਿੱਜੀਕਰਨ ਲਈ ਅਭਿਆਸ ਰਿਕਾਰਡਿੰਗਾਂ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਰੱਖਣ ਲਈ ਸਹਿਮਤ ਹਾਂ। ਮੈਂ ਇਹਨਾਂ ਨੂੰ ਕਦੇ ਵੀ ਮਿਟਾ ਸਕਦਾ/ਸਕਦੀ ਹਾਂ।",
+  },
+  awaazStartRecording: {
+    en: "Start practice recording",
+    hi: "अभ्यास रिकॉर्डिंग शुरू करें",
+    pa: "ਅਭਿਆਸ ਰਿਕਾਰਡਿੰਗ ਸ਼ੁਰੂ ਕਰੋ",
+  },
+  awaazStopRecording: {
+    en: "Stop recording",
+    hi: "रिकॉर्डिंग रोकें",
+    pa: "ਰਿਕਾਰਡਿੰਗ ਰੋਕੋ",
+  },
+  awaazChoosePhrase: {
+    en: "Now tap the card that matches what you said.",
+    hi: "अब वही कार्ड दबाएँ जो आपने कहा था।",
+    pa: "ਹੁਣ ਉਹ ਕਾਰਡ ਦਬਾਓ ਜੋ ਤੁਸੀਂ ਕਿਹਾ ਸੀ।",
+  },
+  awaazDiscardRecording: {
+    en: "Discard this recording",
+    hi: "यह रिकॉर्डिंग मिटाएँ",
+    pa: "ਇਹ ਰਿਕਾਰਡਿੰਗ ਮਿਟਾਓ",
+  },
+  awaazCaptureSaved: {
+    en: "Practice pair saved on this device.",
+    hi: "अभ्यास जोड़ी इस डिवाइस पर सहेजी गई।",
+    pa: "ਅਭਿਆਸ ਜੋੜੀ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲੀ ਗਈ।",
+  },
+  awaazCaptureFailed: {
+    en: "The recording could not be paired. It is still ready—tap the same card to retry or discard it.",
+    hi: "रिकॉर्डिंग जोड़ी नहीं जा सकी। यह अभी तैयार है—उसी कार्ड को फिर दबाएँ या इसे मिटाएँ।",
+    pa: "ਰਿਕਾਰਡਿੰਗ ਜੋੜੀ ਨਹੀਂ ਜਾ ਸਕੀ। ਇਹ ਹਾਲੇ ਤਿਆਰ ਹੈ—ਉਹੀ ਕਾਰਡ ਦੁਬਾਰਾ ਦਬਾਓ ਜਾਂ ਇਸ ਨੂੰ ਮਿਟਾਓ।",
+  },
+  awaazMicUnavailable: {
+    en: "The microphone is not available. Check browser permission and try again.",
+    hi: "माइक्रोफ़ोन उपलब्ध नहीं है। ब्राउज़र अनुमति जाँचकर फिर कोशिश करें।",
+    pa: "ਮਾਈਕ੍ਰੋਫੋਨ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਇਜਾਜ਼ਤ ਜਾਂਚ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  },
+  awaazAutoStop: {
+    en: "Automatically stop after my pause",
+    hi: "मेरे विराम के बाद अपने आप रोकें",
+    pa: "ਮੇਰੇ ਵਿਰਾਮ ਤੋਂ ਬਾਅਦ ਆਪਣੇ ਆਪ ਰੋਕੋ",
+  },
+  awaazPauseLabel: {
+    en: "Wait through pauses before stopping",
+    hi: "रोकने से पहले विराम का इंतज़ार",
+    pa: "ਰੋਕਣ ਤੋਂ ਪਹਿਲਾਂ ਵਿਰਾਮ ਦੀ ਉਡੀਕ",
+  },
+  awaazSavePause: { en: "Save pause time", hi: "विराम समय सहेजें", pa: "ਵਿਰਾਮ ਸਮਾਂ ਸੰਭਾਲੋ" },
+  awaazPauseSaved: { en: "Pause time saved.", hi: "विराम समय सहेजा गया।", pa: "ਵਿਰਾਮ ਸਮਾਂ ਸੰਭਾਲਿਆ ਗਿਆ।" },
+  awaazLocalPairs: {
+    en: "learning recordings stored on this device",
+    hi: "सीखने की रिकॉर्डिंग इस डिवाइस पर सहेजी गईं",
+    pa: "ਸਿੱਖਣ ਵਾਲੀਆਂ ਰਿਕਾਰਡਿੰਗਾਂ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਸੰਭਾਲੀਆਂ ਗਈਆਂ",
+  },
+  awaazDeleteRecordings: {
+    en: "Delete all local recordings",
+    hi: "सभी स्थानीय रिकॉर्डिंग मिटाएँ",
+    pa: "ਸਾਰੀਆਂ ਲੋਕਲ ਰਿਕਾਰਡਿੰਗਾਂ ਮਿਟਾਓ",
+  },
+  awaazDeleteConfirm: {
+    en: "Delete every Awaaz practice recording stored in this browser? This cannot be undone.",
+    hi: "इस ब्राउज़र में सहेजी सभी आवाज़ अभ्यास रिकॉर्डिंग मिटाएँ? इसे वापस नहीं किया जा सकता।",
+    pa: "ਇਸ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਸੰਭਾਲੀਆਂ ਸਾਰੀਆਂ ਆਵਾਜ਼ ਅਭਿਆਸ ਰਿਕਾਰਡਿੰਗਾਂ ਮਿਟਾਉਣੀਆਂ ਹਨ? ਇਹ ਵਾਪਸ ਨਹੀਂ ਹੋ ਸਕਦਾ।",
+  },
+  awaazDeleteDone: {
+    en: "Local practice recordings deleted.",
+    hi: "स्थानीय अभ्यास रिकॉर्डिंग मिटा दी गईं।",
+    pa: "ਲੋਕਲ ਅਭਿਆਸ ਰਿਕਾਰਡਿੰਗਾਂ ਮਿਟਾ ਦਿੱਤੀਆਂ ਗਈਆਂ।",
+  },
+  awaazDeleteReceiptFailed: {
+    en: "The recordings were deleted here, but the server receipt could not be updated. The audio is no longer on this device.",
+    hi: "रिकॉर्डिंग यहाँ मिटा दी गईं, लेकिन सर्वर रसीद अपडेट नहीं हो सकी। ऑडियो अब इस डिवाइस पर नहीं है।",
+    pa: "ਰਿਕਾਰਡਿੰਗਾਂ ਇੱਥੇ ਮਿਟਾ ਦਿੱਤੀਆਂ ਗਈਆਂ, ਪਰ ਸਰਵਰ ਰਸੀਦ ਅੱਪਡੇਟ ਨਹੀਂ ਹੋ ਸਕੀ। ਆਡੀਓ ਹੁਣ ਇਸ ਡਿਵਾਈਸ 'ਤੇ ਨਹੀਂ ਹੈ।",
+  },
+  awaazExportTitle: {
+    en: "Export for an authorised training workflow",
+    hi: "अधिकृत प्रशिक्षण प्रक्रिया के लिए निर्यात",
+    pa: "ਅਧਿਕਾਰਤ ਟ੍ਰੇਨਿੰਗ ਪ੍ਰਕਿਰਿਆ ਲਈ ਐਕਸਪੋਰਟ",
+  },
+  awaazExportHelp: {
+    en: "This verifies every WAV and downloads a local archive. Nothing is uploaded by NeuroTrace. The file contains patient voice and verified words; after download it is outside protected app storage and cannot be revoked here.",
+    hi: "यह हर WAV की जाँच करके एक स्थानीय संग्रह डाउनलोड करता है। न्यूरोट्रेस कुछ अपलोड नहीं करता। फ़ाइल में रोगी की आवाज़ और सत्यापित शब्द होते हैं; डाउनलोड के बाद यह सुरक्षित ऐप स्टोरेज से बाहर होगी और यहाँ से वापस नहीं ली जा सकती।",
+    pa: "ਇਹ ਹਰ WAV ਦੀ ਜਾਂਚ ਕਰਕੇ ਇੱਕ ਲੋਕਲ ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਕਰਦਾ ਹੈ। ਨਿਊਰੋਟ੍ਰੇਸ ਕੁਝ ਅੱਪਲੋਡ ਨਹੀਂ ਕਰਦਾ। ਫਾਈਲ ਵਿੱਚ ਮਰੀਜ਼ ਦੀ ਆਵਾਜ਼ ਅਤੇ ਪੁਸ਼ਟੀ ਕੀਤੇ ਸ਼ਬਦ ਹੁੰਦੇ ਹਨ; ਡਾਊਨਲੋਡ ਤੋਂ ਬਾਅਦ ਇਹ ਸੁਰੱਖਿਅਤ ਐਪ ਸਟੋਰੇਜ ਤੋਂ ਬਾਹਰ ਹੋਵੇਗੀ ਅਤੇ ਇੱਥੋਂ ਵਾਪਸ ਨਹੀਂ ਲਈ ਜਾ ਸਕਦੀ।",
+  },
+  awaazPolicyLoggingTitle: {
+    en: "Help improve which options appear first",
+    hi: "कौन-से विकल्प पहले दिखें, इसे बेहतर बनाने में मदद करें",
+    pa: "ਕਿਹੜੇ ਵਿਕਲਪ ਪਹਿਲਾਂ ਦਿਖਣ, ਇਸਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰੋ",
+  },
+  awaazPolicyLoggingHelp: {
+    en: "Only which option was tapped is recorded, as anonymous numbers. Your words, your recordings and your name are never part of it. Everything on this screen works exactly the same whether this is on or off.",
+    hi: "केवल यह दर्ज होता है कि कौन-सा विकल्प चुना गया, बेनाम संख्याओं के रूप में। आपके शब्द, आपकी रिकॉर्डिंग और आपका नाम इसमें कभी शामिल नहीं होते। यह चालू हो या बंद, इस स्क्रीन पर सब कुछ बिल्कुल वैसा ही चलता है।",
+    pa: "ਸਿਰਫ਼ ਇਹ ਦਰਜ ਹੁੰਦਾ ਹੈ ਕਿ ਕਿਹੜਾ ਵਿਕਲਪ ਚੁਣਿਆ ਗਿਆ, ਬੇਨਾਮ ਸੰਖਿਆਵਾਂ ਵਜੋਂ। ਤੁਹਾਡੇ ਸ਼ਬਦ, ਤੁਹਾਡੀਆਂ ਰਿਕਾਰਡਿੰਗਾਂ ਅਤੇ ਤੁਹਾਡਾ ਨਾਮ ਇਸ ਵਿੱਚ ਕਦੇ ਸ਼ਾਮਲ ਨਹੀਂ ਹੁੰਦੇ। ਇਹ ਚਾਲੂ ਹੋਵੇ ਜਾਂ ਬੰਦ, ਇਸ ਸਕਰੀਨ 'ਤੇ ਸਭ ਕੁਝ ਬਿਲਕੁਲ ਉਸੇ ਤਰ੍ਹਾਂ ਚੱਲਦਾ ਹੈ।",
+  },
+  awaazPolicyLoggingConsent: {
+    en: "I agree to share anonymous numbers about which option was chosen. I can switch this off anytime.",
+    hi: "मैं सहमत हूँ कि कौन-सा विकल्प चुना गया, इसकी बेनाम संख्याएँ साझा की जाएँ। मैं इसे कभी भी बंद कर सकता/सकती हूँ।",
+    pa: "ਮੈਂ ਸਹਿਮਤ ਹਾਂ ਕਿ ਕਿਹੜਾ ਵਿਕਲਪ ਚੁਣਿਆ ਗਿਆ, ਇਸ ਦੀਆਂ ਬੇਨਾਮ ਸੰਖਿਆਵਾਂ ਸਾਂਝੀਆਂ ਕੀਤੀਆਂ ਜਾਣ। ਮੈਂ ਇਸਨੂੰ ਕਦੇ ਵੀ ਬੰਦ ਕਰ ਸਕਦਾ/ਸਕਦੀ ਹਾਂ।",
+  },
+  awaazExportConsent: {
+    en: "I understand this sensitive voice archive leaves protected app storage when downloaded",
+    hi: "मैं समझता/समझती हूँ कि डाउनलोड होने पर यह संवेदनशील आवाज़ संग्रह सुरक्षित ऐप स्टोरेज से बाहर चला जाएगा",
+    pa: "ਮੈਂ ਸਮਝਦਾ/ਸਮਝਦੀ ਹਾਂ ਕਿ ਡਾਊਨਲੋਡ ਹੋਣ 'ਤੇ ਇਹ ਸੰਵੇਦਨਸ਼ੀਲ ਆਵਾਜ਼ ਆਰਕਾਈਵ ਸੁਰੱਖਿਅਤ ਐਪ ਸਟੋਰੇਜ ਤੋਂ ਬਾਹਰ ਚਲਾ ਜਾਵੇਗਾ",
+  },
+  awaazExportButton: {
+    en: "Download verified archive",
+    hi: "सत्यापित संग्रह डाउनलोड करें",
+    pa: "ਜਾਂਚਿਆ ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਕਰੋ",
+  },
+  awaazExporting: {
+    en: "Verifying recordings…",
+    hi: "रिकॉर्डिंग की जाँच हो रही है…",
+    pa: "ਰਿਕਾਰਡਿੰਗਾਂ ਦੀ ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ…",
+  },
+  awaazExportDone: {
+    en: "Archive downloaded. Store it securely; deleting recordings here cannot delete that file.",
+    hi: "संग्रह डाउनलोड हो गया। इसे सुरक्षित रखें; यहाँ रिकॉर्डिंग मिटाने से वह फ़ाइल नहीं मिटेगी।",
+    pa: "ਆਰਕਾਈਵ ਡਾਊਨਲੋਡ ਹੋ ਗਿਆ। ਇਸਨੂੰ ਸੁਰੱਖਿਅਤ ਰੱਖੋ; ਇੱਥੇ ਰਿਕਾਰਡਿੰਗਾਂ ਮਿਟਾਉਣ ਨਾਲ ਉਹ ਫਾਈਲ ਨਹੀਂ ਮਿਟੇਗੀ।",
+  },
+  awaazExportFailed: {
+    en: "The archive was not created. A recording may have failed its integrity check; nothing was uploaded.",
+    hi: "संग्रह नहीं बना। किसी रिकॉर्डिंग की सत्यापन जाँच विफल हो सकती है; कुछ भी अपलोड नहीं हुआ।",
+    pa: "ਆਰਕਾਈਵ ਨਹੀਂ ਬਣਿਆ। ਕਿਸੇ ਰਿਕਾਰਡਿੰਗ ਦੀ ਜਾਂਚ ਅਸਫਲ ਹੋ ਸਕਦੀ ਹੈ; ਕੁਝ ਵੀ ਅੱਪਲੋਡ ਨਹੀਂ ਹੋਇਆ।",
   },
   balanceFraming: {
     en: "Prop the phone about 1.5 metres away, so the whole body is in the frame.",

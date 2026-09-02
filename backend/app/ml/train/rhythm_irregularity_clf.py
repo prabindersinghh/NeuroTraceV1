@@ -110,6 +110,7 @@ def _run_synthetic(args) -> None:
     scores = binary_metrics(y.tolist(), prob.tolist(), threshold=0.5)
     metrics = Metrics(
         model="rhythm_irregularity_clf",
+        synthetic=True,
         dataset="SYNTHETIC FIXTURES (no PhysioNet data present)",
         n_total=n, n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
         n_groups=n, split="synthetic, one record per subject",
@@ -179,6 +180,7 @@ def main() -> None:
 
     metrics = Metrics(
         model="rhythm_irregularity_clf",
+        synthetic=False,
         dataset="PhysioNet/CinC 2017 AF Challenge",
         n_total=len(y), n_positive=int(y.sum()), n_negative=int((1 - y).sum()),
         n_groups=len(set(groups)), split=f"GroupKFold by record, {n_splits} folds",

@@ -50,7 +50,55 @@ turns it into a number with a confusion matrix.
 
 ### 4. `personalised_asr_adapter`
 LoRA fine-tuning per patient from harvested pairs (Awaaz D4). Few million parameters,
-trained nightly, shipped back for on-device inference.
+intended to train nightly and ship back for on-device inference. **Current executable status:
+an untrained runtime.** `app/ml/train/asr_runtime/` implements real LoRA/PEFT fine-tuning of
+an MMS / Wav2Vec2 CTC base, and it has produced nothing: no adapter, no WER, no
+intelligibility number. A strict importer verifies the versioned local tar without
+extraction, and the legacy `personalised_asr_adapter` command still refuses to write an
+adapter or non-synthetic metrics. The runtime is unreachable without a signed
+purpose-specific governance receipt, local base-model weights, and a GPU host, and its
+synthetic dry-run writes a private manifest and no model and no clinical metric. Held-out
+evaluation, human-listener intelligibility, and deployment approval remain prerequisites,
+and they are now the whole of the blocker — the missing piece is governance and evidence,
+not code.
+
+The verified archive can be checked for experimental readiness without exposing its
+contents:
+
+```bash
+python -m app.ml.train.awaaz_evaluation_plan \
+  --archive /authorised/path/awaaz-training.tar \
+  --out /authorised/path/awaaz-corpus-readiness.json
+```
+
+This creates an owner-readable planning artifact, not metrics. Fifty pairs and ten exact
+Unicode-normalised phrase groups are the hard gates for a deterministic 70/15/15
+phrase-disjoint plan at seed 42; 200 pairs remains a non-hard pilot target. The JSON contains
+aggregate counts and, when ready, capture UUID assignments, but no patient ID, transcript,
+audio, or audio hash. It explicitly records that a one-patient archive cannot support
+speaker-disjoint shared-model evaluation and that human listener intelligibility has not
+been measured.
+
+A separately approved shared-model study can check whether multiple local archives permit
+both speaker- and exact-phrase-disjoint evaluation without pooling or extracting them:
+
+```bash
+python -m app.ml.train.awaaz_cohort_plan \
+  --archive /authorised/path/patient-1.tar \
+  --archive /authorised/path/patient-2.tar \
+  --archive /authorised/path/patient-3.tar \
+  --out /authorised/path/awaaz-cohort-readiness.json
+```
+
+Every speaker is a whole assignment unit. If two speakers use the same phrase in the same
+language after Unicode normalization, they are joined into the same indivisible component;
+this prevents the shared board prompt from appearing on both sides of evaluation. Three
+speakers are therefore not automatically three clean splits. If shared prompts leave fewer
+than three independent components, the command emits an aggregate blocker with no capture
+IDs instead of inventing a leakage-safe result. A ready artifact contains capture-ID
+assignments but no patient IDs, phrases, audio, or hashes. It still performs no pooling,
+training, evaluation, or clinical measurement, and local export consent is not pooled-study
+consent.
 **Keep the day-30 adapter permanently** — the frozen-reference trick (D-013) applied to a
 model. If speech scores worse against the *frozen* adapter while the live one compensates
 perfectly, that is objective deterioration.
@@ -101,3 +149,7 @@ artefacts are produced, and a missing dataset is a data problem rather than a co
 
 Scripts emit `"synthetic": true` in `metrics.json` so a synthetic run can never be mistaken
 for a real one.
+
+For `personalised_asr_adapter`, an archive or directory merely existing is never evidence
+that training happened. Real-archive mode validates and fails closed; the synthetic mode is
+the only mode that writes the current demonstration metrics.

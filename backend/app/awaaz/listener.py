@@ -145,6 +145,7 @@ class ListenerSession:
     patient_id: str
     display_name: str
     lang: str
+    created_at: datetime
     expires_at: datetime
     revoked: bool = False
 
@@ -175,10 +176,12 @@ def create_listener_session(
     can be forwarded.
     """
     ttl = max(1, min(int(ttl_minutes), MAX_TTL_MINUTES))
+    now = datetime.now(timezone.utc)
     return ListenerSession(
         token=new_listener_token(),
         patient_id=str(patient_id),
         display_name=display_name.strip()[:64] or "Someone",
         lang=lang if lang in ("en", "hi", "pa") else "en",
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=ttl),
+        created_at=now,
+        expires_at=now + timedelta(minutes=ttl),
     )

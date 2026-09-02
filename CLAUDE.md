@@ -71,7 +71,7 @@ Each has a test. If one fails, that is the finding — do not route around it.
 ## Verifying your work
 
 ```bash
-cd backend && ./.venv/Scripts/python.exe -m pytest -q      # 841 tests
+cd backend && .venv/bin/python -m pytest -q      # 1191 tests
 cd frontend && npx vitest run && npx tsc -b && npm run build
 ./scripts/verify_deploy.sh                                 # against the live instance
 ```
@@ -98,6 +98,12 @@ Judge success by **exit code**, never by grepping output for "error".
   using a colour name.
 - **Every ML model is trained on synthetic fixtures.** Say so in any claim, anywhere. The
   same applies to the face-identity threshold. `ML_STATUS.md` is the source of truth.
+- **An executable training runtime is not a trained model.**
+  `backend/app/ml/train/asr_runtime/` is a governance-gated LoRA/PEFT runtime for MMS /
+  Wav2Vec2 CTC. It has never trained anything: no adapter exists, and no WER or
+  intelligibility number exists for Awaaz ASR anywhere in this repository. Its synthetic
+  dry-run writes a manifest and nothing else. Do not derive a metric, a model-card row, or
+  an `ML_STATUS.md` cell from the existence of that code.
 
 ## House style
 
