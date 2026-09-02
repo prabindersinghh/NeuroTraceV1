@@ -19,7 +19,33 @@
       type="font/woff2"
       crossorigin
     />
+    <!-- The app is light-only (tailwind `darkMode: ["class"]`, and no surface ever sets
+         it). Declared so a browser in dark mode does not repaint form controls and
+         scrollbars dark against a page that stayed white. -->
+    <meta name="color-scheme" content="light" />
     <title>NeuroTrace — a ~3-minute neurological exam, at home, every day</title>
+
+    <!-- Link previews. The title and description are deliberately the same strings as the
+         <title> and <meta name="description"> above rather than a second, punchier pair:
+         two descriptions of a medical product drift, and the one that drifts is always the
+         one nobody tests. No og:image is declared — the only artwork in this repo is SVG,
+         which most link unfurlers will not render, and pointing at an image that resolves
+         to nothing is worse than declaring none. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NeuroTrace" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:title" content="NeuroTrace — a ~3-minute neurological exam, at home, every day" />
+    <meta
+      property="og:description"
+      content="NeuroTrace - a ~3-minute daily neurological check-in for stroke survivors at home."
+    />
+    <meta property="og:url" content="https://neuro-trace-v1.vercel.app/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="NeuroTrace — a ~3-minute neurological exam, at home, every day" />
+    <meta
+      name="twitter:description"
+      content="NeuroTrace - a ~3-minute daily neurological check-in for stroke survivors at home."
+    />
   </head>
   <body>
     <div id="root"></div>

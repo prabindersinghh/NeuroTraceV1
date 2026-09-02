@@ -15,19 +15,51 @@ import { Link } from "react-router-dom";
 
 import { DURATION, EASE } from "@/lib/motion";
 
+/** The desktop bar. Seven, because an eighth wraps at 1280px and a wrapped nav reads as
+ *  an accident. The full set is in the phone menu below, which has room for all of them. */
 const SECTIONS = [
-  ["#problem", "The gap"],
+  ["#gap", "The gap"],
+  ["#signal", "The signal"],
   ["#baseline", "Whose normal"],
   ["#gates", "The decision"],
   ["#run", "21 days"],
-  ["#device", "On the phone"],
+  ["#reach", "Reach"],
+  ["#limits", "Limits"],
+];
+
+/** Everything, for the phone menu — where a longer list costs nothing. */
+const ALL_SECTIONS = [
+  ...SECTIONS.slice(0, 5),
   ["#measures", "What it measures"],
+  ["#device", "On the phone"],
+  ["#reach", "Reach"],
+  ["#awaaz", "Awaaz"],
   ["#limits", "Limits"],
 ];
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [progress, setProgress] = useState(0);
+  // The page has two dark chapters, and a white bar laid over either of them reads as a
+  // slab someone forgot to style. The header takes the tone of whatever is under it.
+  const [onDark, setOnDark] = useState(false);
+
+  useEffect(() => {
+    const marked = document.querySelectorAll("[data-tone='dark']");
+    if (!marked.length || typeof IntersectionObserver === "undefined") return;
+    const live = new Set<Element>();
+    // A one-pixel band at the header's own baseline: a section counts as "under the bar"
+    // exactly when it crosses that line, which is the only place the question matters.
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) live.add(entry.target);
+        else live.delete(entry.target);
+      }
+      setOnDark(live.size > 0);
+    }, { rootMargin: "-56px 0px -100% 0px" });
+    marked.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
     let frame = 0;
@@ -51,11 +83,16 @@ export function LandingNav() {
   return (
     <header
       className="sticky top-0 z-50"
+      data-dark={onDark || undefined}
       style={{
-        background: scrolled ? "hsl(var(--background) / 0.86)" : "hsl(var(--background) / 0)",
+        background: scrolled
+          ? (onDark ? "rgba(6,11,18,0.82)" : "hsl(var(--background) / 0.86)")
+          : "hsl(var(--background) / 0)",
         backdropFilter: scrolled ? "blur(12px)" : "none",
-        borderBottom: `1px solid ${scrolled ? "hsl(var(--border))" : "transparent"}`,
-        transition: `background-color ${DURATION.fast}ms ${EASE.standard}, border-color ${DURATION.fast}ms ${EASE.standard}`,
+        borderBottom: `1px solid ${scrolled ? (onDark ? "rgba(255,255,255,0.10)" : "hsl(var(--border))") : "transparent"}`,
+        color: onDark ? "#E6EDF6" : undefined,
+        transition: `background-color ${DURATION.fast}ms ${EASE.standard},`
+          + ` border-color ${DURATION.fast}ms ${EASE.standard}, color ${DURATION.fast}ms ${EASE.standard}`,
       }}
     >
       <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
@@ -67,23 +104,56 @@ export function LandingNav() {
             <a
               key={href}
               href={href}
-              className="focus-ring rounded text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+              className={`focus-ring rounded text-[13px] transition-colors ${onDark ? "text-white/55 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
             >
               {label}
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-1.5">
-          <Link to="/login" className="focus-ring rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+        {/* The phone menu. `<details>` rather than a state-driven panel: the platform
+            already gives us the disclosure semantics, the keyboard behaviour and the
+            open/close, and a nav that works before hydration is one fewer thing that can
+            be broken by a slow first load. */}
+        <details className="group relative ml-auto lg:hidden">
+          <summary className={`focus-ring flex list-none items-center gap-1.5 rounded-lg px-3 py-2 text-sm marker:hidden [&::-webkit-details-marker]:hidden ${onDark ? "text-white/70" : "text-muted-foreground"}`}>
+            Sections
+            <span aria-hidden className="transition-transform duration-200 group-open:rotate-180">▾</span>
+          </summary>
+          {/* Closing on choose is the one thing `<details>` does not give us: without it
+              the panel stays open over the heading the visitor just jumped to. */}
+          <nav
+            aria-label="All sections"
+            onClick={(e) => e.currentTarget.closest("details")?.removeAttribute("open")}
+            className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-line bg-background p-1.5"
+          >
+            {ALL_SECTIONS.map(([href, label]) => (
+              <a
+                key={href}
+                href={href}
+                className="focus-ring block rounded-lg px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-surface hover:text-foreground"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+        </details>
+
+        <div className="flex items-center gap-1.5 lg:ml-auto">
+          <Link to="/login" className={`focus-ring hidden rounded-lg px-3 py-2 text-sm sm:block ${onDark ? "text-white/70 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}>
             Log in
           </Link>
           {/* The demo lives on the sign-in screen (one tap, no form). This pointed at
               /register, where a visitor was asked to invent an account to see a demo. */}
           <Link
             to="/login"
-            className="focus-ring rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+            className={`focus-ring tactile rounded-lg px-4 py-2 text-sm font-medium ${
+              onDark ? "bg-white text-[#0A121C]" : "bg-foreground text-background"
+            }`}
           >
-            Open the demo
+            {/* "Open the demo" wraps to two lines at 390 px and doubles the header's
+                height. The short form only appears where the long one does not fit. */}
+            <span className="sm:hidden">Demo</span>
+            <span className="hidden sm:inline">Open the demo</span>
           </Link>
         </div>
       </div>

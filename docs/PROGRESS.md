@@ -250,7 +250,57 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-09-02 (later) · **Authentication hardened and redesigned, on branch
+**Last updated:** 2026-09-03 (latest) · **The signed-out landing page was rebuilt around one
+point cloud, on branch `feat/journey-experience` — NOT merged, NOT deployed.** The page now
+opens with a six-act overture (`SignalScene`) in which a single cloud of points is *moved*
+between six arrangements as the section scrolls — scatter, seven domain lanes, a folded
+cortex, a ninety-day ribbon, a five-node ecosystem, a thin wide distribution — because the
+continuity is the argument: the point that was an unmeasured morning is the same point that
+becomes a reading, a day, and a household. Geometry is `frontend/src/lib/cortex.ts` (pure,
+14 tests); the renderer is `components/landing/CortexField.tsx`, **raw WebGL2 and no
+library** — D-039 (no GSAP) and D-064 (no three.js) were re-examined and upheld, and the
+signed-out entry chunk grew 100.17 → 108.32 kB gzipped with **no dependency added**. Two
+sections the page genuinely lacked were written: `#reach`, which names the six assumptions a
+deployment is normally allowed to make and what this one does instead, and the overture
+itself. The Parkinson's confound merged into `#gates`. D-067.
+
+**The bug worth remembering** is that the WebGL fallback was rendering *everywhere*, on every
+device, with nothing in the console: `ResizeObserver` fires on `observe()`, so the still
+plate took a 2D context on the canvas before WebGL was ever requested, and a canvas can only
+ever hold one context type. Found by counting `getContext` calls in a headless probe, not by
+looking at the page — the fallback is a real picture, so it looked fine.
+
+Verified: `vitest run` 222/222, `tsc -b`, `oxlint`, `npm run build`,
+`pytest tests/test_regulatory_claims.py` 41/41 (including the sweep over the fresh `dist/`),
+and headless Chromium at 320/390/768/1440/1920 with no horizontal overflow and no console
+errors across the hero, all six acts and all eight following sections. Each fallback was
+asserted rather than assumed: reduced motion, no WebGL2, and a two-core device all reach the
+still plate; six round trips through `/login` leave a fresh GL context obtainable with zero
+context-loss errors. Long tasks on a full scroll are entirely GL shader compilation — the
+same pass with WebGL blocked records **zero**, so D-039's architecture claim holds — but that
+was measured under a software rasteriser and **no real-GPU or physical-phone measurement
+exists**. `Landing.tsx` and `components/landing/` remain outside the i18n scan, so the new
+English copy makes that gap larger, not smaller.
+
+**Previously:** 2026-09-02 · **The language choice now holds across the whole
+app, on branch `feat/journey-experience` — NOT merged, NOT deployed.** The reported symptom
+was the red FAST card at the foot of the dashboard staying in the previous language after a
+toggle: it is rendered server-side and was keyed on `patient.languages[0]`, so it followed
+the record and not the reader. `safety/fast.resolve_lang()` now prefers the caller's
+`?lang=` (added to `/dashboard/{id}`, `/sessions/{id}/finalize`, `/report/{id}`; the report
+was passing `"en"` literally), and `Dashboard`/`ClinicianReport` refetch on a language
+change. That was the visible corner of a wider gap: `hardcodedStrings.test.ts` globbed only
+the exam path and the journey, so the caregiver dashboard, balance comparison, ASHA field
+view, listener page, operator console and printed clinician report were all English under a
+translated header and the test passed. The glob is now `routes/**` + `components/**` with a
+written exclusion list, ~150 keys were added, and `formatDate` was routed through
+`usableLocale` (it printed "M08 31" on trimmed-ICU devices while `formatDateTime` beside it
+read "31 ਅਗ"). D-066. Still English on purpose: `Landing`, `LanguageGate`, `Diagnostics`,
+and `Score.reason` on the clinician report. Verified: backend `pytest -q` exit 0, frontend
+`tsc -b` + `vitest run` (208) + `build`, and a Chrome walkthrough at 430×900 toggling
+pa → en → hi with the FAST card and emergency-number labels following each time.
+
+**Previously (2026-09-02, later):** **Authentication hardened and redesigned, on branch
 `feat/journey-experience` — NOT merged, NOT deployed.** Server: refresh tokens rotated and
 revocable (migration `0021`, `refresh_tokens`), `POST /auth/logout`, `POST /auth/password`,
 in-memory rate limits on login/register/refresh, a common-password check, the dev JWT

@@ -4,6 +4,143 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-09-03 (latest) — The landing page, rebuilt around one point cloud
+
+Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-067. No migration,
+no backend change, no new dependency.
+
+### What changed
+- **`frontend/src/lib/cortex.ts` (new).** The geometry: one cloud of points with six
+  arrangements — scatter, seven domain lanes, a folded cortex, a ninety-day ribbon, a
+  five-node ecosystem, a thin wide distribution — plus a per-arrangement camera
+  (`STATE_VIEW`), a measured per-arrangement `extent`, blend weights, a device budget, and
+  the local structural links between hub points. Pure; no DOM, no GL.
+- **`frontend/src/components/landing/CortexField.tsx` (new).** Raw WebGL2: two programs, two
+  `drawArrays` calls, six position attributes so the morph is six uniforms rather than any
+  per-frame CPU work proportional to the point count. Imperative handle (`setState`,
+  `setFlare`, `setPointer`) so scrolling never re-renders React. Canvas-2D still plate for
+  reduced motion, no WebGL2, and devices the budget declines.
+- **`frontend/src/components/landing/SignalScene.tsx` (new).** The six-act overture. Native
+  `sticky` with the acts pulled over it by a negative margin, so the reading order in the DOM
+  is the reading order on the page and every act is a real `<article>` with a real heading.
+- **`frontend/src/components/landing/HeroConsole.tsx` (new).** The cortex bonded to
+  `TraceLanes` in one plate, with seven real `<button>`s that flare a domain's region and
+  single out its lane — keyboard- and touch-reachable, unlike a hover zone over a canvas.
+- **`TraceLanes`** gained `setLane`, which dims the other six rather than hiding them.
+- **`Landing.tsx` rewritten.** New `#signal` overture and `#reach` section (the six
+  assumptions a deployment is normally allowed to make); the Parkinson's confound merged into
+  `#gates`; the four roles moved into act 05; the non-gating domains reduced from a card grid
+  to a sentence.
+- **`LandingNav`** takes the tone of the section under it (`data-tone="dark"`), and gained a
+  `<details>` phone menu.
+- **`index.html`** gained OpenGraph/Twitter tags and `color-scheme: light`. No `og:image`:
+  the only artwork here is SVG, which most unfurlers will not render.
+
+### Three bugs found while building it
+1. **The fallback was rendering everywhere, silently.** `ResizeObserver` fires on `observe()`,
+   so the still plate took a 2D context on the canvas before WebGL was ever requested — and a
+   canvas can only hold one context type, so `getContext("webgl2")` returned null forever.
+   No error, no warning. Found by counting `getContext` calls in a headless probe.
+2. **An unbounded yaw drift.** The slow rotation was `clock * 0.035` added to the camera
+   target, so a plate left open for a few minutes ended up looking at the back of the cloud.
+   Now a bounded sway.
+3. **One fixed zoom for six arrangements** threw the widest one off both edges of the screen.
+
+### Verified
+- `npx vitest run` — **222 passed** (20 files), including 14 new in `cortex.test.ts`:
+  determinism, no NaN or runaway coordinate in any arrangement, lobe separation, two-state
+  blending, hub-line deduplication, and the device budget's refusals.
+- `npx tsc -b` clean; `npx oxlint src/` reports nothing new.
+- `npm run build` clean. **Signed-out entry chunk 100.17 kB → 108.32 kB gzipped (+8.2 kB),
+  no dependency added.**
+- `pytest tests/test_regulatory_claims.py` — 41 passed, including the sweep over the freshly
+  built `frontend/dist`.
+- Headless Chromium at **320 / 390 / 768 / 1440 / 1920**: no horizontal overflow, no console
+  errors, at the hero, all six acts and all eight following sections.
+- **Fallbacks, each asserted rather than assumed:** `prefers-reduced-motion` → every canvas
+  is the still plate; `getContext("webgl2")` returning null → still plate draws (550 lit
+  samples, 0 errors); a two-core device → declines WebGL and draws the still plate.
+- **Teardown:** six round trips through `/login` and back leaves a fresh WebGL2 context still
+  obtainable, 0 context-loss errors.
+- **Scroll pass:** LCP 1656 ms, CLS 0.017, heap 10 MB. Long tasks are entirely GL program
+  compilation — the same pass with WebGL blocked records **zero**, so D-039's architecture
+  claim still holds. Measured under a software rasteriser, which exaggerates compile cost by
+  a large and unknown factor; **no real-GPU measurement exists.**
+- **Keyboard:** all seven domain buttons reachable by Tab; skip link first.
+
+### Not done
+- `Landing.tsx` and `components/landing/` are still outside the i18n scan (D-066's written
+  exclusion). The new copy is English, so the gap is now larger than it was.
+- Nothing has run on a physical phone. The `coarse` paths — 30 fps cap, 3 600-point budget,
+  no pointer tilt — are desktop-emulated only.
+
+---
+
+## 2026-09-02 — The language choice now holds across the whole app
+
+Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-066. No
+migration.
+
+### The reported symptom, and what it actually was
+Switching the language left the red FAST card at the foot of the dashboard in the previous
+language. It was not a caching bug: the card is rendered server-side and was keyed on
+`patient.languages[0]`, so it followed the *record*, never the toggle. Reproduced in Chrome
+at 430×900 — UI switched to English, card stayed Punjabi — and that was the visible corner
+of a wider gap.
+
+### Backend (`app/safety/fast.py`, `routers/{dashboard,sessions,clinical_data}.py`)
+- `resolve_lang(requested, patient_languages)`: the caller's `?lang=` wins, the record is
+  the fallback for callers that cannot express one.
+- `?lang=` added to `GET /dashboard/{id}`, `POST /sessions/{id}/finalize` and
+  `GET /report/{id}` (validated `^(en|hi|pa)$`). `/report` was passing `fast_card("en")`
+  literally — its emergency card was English for every reader.
+- `emergency_numbers` labels translated. "Ambulance (India)" was English in all three.
+- The clinician report's method note moved to a module-level `METHOD_NOTE` with all three
+  languages side by side, so a change to one is visibly a change to all three.
+
+### Frontend
+- `Dashboard` and `ClinicianReport` list `lang` as an effect dependency and refetch on a
+  toggle; `ProtocolRunner` passes `lang` to `finalizeSession`.
+- **`formatDate` now goes through `usableLocale`**, which `formatDateTime` already did. On
+  a trimmed-ICU device `pa-IN` has no month names, so the trend axis and the history list
+  printed "M08 31" next to dates that read "31 ਅਗ". One guard, both callers.
+- Translated end to end, ~150 new keys: `WearableLanes`, `CcgTrace`, `CcgComparison`,
+  `DhiForm`, `Listen`, `AshaHome`, `Clinic`, `ClinicianReport`, `Admin`,
+  `FaceMeshShowcase`, plus the error fallbacks in `CaregiverHome`, `CaretakerHome`,
+  `PatientHome` and `FamilyAccess`.
+- Band pills printed the raw enum (`ALERT`) in the middle of translated rows —
+  `bandStableShort`/`WatchShort`/`AlertShort`/`AtypicalShort` for the table-cell wording,
+  kept distinct from the caregiver's full sentence ("Please check on them").
+- `DOMAIN_LABELS` was missing `motor_speech`, `language` and `posterior_vestibular`, which
+  are in the engine registry — charts and reports printed the bare code ("motor speech").
+- `CcgTrace`'s caption still said "Green marks the start, red the finish" describing
+  markers that were moved off green/red some time ago; the partial-capture note preferred
+  the server's fixed English sentence over the translated copy the client already had.
+
+### The guard
+`hardcodedStrings.test.ts` scanned `routes/exam/*` and four named components. Everything
+above sat outside it, so it passed. The glob is now `routes/**` + `components/**` with a
+written exclusion list, and the "did the glob match anything" assertion names the newly
+covered files so a future narrowing fails here rather than shipping.
+
+### Verified
+- `backend`: `pytest -q` → exit 0. Two report tests in `test_api.py` now request
+  `?lang=en` explicitly — the method note exists in three languages, so a test asserting on
+  English wording has to say which one it means; the fixture patient's record is Hindi.
+  `test_the_report_follows_the_readers_language_not_the_record` added alongside them.
+- `frontend`: `npx tsc -b` clean, `npx vitest run` 208 passed / 19 files, `npm run build` ok.
+- Live walkthrough (Chrome 430×900, backend :8000, frontend :5173): FAST card read
+  Punjabi → English → Hindi with the toggle, emergency labels following each time; the
+  dashboard, clinician roster and printed report screenshot clean in Punjabi.
+
+### Still English, on purpose
+`Landing.tsx` and `components/landing/` (600 lines of marketing copy — an open content
+gap), `LanguageGate` (all three scripts at once, by design), `Diagnostics` (browser and
+model identifiers), and `Score.reason` on the clinician report (engine-generated, stored,
+append-only — see D-066).
+
+---
+
 ## 2026-09-02 (later) — Authentication: hardened server-side, redesigned client-side
 
 Branch `feat/journey-experience`, commits after the journey work. **Not merged, not

@@ -47,6 +47,13 @@ export interface TraceLanesHandle {
   setDay: (day: number) => void;
   /** Inspect one morning across all seven lanes. `x` is 0..1 across the plate, or null. */
   setFocus: (x: number | null) => void;
+  /**
+   * Single out one domain's lane, by index into `DOMAINS`, or null for all seven.
+   *
+   * Dims the others rather than hiding them: the reason to single a lane out is to show
+   * WHICH of the seven it is, and a lane on its own no longer says that.
+   */
+  setLane: (lane: number | null) => void;
 }
 
 export interface TraceLanesProps {
@@ -68,6 +75,7 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
   const boxRef = useRef<HTMLDivElement>(null);
   const dayRef = useRef(day);
   const focusRef = useRef<number | null>(null);
+  const laneRef = useRef<number | null>(null);
   const paintRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -139,6 +147,14 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
       }
 
       DOMAINS.forEach((domain, lane) => {
+        // Singling out a lane is done with alpha, not by skipping the others, so the
+        // picked lane keeps its position among seven — which is the fact being shown.
+        const laneAlpha = laneRef.current === null || laneRef.current === lane ? 1 : 0.24;
+        ctx.globalAlpha = laneAlpha;
+        if (laneRef.current === lane) {
+          ctx.fillStyle = "rgba(232,163,61,0.07)";
+          ctx.fillRect(gutter - 6, padY + 10 + lane * laneHeight, plotW + 6, laneHeight);
+        }
         const top = padY + 10 + lane * laneHeight;
         const mid = top + laneHeight / 2;
         const halfH = laneHeight / 2 - 4;
@@ -221,12 +237,12 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
           // finding is noticed rather than silently appearing under the reader's eye.
           const age = shown - d;
           if (age >= 0 && age < 1.2) {
-            ctx.globalAlpha = (1 - age / 1.2) * 0.5;
+            ctx.globalAlpha = (1 - age / 1.2) * 0.5 * laneAlpha;
             ctx.fillStyle = alert ? INK.alert : INK.watch;
             ctx.beginPath();
             ctx.arc(px, py, 3 + age * 7, 0, Math.PI * 2);
             ctx.fill();
-            ctx.globalAlpha = 1;
+            ctx.globalAlpha = laneAlpha;
           }
           ctx.fillStyle = alert ? INK.alert : INK.watch;
           ctx.beginPath();
@@ -243,6 +259,7 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
           ctx.arc(x(focusDay), y(points[focusDay - 1].z), 4.5, 0, Math.PI * 2);
           ctx.stroke();
         }
+        ctx.globalAlpha = 1;
       });
 
       // Leading edge.
@@ -286,6 +303,11 @@ export const TraceLanes = forwardRef<TraceLanesHandle, TraceLanesProps>(function
     setFocus: (x: number | null) => {
       if (x === focusRef.current) return;
       focusRef.current = x;
+      paintRef.current();
+    },
+    setLane: (lane: number | null) => {
+      if (lane === laneRef.current) return;
+      laneRef.current = lane;
       paintRef.current();
     },
   }), []);
