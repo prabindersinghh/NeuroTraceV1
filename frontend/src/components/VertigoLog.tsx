@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../lib/i18n";
+import { formatDateTime } from "../lib/utils";
 import { Button } from "./ui/button";
 
 const LOG_KEY = "neurotrace.vertigo.log";
@@ -58,7 +59,7 @@ function load(): VertigoAttack[] {
 }
 
 export function VertigoLog({ onLogged }: { onLogged?: (a: VertigoAttack) => void }) {
-  const { lang } = useI18n();
+  const { lang, locale } = useI18n();
   const [attacks, setAttacks] = useState<VertigoAttack[]>(load);
   const [duration, setDuration] = useState<number | null>(null);
   const [severity, setSeverity] = useState<number | null>(null);
@@ -195,7 +196,7 @@ export function VertigoLog({ onLogged }: { onLogged?: (a: VertigoAttack) => void
         <ul className="space-y-1 text-xs text-muted-foreground">
           {last30.slice(0, 5).map((a) => (
             <li key={a.ts} className="flex justify-between gap-2">
-              <span>{new Date(a.ts).toLocaleString()}</span>
+              <span>{formatDateTime(a.ts, locale)}</span>
               <span>
                 {Math.round(a.duration_seconds / 60)} min
                 {a.positional ? " · on moving" : ""}

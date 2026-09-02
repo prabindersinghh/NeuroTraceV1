@@ -21,9 +21,18 @@ import { Metric } from "@/components/ui/metric";
 import { PageHeader } from "@/components/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type StringKey } from "@/lib/i18n";
 import type { Band, ClinicPatientRow } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
+
+/** The band as a short clinical word. The pill used to print the raw enum — the one
+ *  English token left on an otherwise fully translated roster row. */
+const BAND_LABEL: Record<string, StringKey> = {
+  STABLE: "bandStableShort",
+  WATCH: "bandWatchShort",
+  ALERT: "bandAlertShort",
+  PATTERN_ATYPICAL: "bandAtypicalShort",
+};
 
 const BAND_STYLE: Record<Band, string> = {
   STABLE: "bg-stable-soft text-stable",
@@ -44,8 +53,7 @@ const BAND_EDGE: Record<string, string> = {
 };
 
 export function Clinic() {
-  const { t, lang, domain: domainLabel } = useI18n();
-  const locale = lang === "hi" ? "hi-IN" : lang === "pa" ? "pa-IN" : "en-IN";
+  const { t, locale, domain: domainLabel } = useI18n();
 
   const [rows, setRows] = useState<ClinicPatientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +63,7 @@ export function Clinic() {
     try {
       setRows((await api.clinicPatients()).patients);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the patient list");
+      setError(err instanceof Error ? err.message : t("errLoadPatientList"));
     }
   }, []);
 
@@ -145,7 +153,7 @@ export function Clinic() {
                     {row.band && (
                       <span className={cn("rounded-full px-3 py-1 text-sm font-semibold",
                                           BAND_STYLE[row.band])}>
-                        {row.band}
+                        {BAND_LABEL[row.band] ? t(BAND_LABEL[row.band]) : row.band}
                       </span>
                     )}
                     <Link
@@ -161,10 +169,12 @@ export function Clinic() {
                 {/* Never a bare number: always what it is relative to. */}
                 {row.sustained_domains.length > 0 && (
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {row.sustained_domains.length} {t("domains").toLowerCase()} (
-                    {row.sustained_domains.map(domainLabel).join(", ")}) sustained vs this
-                    patient&apos;s own baseline · {t("confidence").toLowerCase()}{" "}
-                    {(row.confidence * 100).toFixed(0)}%
+                    {t("sustainedVsBaseline")
+                      .replace("{n}", String(row.sustained_domains.length))
+                      .replace("{domains}", t("domains").toLowerCase())
+                      .replace("{list}", row.sustained_domains.map(domainLabel).join(", "))
+                      .replace("{conf}", t("confidence").toLowerCase())
+                      .replace("{pct}", (row.confidence * 100).toFixed(0))}
                   </p>
                 )}
               </CardContent>
@@ -175,12 +185,7 @@ export function Clinic() {
 
       <p className="mt-6 flex items-start gap-2 rounded-xl border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
         <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <span>
-          All deviations are measured against each patient&apos;s own median/MAD baseline
-          using a robust z-score and a Reliable Change Index. An alert requires two
-          independent domains to exceed threshold across two consecutive valid sessions.
-          This is a monitoring aid; clinical interpretation remains with you.
-        </span>
+        <span>{t("clinicMethod")}</span>
       </p>
       <Tour role="clinician" />
     </AppShell>

@@ -39,7 +39,7 @@ export function CaretakerHome() {
     try {
       setPatients(await api.listPatients());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load your family member");
+      setError(err instanceof Error ? err.message : t("errLoadFamilyMember"));
     }
   }, []);
 

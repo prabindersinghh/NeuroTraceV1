@@ -28,6 +28,7 @@ import { FormError, Input, Label, Select } from "@/components/ui/field";
 import { EmptyState, ErrorState, LoadingState, Spinner } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { formatDate } from "@/lib/utils";
 import type { CaretakerLink, CaretakerRelationship } from "@/lib/types";
 
 const RELATIONSHIPS: CaretakerRelationship[] = [
@@ -36,7 +37,7 @@ const RELATIONSHIPS: CaretakerRelationship[] = [
 
 export function FamilyAccess() {
   const { patientId = "" } = useParams();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [links, setLinks] = useState<CaretakerLink[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -46,7 +47,7 @@ export function FamilyAccess() {
     try {
       setLinks((await api.listCaretakers(patientId)).caretakers);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load family access");
+      setError(err instanceof Error ? err.message : t("errLoadFamilyAccess"));
     }
   }, [patientId]);
 
@@ -136,7 +137,7 @@ export function FamilyAccess() {
                 {link.full_name ?? t("familyMember")} ·{" "}
                 {t(`rel${link.relationship}` as Parameters<typeof t>[0])} ·{" "}
                 {t("familyRemovedOn")}{" "}
-                {link.unlinked_at ? new Date(link.unlinked_at).toLocaleDateString() : "—"}
+                {link.unlinked_at ? formatDate(link.unlinked_at, locale) : "—"}
               </li>
             ))}
           </ul>
@@ -147,7 +148,7 @@ export function FamilyAccess() {
 }
 
 function CaretakerRow({ link, onChanged }: { link: CaretakerLink; onChanged: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -162,7 +163,7 @@ function CaretakerRow({ link, onChanged }: { link: CaretakerLink; onChanged: () 
       await api.revokeCaretaker(link.id, reason.trim());
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove access");
+      setError(err instanceof Error ? err.message : t("errRemoveAccess"));
     } finally {
       setBusy(false);
     }
@@ -175,7 +176,7 @@ function CaretakerRow({ link, onChanged }: { link: CaretakerLink; onChanged: () 
           <p className="font-medium">{link.full_name ?? t("familyMember")}</p>
           <p className="text-sm text-muted-foreground">
             {t(`rel${link.relationship}` as Parameters<typeof t>[0])} ·{" "}
-            {t("familyAddedOn")} {new Date(link.linked_at).toLocaleDateString()}
+            {t("familyAddedOn")} {formatDate(link.linked_at, locale)}
           </p>
         </div>
         <Button variant="outline" onClick={revoke} disabled={busy}>
@@ -220,7 +221,7 @@ function AddCaretakerForm({
       if (!created.login_enabled) setNotice(t("familyInvitePending"));
       onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add this family member");
+      setError(err instanceof Error ? err.message : t("errAddFamilyMember"));
     } finally {
       setBusy(false);
     }

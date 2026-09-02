@@ -33,7 +33,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(iso: string, locale = "en-IN") {
-  return new Date(iso).toLocaleDateString(locale, {
+  // `usableLocale`, same as formatDateTime below. This one did not, so on a device with a
+  // trimmed ICU build the chart axis and the history list rendered "M08 31" while every
+  // date beside them read "31 ਅਗ" — the guard existed and half the callers skipped it.
+  return new Date(iso).toLocaleDateString(usableLocale(locale), {
     day: "numeric",
     month: "short",
   });

@@ -346,13 +346,41 @@ async def test_the_audit_trail_records_access_and_is_not_patient_facing(client):
 
 
 async def test_the_report_endpoint_states_its_method_and_limits(client):
+    # `?lang=` explicitly: the method note exists in all three languages now (D-066), so a
+    # test asserting on English wording has to say which rendering it means. Without it the
+    # note follows the patient record, which for this fixture is Hindi.
     token, _ = await register(client)
     patient = await make_patient(client, token)
-    body = (await client.get(f"/report/{patient['id']}", headers=auth(token))).json()
+    body = (await client.get(f"/report/{patient['id']}?lang=en", headers=auth(token))).json()
     assert body["patient"]["name"] == "Ramesh"
     assert "median/MAD baseline" in body["method_note"]
     assert "does not constitute a diagnosis" in body["method_note"]
     assert body["fast"]["items"]
+
+
+async def test_the_report_follows_the_readers_language_not_the_record(client):
+    """The clinician reads this in the language they have the app set to.
+
+    The FAST card at the foot of the report was `fast_card("en")` literally, and the method
+    note was one English string, so a Punjabi-speaking clinician got a Punjabi page with an
+    English statement of method and an English emergency card on it. Both now take `?lang=`
+    and fall back to the record only when the caller cannot express a preference.
+    """
+    token, _ = await register(client)
+    patient = await make_patient(client, token)   # record says ["hi", "en"]
+
+    pa = (await client.get(f"/report/{patient['id']}?lang=pa", headers=auth(token))).json()
+    en = (await client.get(f"/report/{patient['id']}?lang=en", headers=auth(token))).json()
+    assert pa["method_note"] != en["method_note"]
+    assert pa["fast"]["title"] != en["fast"]["title"]
+    # The number is universal; its label is not.
+    assert pa["fast"]["emergency_numbers"][0]["number"] == "108"
+    assert pa["fast"]["emergency_numbers"][0]["label"] != en["fast"]["emergency_numbers"][0]["label"]
+
+    # No `lang` at all: the record decides, so an older client keeps working.
+    fallback = (await client.get(f"/report/{patient['id']}", headers=auth(token))).json()
+    hi = (await client.get(f"/report/{patient['id']}?lang=hi", headers=auth(token))).json()
+    assert fallback["method_note"] == hi["method_note"]
 
 
 async def test_the_report_states_all_three_gates_not_just_two(client):
@@ -365,7 +393,7 @@ async def test_the_report_states_all_three_gates_not_just_two(client):
     """
     token, _ = await register(client)
     patient = await make_patient(client, token)
-    body = (await client.get(f"/report/{patient['id']}", headers=auth(token))).json()
+    body = (await client.get(f"/report/{patient['id']}?lang=en", headers=auth(token))).json()
 
     note = body["method_note"]
     assert "laterality" in note.lower(), "method note does not mention the laterality gate"

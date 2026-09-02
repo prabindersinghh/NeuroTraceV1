@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,7 @@ from ..exam.registry import MODULES, get_module, modules_for
 from ..exam.scheduler import next_comprehensive_due, session_type_due_today
 from ..exam.session_plan import Intensity, planned_seconds, steps_for, steps_for_session_type
 from ..models import AuditLog, ExamSession, ModuleResult, Patient, SessionType
-from ..safety.fast import fast_card
+from ..safety.fast import fast_card, resolve_lang
 from ..schemas import (
     ModuleResultRead,
     ModuleSubmit,
@@ -243,7 +243,10 @@ async def submit_module(
 
 
 @router.post("/{session_id}/finalize", response_model=SessionFinalizeResponse)
-async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> SessionFinalizeResponse:
+async def finalize(
+    session_id: uuid.UUID, user: CurrentUser, db: Session,
+    lang: Annotated[str | None, Query(pattern="^(en|hi|pa)$")] = None,
+) -> SessionFinalizeResponse:
     exam = await db.get(ExamSession, session_id)
     if exam is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
@@ -266,7 +269,6 @@ async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> Ses
                         patient_id=patient.id,
                         meta_json={"session_id": str(session_id)}))
         await db.commit()
-        lang = (patient.languages or ["en"])[0] if patient.languages else "en"
         return SessionFinalizeResponse(
             session_id=session_id, patient_id=patient.id, band="STABLE",
             reason="practice", gate1_passed=False, gate2_passed=False,
@@ -277,7 +279,7 @@ async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> Ses
             explanation_en="Practice complete. Nothing from a practice run is scored.",
             explanation_hi="अभ्यास पूरा हुआ। अभ्यास के अंक नहीं गिने जाते।",
             explanation_source="template", clinician_line="Practice session — excluded from scoring and baselines.",
-            fast=fast_card(lang),
+            fast=fast_card(resolve_lang(lang, patient.languages)),
         )
 
     result = await compute_session(db, session_id)
@@ -286,9 +288,9 @@ async def finalize(session_id: uuid.UUID, user: CurrentUser, db: Session) -> Ses
                     meta_json={"session_id": str(session_id), "band": result["band"]}))
     await db.commit()
 
-    lang = (patient.languages or ["en"])[0] if patient.languages else "en"
-    # TRD §8: unconditional. Every finalize carries the FAST card.
-    result["fast"] = fast_card(lang)
+    # TRD §8: unconditional. Every finalize carries the FAST card, in the language the
+    # reader has the app set to rather than the one on the record.
+    result["fast"] = fast_card(resolve_lang(lang, patient.languages))
     return SessionFinalizeResponse(**result)
 
 

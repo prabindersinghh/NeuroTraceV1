@@ -966,6 +966,494 @@ export const STRINGS = {
   acknowledge: { en: "Acknowledge", hi: "स्वीकार करें", pa: "ਸਵੀਕਾਰ ਕਰੋ" },
   lastSession: { en: "Last session", hi: "पिछली जाँच", pa: "ਪਿਛਲੀ ਜਾਂਚ" },
   domains: { en: "Domains", hi: "क्षेत्र", pa: "ਖੇਤਰ" },
+
+  // ======================================================= the rest of the product
+  // Added when the language toggle was made to hold across the WHOLE app. Every screen
+  // below used to be English-only regardless of the choice, which meant a Punjabi
+  // household read a Punjabi exam and then an English page of findings about it.
+
+  // ---- errors that reach a screen ----
+  errDashboard: {
+    en: "Could not load the dashboard.",
+    hi: "डैशबोर्ड लोड नहीं हो सका।",
+    pa: "ਡੈਸ਼ਬੋਰਡ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕਿਆ।",
+  },
+  errGeneric: {
+    en: "Something went wrong.",
+    hi: "कुछ गड़बड़ हो गई।",
+    pa: "ਕੁਝ ਗੜਬੜ ਹੋ ਗਈ।",
+  },
+  nothingYet: { en: "Nothing yet.", hi: "अभी कुछ नहीं।", pa: "ਹਾਲੇ ਕੁਝ ਨਹੀਂ।" },
+
+  // ---- the wearable lanes. INV-5: we own the trend, the vendor owns the measurement. ----
+  fallReported: {
+    en: "A fall was reported {when}",
+    hi: "गिरने की सूचना मिली {when}",
+    pa: "ਡਿੱਗਣ ਦੀ ਸੂਚਨਾ ਮਿਲੀ {when}",
+  },
+  fallDismissed: {
+    en: "They dismissed it on the watch. Check anyway — people dismiss falls they are embarrassed by, or confused after.",
+    hi: "उन्होंने इसे घड़ी पर हटा दिया। फिर भी देख लीजिए — लोग शर्मिंदगी में, या गिरने के बाद उलझन में, सूचना हटा देते हैं।",
+    pa: "ਉਹਨਾਂ ਨੇ ਇਸਨੂੰ ਘੜੀ 'ਤੇ ਹਟਾ ਦਿੱਤਾ। ਫਿਰ ਵੀ ਵੇਖ ਲਵੋ — ਲੋਕ ਸ਼ਰਮਿੰਦਗੀ ਵਿੱਚ, ਜਾਂ ਡਿੱਗਣ ਤੋਂ ਬਾਅਦ ਉਲਝਣ ਵਿੱਚ, ਸੂਚਨਾ ਹਟਾ ਦਿੰਦੇ ਹਨ।",
+  },
+  fallChecked: {
+    en: "I have checked on them",
+    hi: "मैंने उन्हें देख लिया है",
+    pa: "ਮੈਂ ਉਹਨਾਂ ਨੂੰ ਵੇਖ ਲਿਆ ਹੈ",
+  },
+  wearableTitle: { en: "From their watch", hi: "उनकी घड़ी से", pa: "ਉਹਨਾਂ ਦੀ ਘੜੀ ਤੋਂ" },
+  wearableSource: {
+    en: "Recorded by {source} — shown here as a trend. NeuroTrace does not measure these; the device maker does.",
+    hi: "{source} ने दर्ज किया — यहाँ केवल रुझान दिखाया गया है। NeuroTrace इन्हें नहीं मापता; उपकरण बनाने वाला मापता है।",
+    pa: "{source} ਨੇ ਦਰਜ ਕੀਤਾ — ਇੱਥੇ ਸਿਰਫ਼ ਰੁਝਾਨ ਦਿਖਾਇਆ ਗਿਆ ਹੈ। NeuroTrace ਇਹਨਾਂ ਨੂੰ ਨਹੀਂ ਮਾਪਦਾ; ਯੰਤਰ ਬਣਾਉਣ ਵਾਲਾ ਮਾਪਦਾ ਹੈ।",
+  },
+  wearableDevice: { en: "the device", hi: "उपकरण", pa: "ਯੰਤਰ" },
+  wearableReadings: {
+    en: "{n} readings · {from} – {to}",
+    hi: "{n} रीडिंग · {from} – {to}",
+    pa: "{n} ਰੀਡਿੰਗ · {from} – {to}",
+  },
+  wearableTrend: { en: "trend", hi: "रुझान", pa: "ਰੁਝਾਨ" },
+  metricHeartRate: { en: "Heart rate", hi: "धड़कन", pa: "ਧੜਕਣ" },
+  metricIrregular: {
+    en: "Irregular rhythm notifications",
+    hi: "अनियमित धड़कन की सूचनाएँ",
+    pa: "ਅਨਿਯਮਿਤ ਧੜਕਣ ਦੀਆਂ ਸੂਚਨਾਵਾਂ",
+  },
+  metricSleep: { en: "Sleep quality", hi: "नींद की गुणवत्ता", pa: "ਨੀਂਦ ਦੀ ਗੁਣਵੱਤਾ" },
+  metricSteps: { en: "Steps", hi: "क़दम", pa: "ਕਦਮ" },
+  metricSpo2: { en: "Blood oxygen", hi: "रक्त ऑक्सीजन", pa: "ਖ਼ੂਨ ਆਕਸੀਜਨ" },
+  metricBpUpper: {
+    en: "Blood pressure (upper)",
+    hi: "रक्तचाप (ऊपरी)",
+    pa: "ਬਲੱਡ ਪ੍ਰੈਸ਼ਰ (ਉੱਪਰਲਾ)",
+  },
+  metricBpLower: {
+    en: "Blood pressure (lower)",
+    hi: "रक्तचाप (निचला)",
+    pa: "ਬਲੱਡ ਪ੍ਰੈਸ਼ਰ (ਹੇਠਲਾ)",
+  },
+
+  // ---- balance / craniocorpography ----
+  balanceTrace: { en: "Balance trace", hi: "संतुलन का नक़्शा", pa: "ਸੰਤੁਲਨ ਦਾ ਨਕਸ਼ਾ" },
+  balanceTraceTitle: {
+    en: "Balance — movement trace",
+    hi: "संतुलन — गति का नक़्शा",
+    pa: "ਸੰਤੁਲਨ — ਗਤੀ ਦਾ ਨਕਸ਼ਾ",
+  },
+  ccgTests: { en: "{done}/{total} tests", hi: "{total} में से {done} जाँचें", pa: "{total} ਵਿੱਚੋਂ {done} ਜਾਂਚਾਂ" },
+  ccgStart: { en: "Start of path", hi: "रास्ते की शुरुआत", pa: "ਰਾਹ ਦੀ ਸ਼ੁਰੂਆਤ" },
+  ccgEnd: { en: "End of path", hi: "रास्ते का अंत", pa: "ਰਾਹ ਦਾ ਅੰਤ" },
+  ccgStartShort: { en: "start", hi: "शुरू", pa: "ਸ਼ੁਰੂ" },
+  ccgEndShort: { en: "end", hi: "अंत", pa: "ਅੰਤ" },
+  ccgToTheRight: { en: "{deg}° to the right", hi: "{deg}° दाईं ओर", pa: "{deg}° ਸੱਜੇ ਪਾਸੇ" },
+  ccgToTheLeft: { en: "{deg}° to the left", hi: "{deg}° बाईं ओर", pa: "{deg}° ਖੱਬੇ ਪਾਸੇ" },
+  ccgPartial: {
+    en: "Partial capture — some tests need someone present and were not recorded.",
+    hi: "अधूरी रिकॉर्डिंग — कुछ जाँचों के लिए किसी का साथ होना ज़रूरी है और वे दर्ज नहीं हुईं।",
+    pa: "ਅਧੂਰੀ ਰਿਕਾਰਡਿੰਗ — ਕੁਝ ਜਾਂਚਾਂ ਲਈ ਕਿਸੇ ਦਾ ਨਾਲ ਹੋਣਾ ਜ਼ਰੂਰੀ ਹੈ ਅਤੇ ਉਹ ਦਰਜ ਨਹੀਂ ਹੋਈਆਂ।",
+  },
+  ccgNoLaterality: {
+    en: "Sway is measured; the direction of deviation is not.",
+    hi: "डोलना मापा गया है; विचलन की दिशा नहीं।",
+    pa: "ਡੋਲਣਾ ਮਾਪਿਆ ਗਿਆ ਹੈ; ਵਿਚਲਨ ਦੀ ਦਿਸ਼ਾ ਨਹੀਂ।",
+  },
+  ccgNoPath: {
+    en: "No movement path recorded for this session.",
+    hi: "इस जाँच के लिए कोई गति-पथ दर्ज नहीं हुआ।",
+    pa: "ਇਸ ਜਾਂਚ ਲਈ ਕੋਈ ਗਤੀ-ਪਥ ਦਰਜ ਨਹੀਂ ਹੋਇਆ।",
+  },
+  ccgUnits: {
+    en: "Distances are in centimetres, scaled using head width as the reference. The lighter dot marks the start, the darker one the finish. This reproduces the layout of a clinical craniocorpography report so it can be read the same way.",
+    hi: "दूरियाँ सेंटीमीटर में हैं, सिर की चौड़ाई को पैमाना मानकर। हल्का बिंदु शुरुआत है, गहरा बिंदु अंत। यह क्लीनिकल क्रेनियोकॉर्पोग्राफ़ी रिपोर्ट के ढाँचे जैसा ही है, ताकि उसी तरह पढ़ा जा सके।",
+    pa: "ਦੂਰੀਆਂ ਸੈਂਟੀਮੀਟਰ ਵਿੱਚ ਹਨ, ਸਿਰ ਦੀ ਚੌੜਾਈ ਨੂੰ ਪੈਮਾਨਾ ਮੰਨ ਕੇ। ਹਲਕਾ ਬਿੰਦੂ ਸ਼ੁਰੂਆਤ ਹੈ, ਗੂੜ੍ਹਾ ਬਿੰਦੂ ਅੰਤ। ਇਹ ਕਲੀਨਿਕਲ ਕ੍ਰੇਨੀਓਕਾਰਪੋਗ੍ਰਾਫ਼ੀ ਰਿਪੋਰਟ ਦੇ ਢਾਂਚੇ ਵਰਗਾ ਹੀ ਹੈ, ਤਾਂ ਜੋ ਉਸੇ ਤਰ੍ਹਾਂ ਪੜ੍ਹਿਆ ਜਾ ਸਕੇ।",
+  },
+  ccgMetricUnterbergerPath: {
+    en: "Unterberger sway path", hi: "उन्टरबर्गर डोलन-पथ", pa: "ਉਨਟਰਬਰਗਰ ਡੋਲਣ-ਪਥ",
+  },
+  ccgMetricAngular: { en: "Angular deviation", hi: "कोणीय विचलन", pa: "ਕੋਣੀ ਵਿਚਲਨ" },
+  ccgMetricTandemWalk: {
+    en: "Tandem walking sway", hi: "एक-रेखा चाल में डोलना", pa: "ਇੱਕ-ਰੇਖਾ ਚਾਲ ਵਿੱਚ ਡੋਲਣਾ",
+  },
+  ccgMetricTandemStance: {
+    en: "Tandem stance sway", hi: "एक-रेखा खड़े होकर डोलना", pa: "ਇੱਕ-ਰੇਖਾ ਖੜ੍ਹੇ ਹੋ ਕੇ ਡੋਲਣਾ",
+  },
+  ccgMetricRombergOpen: {
+    en: "Romberg sway (eyes open)", hi: "रॉमबर्ग डोलन (आँखें खुली)", pa: "ਰੌਮਬਰਗ ਡੋਲਣ (ਅੱਖਾਂ ਖੁੱਲ੍ਹੀਆਂ)",
+  },
+  ccgMetricRombergClosed: {
+    en: "Romberg sway (eyes closed)", hi: "रॉमबर्ग डोलन (आँखें बंद)", pa: "ਰੌਮਬਰਗ ਡੋਲਣ (ਅੱਖਾਂ ਬੰਦ)",
+  },
+  ccgMetricRombergQuotient: { en: "Romberg quotient", hi: "रॉमबर्ग अनुपात", pa: "ਰੌਮਬਰਗ ਅਨੁਪਾਤ" },
+
+  // ---- the reference-vs-today comparison ----
+  ccgReferenceOn: { en: "Reference · {date}", hi: "आधार · {date}", pa: "ਆਧਾਰ · {date}" },
+  ccgReferenceNone: {
+    en: "Reference · not available", hi: "आधार · उपलब्ध नहीं", pa: "ਆਧਾਰ · ਉਪਲਬਧ ਨਹੀਂ",
+  },
+  ccgNoBaseline: {
+    en: "No locked baseline yet, so there is nothing to compare against.",
+    hi: "अभी कोई आधार तय नहीं हुआ है, इसलिए तुलना के लिए कुछ नहीं है।",
+    pa: "ਹਾਲੇ ਕੋਈ ਆਧਾਰ ਤੈਅ ਨਹੀਂ ਹੋਇਆ, ਇਸ ਲਈ ਤੁਲਨਾ ਲਈ ਕੁਝ ਨਹੀਂ ਹੈ।",
+  },
+  ccgLatestOn: { en: "Latest · {date}", hi: "ताज़ा · {date}", pa: "ਤਾਜ਼ਾ · {date}" },
+  ccgDaysLater: { en: "{n} days later", hi: "{n} दिन बाद", pa: "{n} ਦਿਨ ਬਾਅਦ" },
+  ccgPartialLead: { en: "Partial capture.", hi: "अधूरी रिकॉर्डिंग।", pa: "ਅਧੂਰੀ ਰਿਕਾਰਡਿੰਗ।" },
+  ccgPartialBoth: { en: "either capture", hi: "दोनों रिकॉर्डिंग", pa: "ਦੋਵੇਂ ਰਿਕਾਰਡਿੰਗਾਂ" },
+  ccgPartialLatest: { en: "the latest capture", hi: "ताज़ा रिकॉर्डिंग", pa: "ਤਾਜ਼ਾ ਰਿਕਾਰਡਿੰਗ" },
+  ccgPartialReference: { en: "the reference capture", hi: "आधार रिकॉर्डिंग", pa: "ਆਧਾਰ ਰਿਕਾਰਡਿੰਗ" },
+  ccgPartialBody: {
+    en: "The walking and stepping tests need someone present and were not recorded in {which}. Sway is measured; the direction of deviation is not, so any laterality reading from balance is unavailable for this comparison.",
+    hi: "चलने और क़दम गिनने की जाँचों के लिए किसी का साथ होना ज़रूरी है और वे {which} में दर्ज नहीं हुईं। डोलना मापा गया है; विचलन की दिशा नहीं, इसलिए इस तुलना में संतुलन से पक्ष का पता नहीं चल सकता।",
+    pa: "ਤੁਰਨ ਅਤੇ ਕਦਮ ਗਿਣਨ ਦੀਆਂ ਜਾਂਚਾਂ ਲਈ ਕਿਸੇ ਦਾ ਨਾਲ ਹੋਣਾ ਜ਼ਰੂਰੀ ਹੈ ਅਤੇ ਉਹ {which} ਵਿੱਚ ਦਰਜ ਨਹੀਂ ਹੋਈਆਂ। ਡੋਲਣਾ ਮਾਪਿਆ ਗਿਆ ਹੈ; ਵਿਚਲਨ ਦੀ ਦਿਸ਼ਾ ਨਹੀਂ, ਇਸ ਲਈ ਇਸ ਤੁਲਨਾ ਵਿੱਚ ਸੰਤੁਲਨ ਤੋਂ ਪਾਸੇ ਦਾ ਪਤਾ ਨਹੀਂ ਲੱਗ ਸਕਦਾ।",
+  },
+  ccgColMeasure: { en: "Measure ({units})", hi: "माप ({units})", pa: "ਮਾਪ ({units})" },
+  ccgColReference: { en: "Reference", hi: "आधार", pa: "ਆਧਾਰ" },
+  ccgColLatest: { en: "Latest", hi: "ताज़ा", pa: "ਤਾਜ਼ਾ" },
+  ccgColChange: { en: "Change", hi: "बदलाव", pa: "ਬਦਲਾਅ" },
+  ccgNoColourNote: {
+    en: "Change is shown as direction and magnitude only. A smaller sway area is not necessarily an improvement — bracing, or being steadied by someone, produces the same reduction with no change in vestibular function.",
+    hi: "बदलाव केवल दिशा और मात्रा के रूप में दिखाया गया है। कम डोलना ज़रूरी नहीं कि सुधार हो — सहारा लेने से, या किसी के थामने से, वही कमी आती है जबकि संतुलन-तंत्र में कोई बदलाव नहीं होता।",
+    pa: "ਬਦਲਾਅ ਸਿਰਫ਼ ਦਿਸ਼ਾ ਅਤੇ ਮਾਤਰਾ ਵਜੋਂ ਦਿਖਾਇਆ ਗਿਆ ਹੈ। ਘੱਟ ਡੋਲਣਾ ਜ਼ਰੂਰੀ ਨਹੀਂ ਕਿ ਸੁਧਾਰ ਹੋਵੇ — ਸਹਾਰਾ ਲੈਣ ਨਾਲ, ਜਾਂ ਕਿਸੇ ਦੇ ਫੜਨ ਨਾਲ, ਓਹੀ ਕਮੀ ਆਉਂਦੀ ਹੈ ਜਦਕਿ ਸੰਤੁਲਨ-ਤੰਤਰ ਵਿੱਚ ਕੋਈ ਬਦਲਾਅ ਨਹੀਂ ਹੁੰਦਾ।",
+  },
+  ccgTestUnterberger: {
+    en: "Unterberger stepping (eyes closed)",
+    hi: "उन्टरबर्गर क़दमताल (आँखें बंद)",
+    pa: "ਉਨਟਰਬਰਗਰ ਕਦਮਤਾਲ (ਅੱਖਾਂ ਬੰਦ)",
+  },
+  ccgTestTandemWalk: { en: "Tandem walking", hi: "एक-रेखा चाल", pa: "ਇੱਕ-ਰੇਖਾ ਚਾਲ" },
+  ccgTestTandemStance: {
+    en: "Tandem stance", hi: "एक-रेखा पर खड़े होना", pa: "ਇੱਕ-ਰੇਖਾ 'ਤੇ ਖੜ੍ਹੇ ਹੋਣਾ",
+  },
+  ccgTestRombergClosed: {
+    en: "Romberg — eyes closed", hi: "रॉमबर्ग — आँखें बंद", pa: "ਰੌਮਬਰਗ — ਅੱਖਾਂ ਬੰਦ",
+  },
+  ccgTestRombergOpen: {
+    en: "Romberg — eyes open", hi: "रॉमबर्ग — आँखें खुली", pa: "ਰੌਮਬਰਗ — ਅੱਖਾਂ ਖੁੱਲ੍ਹੀਆਂ",
+  },
+  ccgPlotLabel: {
+    en: "{test}: movement path, {units}",
+    hi: "{test}: गति-पथ, {units}",
+    pa: "{test}: ਗਤੀ-ਪਥ, {units}",
+  },
+  openReport: {
+    en: "Open printable report", hi: "छपने योग्य रिपोर्ट खोलें", pa: "ਛਪਣਯੋਗ ਰਿਪੋਰਟ ਖੋਲ੍ਹੋ",
+  },
+
+  // ---- the clinician roster ----
+  sustainedVsBaseline: {
+    en: "{n} {domains} ({list}) sustained vs this patient's own baseline · {conf} {pct}%",
+    hi: "{n} {domains} ({list}) इस मरीज़ के अपने आधार की तुलना में लगातार · {conf} {pct}%",
+    pa: "{n} {domains} ({list}) ਇਸ ਮਰੀਜ਼ ਦੇ ਆਪਣੇ ਆਧਾਰ ਦੇ ਮੁਕਾਬਲੇ ਲਗਾਤਾਰ · {conf} {pct}%",
+  },
+  clinicMethod: {
+    en: "All deviations are measured against each patient's own median/MAD baseline using a robust z-score and a Reliable Change Index. An alert requires two independent domains to exceed threshold across two consecutive valid sessions. This is a monitoring aid; clinical interpretation remains with you.",
+    hi: "हर विचलन उसी मरीज़ के अपने median/MAD आधार के मुक़ाबले, robust z-score और विश्वसनीय-परिवर्तन सूचकांक (RCI) से मापा जाता है। अलर्ट के लिए दो स्वतंत्र क्षेत्रों का लगातार दो वैध जाँचों में सीमा पार करना ज़रूरी है। यह निगरानी में सहायक है; नैदानिक व्याख्या आपकी ही रहती है।",
+    pa: "ਹਰ ਵਿਚਲਨ ਉਸੇ ਮਰੀਜ਼ ਦੇ ਆਪਣੇ median/MAD ਆਧਾਰ ਦੇ ਮੁਕਾਬਲੇ, robust z-score ਅਤੇ ਭਰੋਸੇਯੋਗ-ਤਬਦੀਲੀ ਸੂਚਕਾਂਕ (RCI) ਨਾਲ ਮਾਪਿਆ ਜਾਂਦਾ ਹੈ। ਅਲਰਟ ਲਈ ਦੋ ਸੁਤੰਤਰ ਖੇਤਰਾਂ ਦਾ ਲਗਾਤਾਰ ਦੋ ਜਾਇਜ਼ ਜਾਂਚਾਂ ਵਿੱਚ ਹੱਦ ਪਾਰ ਕਰਨਾ ਜ਼ਰੂਰੀ ਹੈ। ਇਹ ਨਿਗਰਾਨੀ ਵਿੱਚ ਸਹਾਇਕ ਹੈ; ਕਲੀਨਿਕਲ ਵਿਆਖਿਆ ਤੁਹਾਡੀ ਹੀ ਰਹਿੰਦੀ ਹੈ।",
+  },
+
+  // ---- the listener view (Awaaz). Opened by a stranger, after the language gate. ----
+  listenExpired: {
+    en: "This link has expired", hi: "यह लिंक समाप्त हो चुका है", pa: "ਇਹ ਲਿੰਕ ਖ਼ਤਮ ਹੋ ਚੁੱਕਾ ਹੈ",
+  },
+  listenExpiredBody: {
+    en: "Listener links last a short time on purpose. Ask for a new one.",
+    hi: "सुनने के लिंक जान-बूझकर थोड़े समय के लिए होते हैं। नया लिंक माँग लीजिए।",
+    pa: "ਸੁਣਨ ਵਾਲੇ ਲਿੰਕ ਜਾਣ-ਬੁੱਝ ਕੇ ਥੋੜ੍ਹੇ ਸਮੇਂ ਲਈ ਹੁੰਦੇ ਹਨ। ਨਵਾਂ ਲਿੰਕ ਮੰਗ ਲਵੋ।",
+  },
+  connecting: { en: "Connecting…", hi: "जुड़ रहे हैं…", pa: "ਜੁੜ ਰਹੇ ਹਾਂ…" },
+  listenWith: { en: "You are listening with", hi: "आप सुन रहे हैं", pa: "ਤੁਸੀਂ ਸੁਣ ਰਹੇ ਹੋ" },
+  listenHowToHelp: { en: "HOW TO HELP", hi: "कैसे मदद करें", pa: "ਕਿਵੇਂ ਮਦਦ ਕਰੀਏ" },
+  listenSaid: {
+    en: "What they have said", hi: "उन्होंने क्या कहा है", pa: "ਉਹਨਾਂ ਨੇ ਕੀ ਕਿਹਾ ਹੈ",
+  },
+  listenNothing: {
+    en: "Nothing yet. Give them time — waiting is the help.",
+    hi: "अभी कुछ नहीं। उन्हें समय दीजिए — इंतज़ार करना ही मदद है।",
+    pa: "ਹਾਲੇ ਕੁਝ ਨਹੀਂ। ਉਹਨਾਂ ਨੂੰ ਸਮਾਂ ਦਿਓ — ਉਡੀਕਣਾ ਹੀ ਮਦਦ ਹੈ।",
+  },
+  listenExpiresIn: {
+    en: "This link expires in about {n} minutes.",
+    hi: "यह लिंक लगभग {n} मिनट में समाप्त हो जाएगा।",
+    pa: "ਇਹ ਲਿੰਕ ਲਗਭਗ {n} ਮਿੰਟ ਵਿੱਚ ਖ਼ਤਮ ਹੋ ਜਾਵੇਗਾ।",
+  },
+  listenPrivacy: {
+    en: "You are seeing only what they chose to say. No health information, no history, and no recording — theirs or yours.",
+    hi: "आप केवल वही देख रहे हैं जो उन्होंने कहना चुना। कोई स्वास्थ्य जानकारी नहीं, कोई इतिहास नहीं, और कोई रिकॉर्डिंग नहीं — न उनकी, न आपकी।",
+    pa: "ਤੁਸੀਂ ਸਿਰਫ਼ ਉਹੀ ਵੇਖ ਰਹੇ ਹੋ ਜੋ ਉਹਨਾਂ ਨੇ ਕਹਿਣਾ ਚੁਣਿਆ। ਕੋਈ ਸਿਹਤ ਜਾਣਕਾਰੀ ਨਹੀਂ, ਕੋਈ ਇਤਿਹਾਸ ਨਹੀਂ, ਅਤੇ ਕੋਈ ਰਿਕਾਰਡਿੰਗ ਨਹੀਂ — ਨਾ ਉਹਨਾਂ ਦੀ, ਨਾ ਤੁਹਾਡੀ।",
+  },
+
+  // ---- the dizziness handicap inventory ----
+  dhiTitle: {
+    en: "Dizziness questionnaire", hi: "चक्कर की प्रश्नावली", pa: "ਚੱਕਰ ਦੀ ਪ੍ਰਸ਼ਨਾਵਲੀ",
+  },
+  dhiIntro: {
+    en: "{n} questions about the last month. There are no wrong answers.",
+    hi: "पिछले महीने के बारे में {n} सवाल। कोई जवाब ग़लत नहीं होता।",
+    pa: "ਪਿਛਲੇ ਮਹੀਨੇ ਬਾਰੇ {n} ਸਵਾਲ। ਕੋਈ ਜਵਾਬ ਗ਼ਲਤ ਨਹੀਂ ਹੁੰਦਾ।",
+  },
+  dhiAnswered: {
+    en: "{done} of {total} answered",
+    hi: "{total} में से {done} के जवाब दिए",
+    pa: "{total} ਵਿੱਚੋਂ {done} ਦੇ ਜਵਾਬ ਦਿੱਤੇ",
+  },
+  dhiSaving: { en: "Saving…", hi: "सहेजा जा रहा है…", pa: "ਸੰਭਾਲਿਆ ਜਾ ਰਿਹਾ ਹੈ…" },
+  dhiSave: { en: "Save answers", hi: "जवाब सहेजें", pa: "ਜਵਾਬ ਸੰਭਾਲੋ" },
+  dhiLeft: { en: "{n} left", hi: "{n} बाक़ी", pa: "{n} ਬਾਕੀ" },
+  dhiSaveError: {
+    en: "Could not save the answers",
+    hi: "जवाब सहेजे नहीं जा सके",
+    pa: "ਜਵਾਬ ਸੰਭਾਲੇ ਨਹੀਂ ਜਾ ਸਕੇ",
+  },
+  dhiSinceLast: {
+    en: "{delta} since last time.",
+    hi: "पिछली बार से {delta}।",
+    pa: "ਪਿਛਲੀ ਵਾਰ ਤੋਂ {delta}।",
+  },
+  dhiMeaningful: {
+    en: "That is a real change and is worth mentioning to their doctor.",
+    hi: "यह असली बदलाव है और डॉक्टर को बताने लायक़ है।",
+    pa: "ਇਹ ਅਸਲੀ ਬਦਲਾਅ ਹੈ ਅਤੇ ਡਾਕਟਰ ਨੂੰ ਦੱਸਣ ਯੋਗ ਹੈ।",
+  },
+  dhiWithinNoise: {
+    en: "Changes smaller than {mdc} points are within this questionnaire's own margin of error, so this is not a sign that anything has changed.",
+    hi: "{mdc} अंक से कम का बदलाव इस प्रश्नावली की अपनी त्रुटि-सीमा के भीतर है, इसलिए यह किसी बदलाव का संकेत नहीं है।",
+    pa: "{mdc} ਅੰਕ ਤੋਂ ਘੱਟ ਦਾ ਬਦਲਾਅ ਇਸ ਪ੍ਰਸ਼ਨਾਵਲੀ ਦੀ ਆਪਣੀ ਗ਼ਲਤੀ-ਹੱਦ ਦੇ ਅੰਦਰ ਹੈ, ਇਸ ਲਈ ਇਹ ਕਿਸੇ ਬਦਲਾਅ ਦਾ ਸੰਕੇਤ ਨਹੀਂ ਹੈ।",
+  },
+  dhiFooter: {
+    en: "This records how much dizziness is getting in the way of daily life. It is what the person tells us, not a measurement of their balance.",
+    hi: "यह दर्ज करता है कि चक्कर रोज़मर्रा के जीवन में कितनी बाधा डाल रहे हैं। यह वही है जो व्यक्ति हमें बताता है, उनके संतुलन का माप नहीं।",
+    pa: "ਇਹ ਦਰਜ ਕਰਦਾ ਹੈ ਕਿ ਚੱਕਰ ਰੋਜ਼ਾਨਾ ਜੀਵਨ ਵਿੱਚ ਕਿੰਨੀ ਰੁਕਾਵਟ ਪਾ ਰਹੇ ਹਨ। ਇਹ ਉਹੀ ਹੈ ਜੋ ਵਿਅਕਤੀ ਸਾਨੂੰ ਦੱਸਦਾ ਹੈ, ਉਹਨਾਂ ਦੇ ਸੰਤੁਲਨ ਦਾ ਮਾਪ ਨਹੀਂ।",
+  },
+
+  // ---- the ASHA worker's field view ----
+  ashaEyebrow: { en: "Field visits", hi: "क्षेत्र दौरे", pa: "ਖੇਤਰੀ ਦੌਰੇ" },
+  ashaTitle: { en: "My households", hi: "मेरे घर", pa: "ਮੇਰੇ ਘਰ" },
+  ashaOnline: { en: "Online", hi: "ऑनलाइन", pa: "ਆਨਲਾਈਨ" },
+  ashaOffline: {
+    en: "No connection — visits are saved",
+    hi: "कनेक्शन नहीं — दौरे सहेजे जा रहे हैं",
+    pa: "ਕੁਨੈਕਸ਼ਨ ਨਹੀਂ — ਦੌਰੇ ਸੰਭਾਲੇ ਜਾ ਰਹੇ ਹਨ",
+  },
+  ashaPending: {
+    en: "{n} visits saved on this device, waiting to send.",
+    hi: "{n} दौरे इस उपकरण पर सहेजे हैं, भेजे जाने बाक़ी हैं।",
+    pa: "{n} ਦੌਰੇ ਇਸ ਯੰਤਰ 'ਤੇ ਸੰਭਾਲੇ ਹਨ, ਭੇਜੇ ਜਾਣੇ ਬਾਕੀ ਹਨ।",
+  },
+  ashaSending: { en: "Sending…", hi: "भेजा जा रहा है…", pa: "ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ…" },
+  ashaSendNow: { en: "Send now", hi: "अभी भेजें", pa: "ਹੁਣੇ ਭੇਜੋ" },
+  ashaSavedList: {
+    en: "Showing your saved list — no connection right now.",
+    hi: "आपकी सहेजी हुई सूची दिख रही है — अभी कनेक्शन नहीं है।",
+    pa: "ਤੁਹਾਡੀ ਸੰਭਾਲੀ ਸੂਚੀ ਦਿਖ ਰਹੀ ਹੈ — ਹੁਣ ਕੁਨੈਕਸ਼ਨ ਨਹੀਂ ਹੈ।",
+  },
+  ashaLoadError: {
+    en: "Could not load your households",
+    hi: "आपके घर लोड नहीं हो सके",
+    pa: "ਤੁਹਾਡੇ ਘਰ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ",
+  },
+  ashaSendError: { en: "Could not send", hi: "भेजा नहीं जा सका", pa: "ਭੇਜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ" },
+  ashaNoHouseholds: {
+    en: "No households are assigned to you yet.",
+    hi: "अभी आपको कोई घर नहीं सौंपा गया है।",
+    pa: "ਹਾਲੇ ਤੁਹਾਨੂੰ ਕੋਈ ਘਰ ਨਹੀਂ ਸੌਂਪਿਆ ਗਿਆ।",
+  },
+  ashaYears: { en: "{n} years", hi: "{n} साल", pa: "{n} ਸਾਲ" },
+  ashaLastCheckin: { en: "Last check-in", hi: "पिछली जाँच", pa: "ਪਿਛਲੀ ਜਾਂਚ" },
+  ashaLastVisit: { en: "Last visit", hi: "पिछला दौरा", pa: "ਪਿਛਲਾ ਦੌਰਾ" },
+  ashaNone: { en: "none", hi: "कोई नहीं", pa: "ਕੋਈ ਨਹੀਂ" },
+  // INV-12: these are the fall-risk tasks, which exist only in a supervised visit.
+  ashaDoThese: {
+    en: "Do these on this visit", hi: "इस दौरे में ये कीजिए", pa: "ਇਸ ਦੌਰੇ ਵਿੱਚ ਇਹ ਕਰੋ",
+  },
+  ashaFamilyRest: {
+    en: "The family does the rest at home. Do not repeat those.",
+    hi: "बाक़ी काम परिवार घर पर करता है। उन्हें दोबारा न कराएँ।",
+    pa: "ਬਾਕੀ ਕੰਮ ਪਰਿਵਾਰ ਘਰ 'ਤੇ ਕਰਦਾ ਹੈ। ਉਹਨਾਂ ਨੂੰ ਦੁਬਾਰਾ ਨਾ ਕਰਾਓ।",
+  },
+  ashaNothingDue: {
+    en: "Nothing needs a visit this month.",
+    hi: "इस महीने किसी दौरे की ज़रूरत नहीं।",
+    pa: "ਇਸ ਮਹੀਨੇ ਕਿਸੇ ਦੌਰੇ ਦੀ ਲੋੜ ਨਹੀਂ।",
+  },
+  ashaVisitSent: { en: "Visit sent ✓", hi: "दौरा भेजा गया ✓", pa: "ਦੌਰਾ ਭੇਜਿਆ ਗਿਆ ✓" },
+  ashaVisitSaved: {
+    en: "Saved — will send", hi: "सहेजा — भेज दिया जाएगा", pa: "ਸੰਭਾਲਿਆ — ਭੇਜ ਦਿੱਤਾ ਜਾਵੇਗਾ",
+  },
+  ashaRecordVisit: { en: "Record visit", hi: "दौरा दर्ज करें", pa: "ਦੌਰਾ ਦਰਜ ਕਰੋ" },
+  ashaNotSent: {
+    en: "Not sent yet: {error}. It is saved and will retry.",
+    hi: "अभी भेजा नहीं गया: {error}। यह सहेजा है और दोबारा कोशिश होगी।",
+    pa: "ਹਾਲੇ ਭੇਜਿਆ ਨਹੀਂ ਗਿਆ: {error}। ਇਹ ਸੰਭਾਲਿਆ ਹੈ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਹੋਵੇਗੀ।",
+  },
+  taskTandemWalk: { en: "Tandem walking", hi: "एक-रेखा चाल", pa: "ਇੱਕ-ਰੇਖਾ ਚਾਲ" },
+  taskUnterberger: {
+    en: "Stepping on the spot, eyes closed",
+    hi: "एक ही जगह क़दमताल, आँखें बंद",
+    pa: "ਇੱਕੋ ਥਾਂ ਕਦਮਤਾਲ, ਅੱਖਾਂ ਬੰਦ",
+  },
+  taskLineBisection: { en: "Line bisection", hi: "रेखा को बीच से बाँटना", pa: "ਰੇਖਾ ਨੂੰ ਵਿਚਕਾਰੋਂ ਵੰਡਣਾ" },
+  taskStarCancellation: { en: "Star cancellation", hi: "तारे काटना", pa: "ਤਾਰੇ ਕੱਟਣਾ" },
+  taskSmoothPursuit: {
+    en: "Follow the moving dot", hi: "चलते बिंदु का पीछा कीजिए", pa: "ਚੱਲਦੇ ਬਿੰਦੂ ਦਾ ਪਿੱਛਾ ਕਰੋ",
+  },
+  taskRandomSaccades: { en: "Look at each dot", hi: "हर बिंदु को देखिए", pa: "ਹਰ ਬਿੰਦੂ ਨੂੰ ਵੇਖੋ" },
+  taskTimedUpAndGo: { en: "Stand, walk, sit", hi: "खड़े हों, चलें, बैठें", pa: "ਖੜ੍ਹੇ ਹੋਵੋ, ਤੁਰੋ, ਬੈਠੋ" },
+
+  // ---- the printable clinician report ----
+  reportPrintHint: {
+    en: "Use your browser's print dialog and choose Save as PDF.",
+    hi: "अपने ब्राउज़र के प्रिंट विकल्प में जाकर \"PDF के रूप में सहेजें\" चुनिए।",
+    pa: "ਆਪਣੇ ਬ੍ਰਾਊਜ਼ਰ ਦੇ ਪ੍ਰਿੰਟ ਵਿਕਲਪ ਵਿੱਚ ਜਾ ਕੇ \"PDF ਵਜੋਂ ਸੰਭਾਲੋ\" ਚੁਣੋ।",
+  },
+  reportPrint: {
+    en: "Print / Save as PDF", hi: "प्रिंट / PDF सहेजें", pa: "ਪ੍ਰਿੰਟ / PDF ਸੰਭਾਲੋ",
+  },
+  reportTitle: {
+    en: "NeuroTrace — monitoring report",
+    hi: "NeuroTrace — निगरानी रिपोर्ट",
+    pa: "NeuroTrace — ਨਿਗਰਾਨੀ ਰਿਪੋਰਟ",
+  },
+  reportGenerated: {
+    en: "Generated {when} · covers the most recent {n} scored sessions",
+    hi: "{when} को बनाई गई · सबसे हाल की {n} अंकित जाँचों को शामिल करती है",
+    pa: "{when} ਨੂੰ ਬਣਾਈ ਗਈ · ਸਭ ਤੋਂ ਤਾਜ਼ਾ {n} ਅੰਕਿਤ ਜਾਂਚਾਂ ਸ਼ਾਮਲ ਕਰਦੀ ਹੈ",
+  },
+  reportPatient: { en: "Patient", hi: "मरीज़", pa: "ਮਰੀਜ਼" },
+  reportAgeSex: { en: "Age / sex", hi: "उम्र / लिंग", pa: "ਉਮਰ / ਲਿੰਗ" },
+  reportSide: { en: "Affected side", hi: "प्रभावित पक्ष", pa: "ਪ੍ਰਭਾਵਿਤ ਪਾਸਾ" },
+  reportStrokeDate: { en: "Stroke date", hi: "स्ट्रोक की तारीख़", pa: "ਸਟ੍ਰੋਕ ਦੀ ਤਾਰੀਖ਼" },
+  reportEnrolled: { en: "Enrolled", hi: "पंजीकरण", pa: "ਦਾਖ਼ਲਾ" },
+  reportBaseline: { en: "Baseline", hi: "आधार", pa: "ਆਧਾਰ" },
+  reportModulesLocked: {
+    en: "({locked}/{total} modules locked)",
+    hi: "({total} में से {locked} मॉड्यूल तय)",
+    pa: "({total} ਵਿੱਚੋਂ {locked} ਮਾਡਿਊਲ ਤੈਅ)",
+  },
+  reportUnlockedLead: {
+    en: "Baseline is not locked.", hi: "आधार अभी तय नहीं है।", pa: "ਆਧਾਰ ਹਾਲੇ ਤੈਅ ਨਹੀਂ ਹੈ।",
+  },
+  reportUnlockedBody: {
+    en: "Deviations below are provisional: they are measured against a window that is still being collected, so both the median and the spread will move. Bands should not be acted on clinically until the baseline locks.",
+    hi: "नीचे दिए विचलन अस्थायी हैं: वे एक ऐसी अवधि के मुक़ाबले मापे गए हैं जो अभी इकट्ठी हो रही है, इसलिए median और फैलाव दोनों बदलेंगे। आधार तय होने तक बैंड पर नैदानिक कार्रवाई नहीं करनी चाहिए।",
+    pa: "ਹੇਠਾਂ ਦਿੱਤੇ ਵਿਚਲਨ ਆਰਜ਼ੀ ਹਨ: ਉਹ ਇੱਕ ਅਜਿਹੇ ਸਮੇਂ ਦੇ ਮੁਕਾਬਲੇ ਮਾਪੇ ਗਏ ਹਨ ਜੋ ਹਾਲੇ ਇਕੱਠਾ ਹੋ ਰਿਹਾ ਹੈ, ਇਸ ਲਈ median ਅਤੇ ਫੈਲਾਅ ਦੋਵੇਂ ਬਦਲਣਗੇ। ਆਧਾਰ ਤੈਅ ਹੋਣ ਤੱਕ ਬੈਂਡ 'ਤੇ ਕਲੀਨਿਕਲ ਕਾਰਵਾਈ ਨਹੀਂ ਕਰਨੀ ਚਾਹੀਦੀ।",
+  },
+  reportSessionHistory: { en: "Session history", hi: "जाँचों का इतिहास", pa: "ਜਾਂਚਾਂ ਦਾ ਇਤਿਹਾਸ" },
+  reportColDate: { en: "Date", hi: "तारीख़", pa: "ਤਾਰੀਖ਼" },
+  reportColBand: { en: "Band", hi: "बैंड", pa: "ਬੈਂਡ" },
+  reportColGates: { en: "Gates", hi: "गेट", pa: "ਗੇਟ" },
+  reportColLateralised: { en: "Lateralised", hi: "पक्ष-विशेष", pa: "ਪਾਸਾ-ਵਿਸ਼ੇਸ਼" },
+  reportColReason: { en: "Reason", hi: "कारण", pa: "ਕਾਰਨ" },
+  reportConfounders: {
+    en: "Confounders active: {list}",
+    hi: "सक्रिय भ्रामक कारक: {list}",
+    pa: "ਸਰਗਰਮ ਭਰਮਾਊ ਕਾਰਕ: {list}",
+  },
+  reportBaselines: { en: "Baselines", hi: "आधार", pa: "ਆਧਾਰ" },
+  reportColModule: { en: "Module", hi: "मॉड्यूल", pa: "ਮਾਡਿਊਲ" },
+  reportColLocked: { en: "Locked", hi: "तय", pa: "ਤੈਅ" },
+  reportColSessionsUsed: {
+    en: "Sessions used", hi: "इस्तेमाल हुई जाँचें", pa: "ਵਰਤੀਆਂ ਜਾਂਚਾਂ",
+  },
+  reportColRejected: { en: "Rejected", hi: "अस्वीकृत", pa: "ਰੱਦ" },
+  reportColWindow: { en: "Window", hi: "अवधि", pa: "ਸਮਾਂ-ਸੀਮਾ" },
+  reportYes: { en: "yes", hi: "हाँ", pa: "ਹਾਂ" },
+  reportNo: { en: "no", hi: "नहीं", pa: "ਨਹੀਂ" },
+  reportMethod: { en: "Method", hi: "विधि", pa: "ਵਿਧੀ" },
+  // The disclaimer at the foot of the printed report. INV-13 territory: it is frozen
+  // copy, so all three renderings say exactly the same thing.
+  reportLimitation: {
+    en: "NeuroTrace monitors change over days against a person's own baseline. It cannot detect an acute stroke and must not be used to rule one out. Sudden weakness, drooping, speech loss or severe headache is an emergency regardless of what any band on this page says.",
+    hi: "NeuroTrace किसी व्यक्ति के अपने आधार के मुक़ाबले कई दिनों में होने वाले बदलाव पर नज़र रखता है। यह होते हुए स्ट्रोक को नहीं पकड़ सकता और इससे स्ट्रोक को ख़ारिज नहीं किया जा सकता। अचानक कमज़ोरी, चेहरे का लटकना, बोली का जाना या तेज़ सिरदर्द आपातकाल है, चाहे इस पन्ने पर कोई भी बैंड लिखा हो।",
+    pa: "NeuroTrace ਕਿਸੇ ਵਿਅਕਤੀ ਦੇ ਆਪਣੇ ਆਧਾਰ ਦੇ ਮੁਕਾਬਲੇ ਕਈ ਦਿਨਾਂ ਵਿੱਚ ਹੋਣ ਵਾਲੇ ਬਦਲਾਅ 'ਤੇ ਨਜ਼ਰ ਰੱਖਦਾ ਹੈ। ਇਹ ਹੁੰਦੇ ਹੋਏ ਸਟ੍ਰੋਕ ਨੂੰ ਨਹੀਂ ਫੜ ਸਕਦਾ ਅਤੇ ਇਸ ਨਾਲ ਸਟ੍ਰੋਕ ਨੂੰ ਰੱਦ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਅਚਾਨਕ ਕਮਜ਼ੋਰੀ, ਚਿਹਰੇ ਦਾ ਲਟਕਣਾ, ਬੋਲੀ ਦਾ ਜਾਣਾ ਜਾਂ ਤੇਜ਼ ਸਿਰਦਰਦ ਐਮਰਜੈਂਸੀ ਹੈ, ਭਾਵੇਂ ਇਸ ਪੰਨੇ 'ਤੇ ਕੋਈ ਵੀ ਬੈਂਡ ਲਿਖਿਆ ਹੋਵੇ।",
+  },
+
+  // ---- the operator console ----
+  // The clinical band names, as a clinician reads them on a printed report. Distinct from
+  // bandStable/bandWatch/bandAlert, which are the caregiver's plain-language wording
+  // ("Please check on them") and would be wrong in a table column headed "Band".
+  bandStableShort: { en: "Stable", hi: "स्थिर", pa: "ਸਥਿਰ" },
+  bandWatchShort: { en: "Watch", hi: "निगरानी", pa: "ਨਿਗਰਾਨੀ" },
+  bandAlertShort: { en: "Alert", hi: "अलर्ट", pa: "ਅਲਰਟ" },
+  bandAtypicalShort: { en: "Atypical pattern", hi: "असामान्य पैटर्न", pa: "ਅਸਾਧਾਰਨ ਪੈਟਰਨ" },
+  gatePersist: { en: "persist", hi: "निरंतर", pa: "ਨਿਰੰਤਰ" },
+  gateCross: { en: "cross", hi: "अंतर-विधा", pa: "ਅੰਤਰ-ਵਿਧਾ" },
+  gateLateral: { en: "lateral", hi: "पक्ष", pa: "ਪਾਸਾ" },
+
+  adminPatients: { en: "Patients", hi: "मरीज़", pa: "ਮਰੀਜ਼" },
+  adminFinishedSetup: {
+    en: "{n} finished setup", hi: "{n} ने सेटअप पूरा किया", pa: "{n} ਨੇ ਸੈੱਟਅੱਪ ਪੂਰਾ ਕੀਤਾ",
+  },
+  adminUsers: { en: "Users", hi: "उपयोक्ता", pa: "ਵਰਤੋਂਕਾਰ" },
+  adminSessions: { en: "Sessions", hi: "जाँचें", pa: "ਜਾਂਚਾਂ" },
+  adminLast7: {
+    en: "{n} in the last 7 days", hi: "पिछले 7 दिनों में {n}", pa: "ਪਿਛਲੇ 7 ਦਿਨਾਂ ਵਿੱਚ {n}",
+  },
+  adminModules: { en: "Modules captured", hi: "दर्ज मॉड्यूल", pa: "ਦਰਜ ਮਾਡਿਊਲ" },
+  adminQualityFlagged: {
+    en: "{n} quality-flagged",
+    hi: "{n} गुणवत्ता के लिए चिह्नित",
+    pa: "{n} ਗੁਣਵੱਤਾ ਲਈ ਨਿਸ਼ਾਨਬੱਧ",
+  },
+
+  // Fallbacks for when a request fails without a message the server can phrase itself.
+  errLoadPatients: {
+    en: "Could not load patients", hi: "मरीज़ लोड नहीं हो सके", pa: "ਮਰੀਜ਼ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ",
+  },
+  errEnrolPatient: {
+    en: "Could not enrol the patient",
+    hi: "मरीज़ का पंजीकरण नहीं हो सका",
+    pa: "ਮਰੀਜ਼ ਦਾ ਦਾਖ਼ਲਾ ਨਹੀਂ ਹੋ ਸਕਿਆ",
+  },
+  errLoadFamilyMember: {
+    en: "Could not load your family member",
+    hi: "आपके परिजन की जानकारी लोड नहीं हो सकी",
+    pa: "ਤੁਹਾਡੇ ਪਰਿਵਾਰਕ ਮੈਂਬਰ ਦੀ ਜਾਣਕਾਰੀ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀ",
+  },
+  errLoadPatientList: {
+    en: "Could not load the patient list",
+    hi: "मरीज़ों की सूची लोड नहीं हो सकी",
+    pa: "ਮਰੀਜ਼ਾਂ ਦੀ ਸੂਚੀ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀ",
+  },
+  errLoadProfile: {
+    en: "Could not load your profile",
+    hi: "आपकी प्रोफ़ाइल लोड नहीं हो सकी",
+    pa: "ਤੁਹਾਡੀ ਪ੍ਰੋਫ਼ਾਈਲ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀ",
+  },
+  errLoadFamilyAccess: {
+    en: "Could not load family access",
+    hi: "पारिवारिक पहुँच लोड नहीं हो सकी",
+    pa: "ਪਰਿਵਾਰਕ ਪਹੁੰਚ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀ",
+  },
+  errRemoveAccess: {
+    en: "Could not remove access", hi: "पहुँच हटाई नहीं जा सकी", pa: "ਪਹੁੰਚ ਹਟਾਈ ਨਹੀਂ ਜਾ ਸਕੀ",
+  },
+  errAddFamilyMember: {
+    en: "Could not add this family member",
+    hi: "यह परिजन जोड़े नहीं जा सके",
+    pa: "ਇਹ ਪਰਿਵਾਰਕ ਮੈਂਬਰ ਜੋੜਿਆ ਨਹੀਂ ਜਾ ਸਕਿਆ",
+  },
+
+  adminScored: { en: "Scored", hi: "अंकित", pa: "ਅੰਕਿਤ" },
+  adminGate1: { en: "1 · Persistence", hi: "1 · निरंतरता", pa: "1 · ਨਿਰੰਤਰਤਾ" },
+  adminGate2: { en: "2 · Cross-modality", hi: "2 · अंतर-विधा", pa: "2 · ਅੰਤਰ-ਵਿਧਾ" },
+  adminGate3: { en: "3 · Laterality", hi: "3 · पक्षधरता", pa: "3 · ਪਾਸਾ-ਨਿਰਧਾਰਨ" },
+  adminOfScored: { en: "of scored", hi: "अंकित में से", pa: "ਅੰਕਿਤ ਵਿੱਚੋਂ" },
+  adminBands: { en: "Bands", hi: "बैंड", pa: "ਬੈਂਡ" },
+  adminBaselines: { en: "Baselines", hi: "आधार", pa: "ਆਧਾਰ" },
+  adminUsersByRole: { en: "Users by role", hi: "भूमिका के अनुसार उपयोक्ता", pa: "ਭੂਮਿਕਾ ਅਨੁਸਾਰ ਵਰਤੋਂਕਾਰ" },
+  adminSamePerson: { en: "Same-person check", hi: "एक ही व्यक्ति की जाँच", pa: "ਇੱਕੋ ਵਿਅਕਤੀ ਦੀ ਜਾਂਚ" },
+  adminPatientsEnrolled: { en: "patients enrolled", hi: "मरीज़ पंजीकृत", pa: "ਮਰੀਜ਼ ਦਾਖ਼ਲ" },
+  adminSessionsChecked: { en: "sessions checked", hi: "जाँचें परखी गईं", pa: "ਜਾਂਚਾਂ ਪਰਖੀਆਂ ਗਈਆਂ" },
+  adminFlagged: { en: "flagged as uncertain", hi: "अनिश्चित के रूप में चिह्नित", pa: "ਅਨਿਸ਼ਚਿਤ ਵਜੋਂ ਨਿਸ਼ਾਨਬੱਧ" },
+  adminAudit: { en: "Audit trail · append-only", hi: "ऑडिट रिकॉर्ड · केवल जोड़ा जा सकता है", pa: "ਆਡਿਟ ਰਿਕਾਰਡ · ਸਿਰਫ਼ ਜੋੜਿਆ ਜਾ ਸਕਦਾ ਹੈ" },
+  adminNothingRecorded: { en: "Nothing recorded yet.", hi: "अभी कुछ दर्ज नहीं है।", pa: "ਹਾਲੇ ਕੁਝ ਦਰਜ ਨਹੀਂ ਹੈ।" },
+
+  faceMeshAlt: {
+    en: "Diagram of the facial regions the examination measures",
+    hi: "जाँच जिन चेहरे के हिस्सों को मापती है, उनका आरेख",
+    pa: "ਜਾਂਚ ਜਿਨ੍ਹਾਂ ਚਿਹਰੇ ਦੇ ਹਿੱਸਿਆਂ ਨੂੰ ਮਾਪਦੀ ਹੈ, ਉਹਨਾਂ ਦਾ ਚਿੱਤਰ",
+  },
 } as const;
 
 export type StringKey = keyof typeof STRINGS;
@@ -974,6 +1462,12 @@ export type StringKey = keyof typeof STRINGS;
 export const DOMAIN_LABELS: Record<string, Record<Lang, string>> = {
   cranial_nerves: { en: "Face", hi: "चेहरा", pa: "ਚਿਹਰਾ" },
   speech_language: { en: "Speech", hi: "बोली", pa: "ਬੋਲੀ" },
+  // Present in the engine's registry (exam/registry.py) but missing here, so every chart
+  // and roster row carrying one printed the bare code — "motor speech", "posterior
+  // vestibular" — in English under a Hindi or Punjabi heading.
+  motor_speech: { en: "Speech clarity", hi: "बोली की स्पष्टता", pa: "ਬੋਲੀ ਦੀ ਸਪਸ਼ਟਤਾ" },
+  language: { en: "Words and meaning", hi: "शब्द और अर्थ", pa: "ਸ਼ਬਦ ਅਤੇ ਅਰਥ" },
+  posterior_vestibular: { en: "Eyes and balance", hi: "आँखें और संतुलन", pa: "ਅੱਖਾਂ ਅਤੇ ਸੰਤੁਲਨ" },
   motor: { en: "Hands and arms", hi: "हाथ और बाँहें", pa: "ਹੱਥ ਅਤੇ ਬਾਂਹਾਂ" },
   coordination_gait: { en: "Balance", hi: "संतुलन", pa: "ਸੰਤੁਲਨ" },
   cognition: { en: "Attention", hi: "ध्यान", pa: "ਧਿਆਨ" },
@@ -981,9 +1475,17 @@ export const DOMAIN_LABELS: Record<string, Record<Lang, string>> = {
   vitals_prevention: { en: "Heart and medicines", hi: "दिल और दवाइयाँ", pa: "ਦਿਲ ਅਤੇ ਦਵਾਈਆਂ" },
 };
 
+/** The Intl locale for a language. Was an identical ternary in eight components; one of
+ *  them is enough, and a new language then only has to be added here. */
+export const LOCALES: Record<Lang, string> = {
+  en: "en-IN", hi: "hi-IN", pa: "pa-IN",
+};
+
 interface I18nValue {
   lang: Lang;
   setLang: (l: Lang) => void;
+  /** Intl locale for `lang` — dates and numbers follow the choice too, not just words. */
+  locale: string;
   t: (key: StringKey) => string;
   domain: (code: string) => string;
 }
@@ -1010,6 +1512,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({
       lang,
       setLang,
+      locale: LOCALES[lang],
       t: (key: StringKey) => STRINGS[key][lang],
       domain: (code: string) => DOMAIN_LABELS[code]?.[lang] ?? code.replace(/_/g, " "),
     }),

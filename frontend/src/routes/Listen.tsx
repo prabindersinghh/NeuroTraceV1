@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 interface ListenerView {
   display_name: string;
@@ -30,6 +31,7 @@ interface ListenerView {
 
 export default function Listen() {
   const { token = "" } = useParams();
+  const { t } = useI18n();
   const [view, setView] = useState<ListenerView | null>(null);
   const [dead, setDead] = useState(false);
 
@@ -54,10 +56,8 @@ export default function Listen() {
   if (dead) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6 text-center">
-        <h1 className="text-title-fluid">This link has expired</h1>
-        <p className="text-muted-foreground">
-          Listener links last a short time on purpose. Ask for a new one.
-        </p>
+        <h1 className="text-title-fluid">{t("listenExpired")}</h1>
+        <p className="text-muted-foreground">{t("listenExpiredBody")}</p>
       </main>
     );
   }
@@ -65,7 +65,7 @@ export default function Listen() {
   if (!view) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
-        <p className="text-muted-foreground">Connecting…</p>
+        <p className="text-muted-foreground">{t("connecting")}</p>
       </main>
     );
   }
@@ -78,21 +78,21 @@ export default function Listen() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-5 p-6">
       <header>
-        <p className="text-sm text-muted-foreground">You are listening with</p>
+        <p className="text-sm text-muted-foreground">{t("listenWith")}</p>
         <h1 className="text-title-fluid">{view.display_name}</h1>
       </header>
 
       {/* The single most useful thing to say right now. */}
       <section className="rounded-2xl border-2 border-accent/40 bg-accent/5 p-5">
-        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">HOW TO HELP</p>
+        <p className="font-mono text-[11px] tracking-[0.18em] text-accent">{t("listenHowToHelp")}</p>
         <p className="mt-2 text-xl leading-snug">{view.coaching.line}</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">What they have said</p>
+        <p className="text-sm text-muted-foreground">{t("listenSaid")}</p>
         {view.recent.length === 0 ? (
           <p className="rounded-xl border border-line p-4 text-muted-foreground">
-            Nothing yet. Give them time — waiting is the help.
+            {t("listenNothing")}
           </p>
         ) : (
           view.recent.map((u) => (
@@ -104,11 +104,8 @@ export default function Listen() {
       </section>
 
       <footer className="mt-auto space-y-2 pt-6 text-xs text-muted-foreground">
-        <p>This link expires in about {minutesLeft} minute{minutesLeft === 1 ? "" : "s"}.</p>
-        <p>
-          You are seeing only what they chose to say. No health information, no history,
-          and no recording — theirs or yours.
-        </p>
+        <p>{t("listenExpiresIn").replace("{n}", String(minutesLeft))}</p>
+        <p>{t("listenPrivacy")}</p>
       </footer>
     </main>
   );

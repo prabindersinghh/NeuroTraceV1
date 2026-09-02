@@ -41,7 +41,7 @@ export function CaregiverHome() {
     try {
       setPatients(await api.listPatients());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load patients");
+      setError(err instanceof Error ? err.message : t("errLoadPatients"));
     }
   }, []);
 
@@ -296,7 +296,7 @@ function AddPatientForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
       });
       onCreated(created?.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not enrol the patient");
+      setError(err instanceof Error ? err.message : t("errEnrolPatient"));
     } finally {
       setBusy(false);
     }

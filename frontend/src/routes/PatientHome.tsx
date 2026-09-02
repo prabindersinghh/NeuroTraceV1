@@ -58,7 +58,7 @@ export function PatientHome() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load your profile");
+      setError(err instanceof Error ? err.message : t("errLoadProfile"));
     }
   }, []);
 

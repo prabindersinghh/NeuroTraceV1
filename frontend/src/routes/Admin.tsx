@@ -19,6 +19,8 @@ import { Metric } from "@/components/ui/metric";
 import { PageHeader } from "@/components/ui/page";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/utils";
 
 interface Overview {
   generated_at: string;
@@ -51,13 +53,14 @@ function Stat({ label, value, hint }: { label: string; value: number | string; h
 }
 
 function Distribution({ title, data }: { title: string; data: Record<string, number> }) {
+  const { t } = useI18n();
   const entries = Object.entries(data).filter(([, v]) => v > 0);
   const total = entries.reduce((n, [, v]) => n + v, 0) || 1;
   return (
     <div className="rounded-2xl border border-line p-5">
       <p className="text-label text-muted-foreground">{title}</p>
       {entries.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">Nothing yet.</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("nothingYet")}</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {entries.map(([k, v]) => (
@@ -76,6 +79,7 @@ function Distribution({ title, data }: { title: string; data: Record<string, num
 }
 
 export default function Admin() {
+  const { t, locale } = useI18n();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [identity, setIdentity] = useState<IdentityHealth | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
@@ -122,13 +126,15 @@ export default function Admin() {
         </p>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Patients" value={overview.patients.total}
-                hint={`${overview.patients.onboarding_complete} finished setup`} />
-          <Stat label="Users" value={overview.users.total} />
-          <Stat label="Sessions" value={overview.sessions.total}
-                hint={`${overview.sessions.last_7_days} in the last 7 days`} />
-          <Stat label="Modules captured" value={overview.modules.total}
-                hint={`${overview.modules.quality_flagged} quality-flagged`} />
+          <Stat label={t("adminPatients")} value={overview.patients.total}
+                hint={t("adminFinishedSetup")
+                  .replace("{n}", String(overview.patients.onboarding_complete))} />
+          <Stat label={t("adminUsers")} value={overview.users.total} />
+          <Stat label={t("adminSessions")} value={overview.sessions.total}
+                hint={t("adminLast7").replace("{n}", String(overview.sessions.last_7_days))} />
+          <Stat label={t("adminModules")} value={overview.modules.total}
+                hint={t("adminQualityFlagged")
+                  .replace("{n}", String(overview.modules.quality_flagged))} />
         </section>
 
         {/* The gate funnel — the one view that says whether the engine is behaving. */}
@@ -138,43 +144,41 @@ export default function Admin() {
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-4">
             {[
-              ["Scored", g.scored, ""],
-              ["1 · Persistence", g.gate1_persistence, pct(g.gate1_persistence)],
-              ["2 · Cross-modality", g.gate2_cross_modality, pct(g.gate2_cross_modality)],
-              ["3 · Laterality", g.gate3_laterality, pct(g.gate3_laterality)],
+              [t("adminScored"), g.scored, ""],
+              [t("adminGate1"), g.gate1_persistence, pct(g.gate1_persistence)],
+              [t("adminGate2"), g.gate2_cross_modality, pct(g.gate2_cross_modality)],
+              [t("adminGate3"), g.gate3_laterality, pct(g.gate3_laterality)],
             ].map(([label, value, share]) => (
               <div key={String(label)}>
                 <p className="text-label text-muted-foreground">{label}</p>
                 <p className="mt-1.5 text-metric text-foreground">{value}</p>
-                {share ? <p className="mt-1 text-sm text-muted-foreground">{share} of scored</p> : null}
+                {share ? <p className="mt-1 text-sm text-muted-foreground">{share} {t("adminOfScored")}</p> : null}
               </div>
             ))}
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
-          <Distribution title="Bands" data={overview.sessions.by_band} />
-          <Distribution title="Baselines" data={overview.baselines.by_state} />
-          <Distribution title="Users by role" data={overview.users.by_role} />
+          <Distribution title={t("adminBands")} data={overview.sessions.by_band} />
+          <Distribution title={t("adminBaselines")} data={overview.baselines.by_state} />
+          <Distribution title={t("adminUsersByRole")} data={overview.users.by_role} />
         </section>
 
         {identity && (
           <section className="rounded-2xl border border-line p-5">
-            <p className="text-label text-muted-foreground">
-              Same-person check
-            </p>
+            <p className="text-label text-muted-foreground">{t("adminSamePerson")}</p>
             <div className="mt-3 grid gap-4 sm:grid-cols-3">
               <div>
                 <p className="text-metric text-foreground">{identity.patients_enrolled}</p>
-                <p className="mt-1 text-sm text-muted-foreground">patients enrolled</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("adminPatientsEnrolled")}</p>
               </div>
               <div>
                 <p className="text-metric text-foreground">{identity.sessions_scored}</p>
-                <p className="mt-1 text-sm text-muted-foreground">sessions checked</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("adminSessionsChecked")}</p>
               </div>
               <div>
                 <p className="text-metric text-foreground">{identity.sessions_flagged}</p>
-                <p className="mt-1 text-sm text-muted-foreground">flagged as uncertain</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("adminFlagged")}</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">{identity.note}</p>
@@ -182,17 +186,15 @@ export default function Admin() {
         )}
 
         <section className="rounded-2xl border border-line p-5">
-          <p className="text-label text-muted-foreground">
-            Audit trail · append-only
-          </p>
+          <p className="text-label text-muted-foreground">{t("adminAudit")}</p>
           {!audit?.length ? (
-            <p className="mt-2 text-sm text-muted-foreground">Nothing recorded yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t("adminNothingRecorded")}</p>
           ) : (
             <ul className="mt-3 divide-y divide-line text-sm">
               {audit.map((e, i) => (
                 <li key={`${e.ts}-${i}`} className="flex items-center gap-4 py-2">
                   <span className="w-44 shrink-0 font-mono text-xs text-muted-foreground">
-                    {new Date(e.ts).toLocaleString()}
+                    {formatDateTime(e.ts, locale)}
                   </span>
                   <span className="flex-1 truncate">{e.action}</span>
                   {e.patient_ref && (

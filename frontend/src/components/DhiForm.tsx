@@ -77,7 +77,7 @@ export function DhiForm({
   previousTotal?: number | null;
   onSubmitted?: (total: number) => void;
 }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [answers, setAnswers] = useState<(number | null)[]>(
     () => Array(ITEMS.length).fill(null),
   );
@@ -108,7 +108,7 @@ export function DhiForm({
       setResult({ total, band: String(res.band ?? bandFor(total).en) });
       onSubmitted?.(total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the answers");
+      setError(err instanceof Error ? err.message : t("dhiSaveError"));
     } finally {
       setBusy(false);
     }
@@ -122,7 +122,7 @@ export function DhiForm({
 
     return (
       <section className="space-y-3">
-        <h3 className="text-base font-semibold">Dizziness questionnaire</h3>
+        <h3 className="text-base font-semibold">{t("dhiTitle")}</h3>
         <p className="text-3xl font-semibold tabular-nums">
           {result.total}
           <span className="ml-1 text-base font-normal text-muted-foreground">/ 100</span>
@@ -137,18 +137,14 @@ export function DhiForm({
                 : "rounded-md border bg-muted/40 p-2.5 text-sm text-muted-foreground"
             }
           >
-            {change > 0 ? "+" : ""}
-            {change} since last time.{" "}
+            {t("dhiSinceLast").replace("{delta}", `${change > 0 ? "+" : ""}${change}`)}{" "}
             {meaningful
-              ? "That is a real change and is worth mentioning to their doctor."
-              : `Changes smaller than ${MDC_POINTS} points are within this questionnaire's own margin of error, so this is not a sign that anything has changed.`}
+              ? t("dhiMeaningful")
+              : t("dhiWithinNoise").replace("{mdc}", String(MDC_POINTS))}
           </p>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          This records how much dizziness is getting in the way of daily life. It is what
-          the person tells us, not a measurement of their balance.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("dhiFooter")}</p>
       </section>
     );
   }
@@ -156,9 +152,11 @@ export function DhiForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <header className="space-y-1">
-        <h3 className="text-base font-semibold">Dizziness questionnaire</h3>
+        <h3 className="text-base font-semibold">{t("dhiTitle")}</h3>
+        {/* The count comes from ITEMS, not a literal — the copy used to say "25" beside a
+            progress bar that counted the real length, so the two could disagree. */}
         <p className="text-sm text-muted-foreground">
-          25 questions about the last month. There are no wrong answers.
+          {t("dhiIntro").replace("{n}", String(ITEMS.length))}
         </p>
         <div
           className="h-1.5 overflow-hidden rounded-full bg-muted"
@@ -173,7 +171,9 @@ export function DhiForm({
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          {answered} of {ITEMS.length} answered
+          {t("dhiAnswered")
+            .replace("{done}", String(answered))
+            .replace("{total}", String(ITEMS.length))}
         </p>
       </header>
 
@@ -219,7 +219,11 @@ export function DhiForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={!complete || busy} className="w-full">
-        {busy ? "Saving…" : complete ? "Save answers" : `${ITEMS.length - answered} left`}
+        {busy
+          ? t("dhiSaving")
+          : complete
+            ? t("dhiSave")
+            : t("dhiLeft").replace("{n}", String(ITEMS.length - answered))}
       </Button>
     </form>
   );

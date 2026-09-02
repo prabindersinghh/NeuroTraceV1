@@ -25,7 +25,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, ApiError } from "../lib/api";
+import { useI18n, type StringKey } from "../lib/i18n";
 import type { AshaHousehold } from "../lib/types";
+import { formatDate } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageHeader } from "../components/ui/page";
@@ -66,17 +68,18 @@ function makeVisitId(patientId: string, ts: string): string {
   return `${patientId.slice(0, 8)}-${ts.slice(0, 10)}`;
 }
 
-const TASK_LABEL: Record<string, string> = {
-  tandem_walk: "Tandem walking",
-  unterberger: "Stepping on the spot, eyes closed",
-  line_bisection: "Line bisection",
-  star_cancellation: "Star cancellation",
-  smooth_pursuit: "Follow the moving dot",
-  random_saccades: "Look at each dot",
-  timed_up_and_go: "Stand, walk, sit",
+const TASK_LABEL: Record<string, StringKey> = {
+  tandem_walk: "taskTandemWalk",
+  unterberger: "taskUnterberger",
+  line_bisection: "taskLineBisection",
+  star_cancellation: "taskStarCancellation",
+  smooth_pursuit: "taskSmoothPursuit",
+  random_saccades: "taskRandomSaccades",
+  timed_up_and_go: "taskTimedUpAndGo",
 };
 
 export default function AshaHome() {
+  const { t, locale } = useI18n();
   const [households, setHouseholds] = useState<AshaHousehold[]>([]);
   const [queue, setQueue] = useState<QueuedVisit[]>(loadQueue);
   const [online, setOnline] = useState(navigator.onLine);
@@ -109,9 +112,9 @@ export default function AshaHome() {
         const cached = localStorage.getItem("neurotrace.asha.households");
         if (cached) {
           setHouseholds(JSON.parse(cached) as AshaHousehold[]);
-          setError("Showing your saved list — no connection right now.");
+          setError(t("ashaSavedList"));
         } else {
-          setError(err instanceof ApiError ? err.message : "Could not load your households");
+          setError(err instanceof ApiError ? err.message : t("ashaLoadError"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -142,7 +145,7 @@ export default function AshaHome() {
         visit.last_error = null;
       } catch (err) {
         // Keep the visit. A failed upload is a retry, never a loss.
-        visit.last_error = err instanceof ApiError ? err.message : "Could not send";
+        visit.last_error = err instanceof ApiError ? err.message : t("ashaSendError");
       }
     }
     setQueue(next);
@@ -178,8 +181,8 @@ export default function AshaHome() {
     <div className="w-full space-y-4 p-4">
       <PageHeader
         className="mb-6"
-        eyebrow="Field visits"
-        title="My households"
+        eyebrow={t("ashaEyebrow")}
+        title={t("ashaTitle")}
         actions={<span
           className={[
             "rounded-full px-3 py-1 text-sm font-medium",
@@ -195,7 +198,7 @@ export default function AshaHome() {
               : "bg-watch-soft text-foreground border border-watch/40",
           ].join(" ")}
         >
-          {online ? "Online" : "No connection — visits are saved"}
+          {online ? t("ashaOnline") : t("ashaOffline")}
         </span>}
       />
 
@@ -203,11 +206,10 @@ export default function AshaHome() {
         <Card>
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <p className="text-sm">
-              <strong>{pending.length}</strong> visit{pending.length > 1 ? "s" : ""} saved on
-              this device, waiting to send.
+              {t("ashaPending").replace("{n}", String(pending.length))}
             </p>
             <Button onClick={() => void sync()} disabled={!online || syncing}>
-              {syncing ? "Sending…" : "Send now"}
+              {syncing ? t("ashaSending") : t("ashaSendNow")}
             </Button>
           </CardContent>
         </Card>
@@ -221,12 +223,10 @@ export default function AshaHome() {
         </p>
       )}
 
-      {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {loading && <p className="text-sm text-muted-foreground">{t("loading")}</p>}
 
       {!loading && households.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          No households are assigned to you yet.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("ashaNoHouseholds")}</p>
       )}
 
       <ul className="space-y-3">
@@ -240,40 +240,36 @@ export default function AshaHome() {
                   <CardTitle className="flex flex-wrap items-baseline justify-between gap-2">
                     <span>{h.name}</span>
                     <span className="text-sm font-normal text-muted-foreground">
-                      {h.age ? `${h.age} years` : ""}
+                      {h.age ? t("ashaYears").replace("{n}", String(h.age)) : ""}
                     </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    Last check-in:{" "}
-                    {h.last_session ? new Date(h.last_session).toLocaleDateString() : "none"}
+                    {t("ashaLastCheckin")}:{" "}
+                    {h.last_session ? formatDate(h.last_session, locale) : t("ashaNone")}
                     {" · "}
-                    Last visit:{" "}
-                    {h.last_visit ? new Date(h.last_visit).toLocaleDateString() : "none"}
+                    {t("ashaLastVisit")}:{" "}
+                    {h.last_visit ? formatDate(h.last_visit, locale) : t("ashaNone")}
                   </p>
 
                   {dueTasks.length > 0 ? (
                     <div className="rounded-lg border bg-muted/40 p-3">
-                      <p className="mb-1.5 text-sm font-medium">Do these on this visit</p>
+                      <p className="mb-1.5 text-sm font-medium">{t("ashaDoThese")}</p>
                       <ul className="space-y-1 text-sm">
                         {dueTasks.flatMap(([mod, tasks]) =>
-                          tasks.map((t) => (
-                            <li key={`${mod}-${t}`} className="flex gap-2">
+                          tasks.map((task) => (
+                            <li key={`${mod}-${task}`} className="flex gap-2">
                               <span aria-hidden>•</span>
-                              <span>{TASK_LABEL[t] ?? t}</span>
+                              <span>{TASK_LABEL[task] ? t(TASK_LABEL[task]) : task}</span>
                             </li>
                           )),
                         )}
                       </ul>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        The family does the rest at home. Do not repeat those.
-                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">{t("ashaFamilyRest")}</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Nothing needs a visit this month.
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t("ashaNothingDue")}</p>
                   )}
 
                   <div className="flex flex-wrap items-center gap-3">
@@ -283,16 +279,16 @@ export default function AshaHome() {
                       disabled={Boolean(queued && !queued.synced_at)}
                     >
                       {queued?.synced_at
-                        ? "Visit sent ✓"
+                        ? t("ashaVisitSent")
                         : queued
-                          ? "Saved — will send"
-                          : "Record visit"}
+                          ? t("ashaVisitSaved")
+                          : t("ashaRecordVisit")}
                     </Button>
                   </div>
 
                   {queued?.last_error && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Not sent yet: {queued.last_error}. It is saved and will retry.
+                      {t("ashaNotSent").replace("{error}", queued.last_error)}
                     </p>
                   )}
                 </CardContent>

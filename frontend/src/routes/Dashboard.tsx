@@ -39,7 +39,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { SessionSettings } from "@/components/SessionSettings";
 import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type StringKey } from "@/lib/i18n";
 import { NOTIFY_MESSAGE_KEY, notificationsFor } from "@/lib/notify";
 import type { Band, Dashboard as DashboardData } from "@/lib/types";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
@@ -50,6 +50,16 @@ import { cn, formatDate, formatDateTime } from "@/lib/utils";
 //
 // STABLE is accent-blue on purpose and green is a forbidden status colour here: green
 // reads as "all clear", which is a reassurance this product is not entitled to give.
+/** The band as a short clinical word, for a table cell. Distinct from bandStable/
+ *  bandWatch/bandAlert, which are the caregiver's full sentence ("Please check on them")
+ *  and do not fit a pill. */
+const BAND_LABEL: Record<string, StringKey> = {
+  STABLE: "bandStableShort",
+  WATCH: "bandWatchShort",
+  ALERT: "bandAlertShort",
+  PATTERN_ATYPICAL: "bandAtypicalShort",
+};
+
 const BAND_STYLE: Record<
   Band,
   { ring: string; bg: string; text: string; Icon: LucideIcon }
@@ -96,9 +106,9 @@ const DOMAIN_COLOURS: Record<string, string> = {
 
 export function Dashboard() {
   const { patientId = "" } = useParams();
-  const { t, lang, domain: domainLabel } = useI18n();
+  const { t, lang, locale, domain: domainLabel } = useI18n();
   const { user } = useAuth();
-  const locale = lang === "hi" ? "hi-IN" : lang === "pa" ? "pa-IN" : "en-IN";
+
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,11 +116,14 @@ export function Dashboard() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setData(await api.dashboard(patientId));
+      setData(await api.dashboard(patientId, 30, lang));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the dashboard");
+      setError(err instanceof Error ? err.message : t("errDashboard"));
     }
-  }, [patientId]);
+    // `lang` is a dependency, not decoration: the FAST card at the foot of this page is
+    // rendered server-side, so switching language has to refetch or the one section that
+    // must be read under panic stays in the language the reader just switched away from.
+  }, [patientId, lang, t]);
 
   useEffect(() => {
     void load();
@@ -382,7 +395,13 @@ export function Dashboard() {
                               (BAND_STYLE[row.band] ?? BAND_STYLE.STABLE).text,
                             )}
                           >
-                            {row.baseline_phase ? "—" : row.band}
+                            {/* Was the raw enum. Every other cell in this row is
+                                translated, so "ALERT" was the one English word in it. */}
+                            {row.baseline_phase
+                              ? "—"
+                              : BAND_LABEL[row.band]
+                                ? t(BAND_LABEL[row.band])
+                                : row.band}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-muted-foreground">
@@ -450,7 +469,7 @@ export function Dashboard() {
       {readOnly && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="text-base">Balance trace</CardTitle>
+            <CardTitle className="text-base">{t("balanceTrace")}</CardTitle>
           </CardHeader>
           <CardContent>
             <CcgComparison patientId={patientId} />
@@ -463,7 +482,7 @@ export function Dashboard() {
           to={`/report/${patientId}`}
           className={cn(buttonVariants({ variant: "outline" }), "mt-6 min-h-12 w-full")}
         >
-          Open printable report
+          {t("openReport")}
         </Link>
       )}
 

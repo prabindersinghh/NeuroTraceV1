@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import CurrentUser, get_patient_for_user
@@ -17,7 +17,7 @@ from ..db import get_session
 from ..exam.questionnaires import score_instrument
 from ..exam.vitals import extract_adherence, extract_blood_pressure, extract_rhythm
 from ..models import Adherence, AuditLog, Patient, Questionnaire, Vital
-from ..safety.fast import fast_card
+from ..safety.fast import fast_card, resolve_lang
 from ..schemas import (
     AdherenceRead,
     AdherenceSubmit,
@@ -28,6 +28,52 @@ from ..schemas import (
 )
 
 router = APIRouter(tags=["clinical-data"])
+
+
+# The method note, in all three languages side by side. A change to one is visibly a
+# change to all three; when it lived inline in the response dict it was English only, so
+# a Punjabi clinician read a Punjabi report with an English statement of method at the
+# foot of it.
+METHOD_NOTE: dict[str, str] = {
+    "en": (
+        "All deviations are computed against this patient's own median/MAD baseline "
+        "using a robust z-score and a Reliable Change Index. An ALERT requires all "
+        "three gates: persistence (two consecutive valid sessions), cross-modality (two "
+        "independent domains above threshold), and laterality (at least one persistent "
+        "domain one-sided, sustained across the window). Change that is persistent and "
+        "cross-modal but SYMMETRIC is reported as PATTERN_ATYPICAL rather than ALERT — "
+        "that combination is characteristic of a progressive movement disorder rather "
+        "than a vascular event, and it warrants a different referral. Every session is "
+        "additionally scored against a frozen reference baseline snapshot taken at "
+        "lock, because the adaptive baseline extrapolates the recovery trajectory "
+        "forward and a slow decline can track it unseen. This is a monitoring aid and "
+        "does not constitute a diagnosis."
+    ),
+    "hi": (
+        "हर विचलन इसी मरीज़ के अपने median/MAD आधार के मुक़ाबले, robust z-score और "
+        "विश्वसनीय-परिवर्तन सूचकांक (RCI) से निकाला जाता है। ALERT के लिए तीनों गेट "
+        "ज़रूरी हैं: निरंतरता (लगातार दो वैध जाँचें), अंतर-विधा (सीमा से ऊपर दो "
+        "स्वतंत्र क्षेत्र), और पक्षधरता (कम से कम एक लगातार क्षेत्र एकतरफा, पूरी अवधि "
+        "में बना रहा हो)। जो बदलाव लगातार और कई विधाओं में है पर दोनों ओर बराबर है, उसे "
+        "ALERT नहीं बल्कि PATTERN_ATYPICAL कहा जाता है — यह संयोग नाड़ी घटना से ज़्यादा "
+        "किसी बढ़ते हुए गति-विकार जैसा है, और इसके लिए अलग रेफरल चाहिए। हर जाँच को लॉक "
+        "के समय लिए गए जमे हुए संदर्भ आधार के मुक़ाबले भी आंका जाता है, क्योंकि चलता "
+        "आधार सुधार की दिशा आगे बढ़ा देता है और धीमी गिरावट उसी के साथ छिप सकती है। यह "
+        "निगरानी में सहायक है और कोई निदान नहीं है।"
+    ),
+    "pa": (
+        "ਹਰ ਵਿਚਲਨ ਇਸੇ ਮਰੀਜ਼ ਦੇ ਆਪਣੇ median/MAD ਆਧਾਰ ਦੇ ਮੁਕਾਬਲੇ, robust z-score ਅਤੇ "
+        "ਭਰੋਸੇਯੋਗ-ਤਬਦੀਲੀ ਸੂਚਕਾਂਕ (RCI) ਨਾਲ ਕੱਢਿਆ ਜਾਂਦਾ ਹੈ। ALERT ਲਈ ਤਿੰਨੋ ਗੇਟ ਜ਼ਰੂਰੀ "
+        "ਹਨ: ਨਿਰੰਤਰਤਾ (ਲਗਾਤਾਰ ਦੋ ਜਾਇਜ਼ ਜਾਂਚਾਂ), ਅੰਤਰ-ਵਿਧਾ (ਹੱਦ ਤੋਂ ਉੱਪਰ ਦੋ ਸੁਤੰਤਰ "
+        "ਖੇਤਰ), ਅਤੇ ਪਾਸਾ-ਨਿਰਧਾਰਨ (ਘੱਟੋ-ਘੱਟ ਇੱਕ ਲਗਾਤਾਰ ਖੇਤਰ ਇੱਕ ਪਾਸੇ, ਪੂਰੇ ਸਮੇਂ ਵਿੱਚ "
+        "ਕਾਇਮ)। ਜੋ ਬਦਲਾਅ ਲਗਾਤਾਰ ਅਤੇ ਕਈ ਵਿਧਾਵਾਂ ਵਿੱਚ ਹੈ ਪਰ ਦੋਵੇਂ ਪਾਸੇ ਬਰਾਬਰ ਹੈ, ਉਸਨੂੰ "
+        "ALERT ਨਹੀਂ ਸਗੋਂ PATTERN_ATYPICAL ਕਿਹਾ ਜਾਂਦਾ ਹੈ — ਇਹ ਮੇਲ ਨਾੜੀ ਘਟਨਾ ਨਾਲੋਂ ਵੱਧ "
+        "ਕਿਸੇ ਵਧਦੇ ਗਤੀ-ਵਿਕਾਰ ਵਰਗਾ ਹੈ, ਅਤੇ ਇਸ ਲਈ ਵੱਖਰਾ ਰੈਫਰਲ ਚਾਹੀਦਾ ਹੈ। ਹਰ ਜਾਂਚ ਨੂੰ ਲਾਕ "
+        "ਵੇਲੇ ਲਈ ਗਈ ਜੰਮੀ ਹੋਈ ਹਵਾਲੇ ਦੇ ਮੁਕਾਬਲੇ ਵੀ ਪਰਖਿਆ ਜਾਂਦਾ ਹੈ, ਕਿਉਂਕਿ ਚੱਲਦਾ ਆਧਾਰ "
+        "ਸੁਧਾਰ ਦੀ ਦਿਸ਼ਾ ਅੱਗੇ ਵਧਾ ਦਿੰਦਾ ਹੈ ਅਤੇ ਹੌਲੀ ਗਿਰਾਵਟ ਉਸੇ ਨਾਲ ਲੁਕ ਸਕਦੀ ਹੈ। ਇਹ "
+        "ਨਿਗਰਾਨੀ ਵਿੱਚ ਸਹਾਇਕ ਹੈ ਅਤੇ ਕੋਈ ਨਿਦਾਨ ਨਹੀਂ ਹੈ।"
+    ),
+}
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 AuthorisedPatient = Annotated[Patient, Depends(get_patient_for_user)]
@@ -113,7 +159,10 @@ async def submit_adherence(
 
 
 @router.get("/report/{patient_id}")
-async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session) -> dict:
+async def exam_report(
+    patient: AuthorisedPatient, user: CurrentUser, db: Session,
+    lang: Annotated[str | None, Query(pattern="^(en|hi|pa)$")] = None,
+) -> dict:
     """Structured exam report for the clinician (the PDF renderer consumes this).
 
     Returned as JSON rather than a binary PDF so the same payload can drive the on-screen
@@ -170,21 +219,8 @@ async def exam_report(patient: AuthorisedPatient, user: CurrentUser, db: Session
              "clinician_note": s.reason}
             for s, ts in scores
         ],
-        "method_note": (
-            "All deviations are computed against this patient's own median/MAD baseline "
-            "using a robust z-score and a Reliable Change Index. An ALERT requires all "
-            "three gates: persistence (two consecutive valid sessions), cross-modality "
-            "(two independent domains above threshold), and laterality (at least one "
-            "persistent domain one-sided, sustained across the window). Change that is "
-            "persistent and cross-modal but SYMMETRIC is reported as PATTERN_ATYPICAL "
-            "rather than ALERT — that combination is characteristic of a progressive "
-            "movement disorder rather than a vascular event, and it warrants a different "
-            "referral. Every session is additionally scored against a frozen reference "
-            "baseline snapshot taken at lock, because the adaptive baseline extrapolates "
-            "the recovery trajectory forward and a slow decline can track it unseen. "
-            "This is a monitoring aid and does not constitute a diagnosis."
-        ),
-        "fast": fast_card("en"),
+        "method_note": METHOD_NOTE[resolve_lang(lang, patient.languages)],
+        "fast": fast_card(resolve_lang(lang, patient.languages)),
     }
 
 

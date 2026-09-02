@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { loadFaceLandmarker, type Landmark } from "@/lib/ondevice/face";
+import { useI18n } from "@/lib/i18n";
 
 type Mode = "schematic" | "loading" | "live" | "unavailable";
 
@@ -44,9 +45,10 @@ const CONTOURS: number[][] = [
  * model, and never presented as such.
  */
 function Schematic() {
+  const { t } = useI18n();
   return (
     <svg viewBox="0 0 320 380" className="h-full w-full" role="img"
-         aria-label="Diagram of the facial regions the examination measures">
+         aria-label={t("faceMeshAlt")}>
       <g fill="none" stroke="currentColor" strokeWidth="1.25" className="text-accent/60">
         <ellipse cx="160" cy="190" rx="96" ry="126" />
         <path d="M84 150c14-12 40-12 54 0" /><path d="M182 150c14-12 40-12 54 0" />

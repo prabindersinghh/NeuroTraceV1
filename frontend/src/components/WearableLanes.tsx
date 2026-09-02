@@ -17,22 +17,26 @@
  */
 import { useMemo } from "react";
 
+import { useI18n, type StringKey } from "../lib/i18n";
 import type { FallEvent, WearableReading } from "../lib/types";
+import { formatDate, formatDateTime } from "../lib/utils";
 
-const METRIC_LABEL: Record<string, string> = {
-  heart_rate: "Heart rate",
-  irregular_rhythm: "Irregular rhythm notifications",
-  sleep_quality: "Sleep quality",
-  step_count: "Steps",
-  spo2: "Blood oxygen",
-  blood_pressure_systolic: "Blood pressure (upper)",
-  blood_pressure_diastolic: "Blood pressure (lower)",
+/** Vendor metric code -> string key. The label itself is translated like everything else;
+ *  what the vendor owns is the number, not the word for it (INV-5). */
+const METRIC_LABEL: Record<string, StringKey> = {
+  heart_rate: "metricHeartRate",
+  irregular_rhythm: "metricIrregular",
+  sleep_quality: "metricSleep",
+  step_count: "metricSteps",
+  spo2: "metricSpo2",
+  blood_pressure_systolic: "metricBpUpper",
+  blood_pressure_diastolic: "metricBpLower",
 };
 
 const W = 320;
 const H = 56;
 
-function Sparkline({ points }: { points: number[] }) {
+function Sparkline({ points, label }: { points: number[]; label: string }) {
   const path = useMemo(() => {
     if (points.length < 2) return "";
     const min = Math.min(...points);
@@ -49,7 +53,7 @@ function Sparkline({ points }: { points: number[] }) {
 
   if (!path) return null;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full" role="img" aria-label="trend">
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full" role="img" aria-label={label}>
       <path
         d={path}
         fill="none"
@@ -70,6 +74,7 @@ export function WearableLanes({
   falls: FallEvent[];
   onAcknowledgeFall?: (id: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const byMetric = useMemo(() => {
     const out = new Map<string, WearableReading[]>();
     for (const r of readings) {
@@ -107,14 +112,11 @@ export function WearableLanes({
               className="rounded-lg border-2 border-alert/50 bg-alert-soft p-4"
             >
               <p className="text-sm font-semibold text-foreground">
-                A fall was reported {new Date(f.ts).toLocaleString()}
+                {t("fallReported").replace("{when}", formatDateTime(f.ts, locale))}
               </p>
               <p className="mt-1 text-sm text-foreground">{f.message}</p>
               {f.dismissed_by_patient && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  They dismissed it on the watch. Check anyway — people dismiss falls they
-                  are embarrassed by, or confused after.
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("fallDismissed")}</p>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
                 {f.claim_notice}
@@ -126,7 +128,7 @@ export function WearableLanes({
                   className="mt-3 min-h-11 w-full rounded-lg border border-alert/50
                              bg-card px-4 text-sm font-medium text-foreground focus-ring"
                 >
-                  I have checked on them
+                  {t("fallChecked")}
                 </button>
               )}
             </div>
@@ -137,10 +139,11 @@ export function WearableLanes({
       {byMetric.size > 0 && (
         <div className="rounded-lg border border-dashed p-4">
           <header className="mb-3">
-            <h3 className="text-base font-semibold">From their watch</h3>
+            <h3 className="text-base font-semibold">{t("wearableTitle")}</h3>
             <p className="text-xs text-muted-foreground">
-              Recorded by {sources.join(", ") || "the device"} — shown here as a trend.
-              NeuroTrace does not measure these; the device maker does.
+              {t("wearableSource").replace(
+                "{source}", sources.join(", ") || t("wearableDevice"),
+              )}
             </p>
           </header>
 
@@ -151,18 +154,19 @@ export function WearableLanes({
                 <div key={metric}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-medium">
-                      {METRIC_LABEL[metric] ?? metric}
+                      {METRIC_LABEL[metric] ? t(METRIC_LABEL[metric]) : metric}
                     </span>
                     <span className="font-mono text-sm tabular-nums">
                       {latest.value}
                       {latest.unit ? ` ${latest.unit}` : ""}
                     </span>
                   </div>
-                  <Sparkline points={list.map((r) => r.value)} />
+                  <Sparkline points={list.map((r) => r.value)} label={t("wearableTrend")} />
                   <p className="text-xs text-muted-foreground">
-                    {list.length} reading{list.length > 1 ? "s" : ""} ·{" "}
-                    {new Date(list[0].ts).toLocaleDateString()} –{" "}
-                    {new Date(latest.ts).toLocaleDateString()}
+                    {t("wearableReadings")
+                      .replace("{n}", String(list.length))
+                      .replace("{from}", formatDate(list[0].ts, locale))
+                      .replace("{to}", formatDate(latest.ts, locale))}
                   </p>
                 </div>
               );

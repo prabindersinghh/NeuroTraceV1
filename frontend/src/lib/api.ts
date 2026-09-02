@@ -354,8 +354,9 @@ export const api = {
       `/trace/${patientId}` + (qs ? `?${qs}` : ""));
   },
 
-  examReport: (patientId: string) =>
-    request<ExamReport>(`/report/${patientId}`),
+  /** `lang` drives the method note and the FAST card in the report body. */
+  examReport: (patientId: string, lang: Lang = "en") =>
+    request<ExamReport>(`/report/${patientId}?lang=${lang}`),
 
   // --- Awaaz ---
   awaazBoard: (patientId: string) =>
@@ -456,8 +457,10 @@ export const api = {
       json: { features, extracted_on_device: true, ...quality },
     }),
 
-  finalizeSession: (sessionId: string) =>
-    request<FinalizeResult>(`/sessions/${sessionId}/finalize`, { method: "POST" }),
+  /** `lang` decides the language of the FAST card in the response — the reader's choice,
+   *  not the patient record's. Omitting it falls back to the record, server-side. */
+  finalizeSession: (sessionId: string, lang: Lang = "en") =>
+    request<FinalizeResult>(`/sessions/${sessionId}/finalize?lang=${lang}`, { method: "POST" }),
 
   /** The patient stopped part-way. Stored, kept, and never scored — see the endpoint. */
   abandonSession: (sessionId: string, steps: { completed: number; total: number }) =>
@@ -501,8 +504,10 @@ export const api = {
     }),
 
   // --- dashboards ---
-  dashboard: (patientId: string, days = 30) =>
-    request<Dashboard>(`/dashboard/${patientId}?days=${days}`),
+  /** `lang` decides the language of the embedded FAST card. Callers refetch when the
+   *  language changes, or the emergency card is left in the previous one. */
+  dashboard: (patientId: string, days = 30, lang: Lang = "en") =>
+    request<Dashboard>(`/dashboard/${patientId}?days=${days}&lang=${lang}`),
 
   clinicPatients: () =>
     request<{ patients: ClinicPatientRow[] }>("/clinic/patients"),

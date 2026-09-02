@@ -43,8 +43,18 @@ FAST_CARD: dict = {
         },
     ],
     "emergency_numbers": [
-        {"label": "Ambulance (India)", "number": "108"},
-        {"label": "National emergency", "number": "112"},
+        {
+            "number": "108",
+            "en": "Ambulance (India)",
+            "hi": "एम्बुलेंस (भारत)",
+            "pa": "ਐਂਬੂਲੈਂਸ (ਭਾਰਤ)",
+        },
+        {
+            "number": "112",
+            "en": "National emergency",
+            "hi": "राष्ट्रीय आपातकालीन नंबर",
+            "pa": "ਰਾਸ਼ਟਰੀ ਐਮਰਜੈਂਸੀ ਨੰਬਰ",
+        },
     ],
     "limitation_notice": {
         "en": ("This app watches for slow changes over days. It cannot detect a stroke as "
@@ -65,6 +75,26 @@ def fast_card(lang: str = "en") -> dict:
         "items": [
             {"letter": item["letter"], **item[lang]} for item in FAST_CARD["items"]
         ],
-        "emergency_numbers": FAST_CARD["emergency_numbers"],
+        # Translated too. The number is universal; "Ambulance (India)" printed in
+        # Devanagari-free English under a Punjabi heading was the last English word
+        # left on the one card that has to be read under panic.
+        "emergency_numbers": [
+            {"label": n[lang], "number": n["number"]}
+            for n in FAST_CARD["emergency_numbers"]
+        ],
         "limitation_notice": FAST_CARD["limitation_notice"][lang],
     }
+
+
+def resolve_lang(requested: str | None, patient_languages: list[str] | None) -> str:
+    """Which language the FAST card is rendered in.
+
+    The reader's choice wins over the record. The card used to be keyed on
+    `patient.languages[0]`, so a caregiver who switched the app to English kept getting a
+    Punjabi emergency card, and vice versa — the app said one language and the one section
+    that has to be understood under panic said another. The patient record stays the
+    fallback for callers that cannot express a preference (a script, an older client).
+    """
+    if requested in ("en", "hi", "pa"):
+        return requested
+    return (patient_languages or ["en"])[0] if patient_languages else "en"

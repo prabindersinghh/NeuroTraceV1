@@ -39,7 +39,7 @@ from ..models import (
     User,
 )
 from ..services.consent import consent_currently_granted
-from ..safety.fast import fast_card
+from ..safety.fast import fast_card, resolve_lang
 from ..schemas import (
     AlertRead,
     AuditRow,
@@ -66,6 +66,7 @@ Clinician = Annotated[User, Depends(require_roles(Role.clinician))]
 async def dashboard(
     patient: AuthorisedPatient, user: CurrentUser, db: Session,
     days: Annotated[int, Query(ge=1, le=365)] = 30,
+    lang: Annotated[str | None, Query(pattern="^(en|hi|pa)$")] = None,
 ) -> DashboardResponse:
     rows = list(await db.execute(
         select(Score, ExamSession.ts)
@@ -122,8 +123,6 @@ async def dashboard(
         .order_by(Questionnaire.ts.desc()).limit(10)
     ))
 
-    lang = (patient.languages or ["en"])[0] if patient.languages else "en"
-
     db.add(AuditLog(actor_id=user.id, action="dashboard.view", patient_id=patient.id))
     await db.commit()
 
@@ -138,7 +137,9 @@ async def dashboard(
         adherence_rate_30d=rate,
         latest_questionnaires=[QuestionnaireRead.model_validate(q) for q in questionnaires],
         dev_threshold=DEV_THRESHOLD,
-        fast=fast_card(lang),   # TRD §8: on every dashboard, unconditionally
+        # TRD §8: on every dashboard, unconditionally — in the language the reader
+        # has the app set to, not the one on the record. See safety/fast.resolve_lang.
+        fast=fast_card(resolve_lang(lang, patient.languages)),
     )
 
 

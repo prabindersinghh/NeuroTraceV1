@@ -512,7 +512,7 @@ export function ProtocolRunner({ practice = false }: Props) {
       if (questions.medicationTaken !== undefined) {
         await api.submitAdherence(patientId, questions.medicationTaken);
       }
-      const finalized = await api.finalizeSession(session.id);
+      const finalized = await api.finalizeSession(session.id, lang);
       if (finalized.fast) setFast(finalized.fast);
     } catch {
       await enqueueSession({

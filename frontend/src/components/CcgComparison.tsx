@@ -24,9 +24,11 @@
  */
 import { useEffect, useState } from "react";
 
-import { CcgTrace, type CcgTraceData } from "@/components/CcgTrace";
+import { CcgTrace, METRIC_LABEL, type CcgTraceData } from "@/components/CcgTrace";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { formatDate } from "@/lib/utils";
 
 /** Metrics where the two captures can legitimately be compared side by side. */
 function sharedMetricKeys(a: CcgTraceData, b: CcgTraceData): string[] {
@@ -57,6 +59,7 @@ function DeltaRow({ label, now, ref }: { label: string; now: number; ref: number
 }
 
 export function CcgComparison({ patientId }: { patientId: string }) {
+  const { t, locale } = useI18n();
   const [now, setNow] = useState<CcgTraceData | null>(null);
   const [reference, setReference] = useState<CcgTraceData | null>(null);
   const [noReference, setNoReference] = useState<string | null>(null);
@@ -92,22 +95,20 @@ export function CcgComparison({ patientId }: { patientId: string }) {
         <div>
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">
             {reference
-              ? `Reference · ${reference.date.slice(0, 10)}`
-              : "Reference · not available"}
+              ? t("ccgReferenceOn").replace("{date}", formatDate(reference.date, locale))
+              : t("ccgReferenceNone")}
           </h3>
           {reference ? (
             <CcgTrace data={reference} />
           ) : (
-            <EmptyState>
-              {noReference ??
-                "No locked baseline yet, so there is nothing to compare against."}
-            </EmptyState>
+            <EmptyState>{noReference ?? t("ccgNoBaseline")}</EmptyState>
           )}
         </div>
         <div>
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">
-            Latest · {now.date.slice(0, 10)}
-            {reference && days > 0 && ` · ${days} days later`}
+            {t("ccgLatestOn").replace("{date}", formatDate(now.date, locale))}
+            {reference && days > 0
+              && ` · ${t("ccgDaysLater").replace("{n}", String(days))}`}
           </h3>
           <CcgTrace data={now} />
         </div>
@@ -117,13 +118,15 @@ export function CcgComparison({ patientId }: { patientId: string }) {
           here, is better than a caveat buried on each panel. */}
       {(!now.complete || (reference && !reference.complete)) && (
         <p className="rounded border border-amber-400 bg-amber-50 p-3 text-sm">
-          <strong>Partial capture.</strong> The walking and stepping tests need someone
-          present and were not recorded in {!now.complete && reference && !reference.complete
-            ? "either capture"
-            : !now.complete
-              ? "the latest capture"
-              : "the reference capture"}. Sway is measured; the direction of deviation is
-          not, so any laterality reading from balance is unavailable for this comparison.
+          <strong>{t("ccgPartialLead")}</strong>{" "}
+          {t("ccgPartialBody").replace(
+            "{which}",
+            t(!now.complete && reference && !reference.complete
+              ? "ccgPartialBoth"
+              : !now.complete
+                ? "ccgPartialLatest"
+                : "ccgPartialReference"),
+          )}
         </p>
       )}
 
@@ -131,17 +134,19 @@ export function CcgComparison({ patientId }: { patientId: string }) {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left">
-              <th className="py-2 pr-3 font-medium">Measure ({now.units})</th>
-              <th className="py-2 pr-3 text-right font-medium">Reference</th>
-              <th className="py-2 pr-3 text-right font-medium">Latest</th>
-              <th className="py-2 text-right font-medium">Change</th>
+              <th className="py-2 pr-3 font-medium">
+                {t("ccgColMeasure").replace("{units}", now.units)}
+              </th>
+              <th className="py-2 pr-3 text-right font-medium">{t("ccgColReference")}</th>
+              <th className="py-2 pr-3 text-right font-medium">{t("ccgColLatest")}</th>
+              <th className="py-2 text-right font-medium">{t("ccgColChange")}</th>
             </tr>
           </thead>
           <tbody>
             {sharedMetricKeys(now, reference).map((k) => (
               <DeltaRow
                 key={k}
-                label={k.replace(/_/g, " ")}
+                label={METRIC_LABEL[k] ? t(METRIC_LABEL[k]) : k.replace(/_/g, " ")}
                 now={now.metrics[k]}
                 ref={reference.metrics[k]}
               />
@@ -150,11 +155,7 @@ export function CcgComparison({ patientId }: { patientId: string }) {
         </table>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Change is shown as direction and magnitude only. A smaller sway area is not
-        necessarily an improvement — bracing, or being steadied by someone, produces the
-        same reduction with no change in vestibular function.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("ccgNoColourNote")}</p>
     </section>
   );
 }

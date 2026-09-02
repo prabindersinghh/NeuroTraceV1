@@ -16,6 +16,9 @@
  */
 import { useMemo } from "react";
 
+import { useI18n, type StringKey } from "@/lib/i18n";
+import { formatDate } from "@/lib/utils";
+
 export interface TraceSeries {
   test: string;
   units: string;
@@ -45,12 +48,12 @@ const TEST_ORDER = [
   "romberg_eyes_open",
 ] as const;
 
-const TEST_LABEL: Record<string, string> = {
-  unterberger: "Unterberger stepping (eyes closed)",
-  tandem_walk: "Tandem walking",
-  tandem_stance: "Tandem stance",
-  romberg_eyes_closed: "Romberg — eyes closed",
-  romberg_eyes_open: "Romberg — eyes open",
+const TEST_LABEL: Record<string, StringKey> = {
+  unterberger: "ccgTestUnterberger",
+  tandem_walk: "ccgTestTandemWalk",
+  tandem_stance: "ccgTestTandemStance",
+  romberg_eyes_closed: "ccgTestRombergClosed",
+  romberg_eyes_open: "ccgTestRombergOpen",
 };
 
 const SIZE = 320;
@@ -67,6 +70,7 @@ function niceBound(points: [number, number][]): number {
 }
 
 function TracePlot({ series }: { series: TraceSeries }) {
+  const { t } = useI18n();
   const { points } = series;
   const bound = useMemo(() => niceBound(points), [points]);
 
@@ -103,9 +107,9 @@ function TracePlot({ series }: { series: TraceSeries }) {
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         className="w-full max-w-[320px] rounded-lg border bg-background"
         role="img"
-        aria-label={`${TEST_LABEL[series.test] ?? series.test}: movement path, ${
-          series.units
-        }`}
+        aria-label={t("ccgPlotLabel")
+          .replace("{test}", TEST_LABEL[series.test] ? t(TEST_LABEL[series.test]) : series.test)
+          .replace("{units}", series.units)}
       >
         {gridlines.map((v) => {
           const [gx] = project(v, 0);
@@ -172,28 +176,28 @@ function TracePlot({ series }: { series: TraceSeries }) {
           * only thing distinguishing them — the caption named neither.
           */}
         <circle cx={ox} cy={oy} r={4} className="fill-accent">
-          <title>Start of path</title>
+          <title>{t("ccgStart")}</title>
         </circle>
         <circle cx={ex} cy={ey} r={5} className="fill-foreground">
-          <title>End of path</title>
+          <title>{t("ccgEnd")}</title>
         </circle>
       </svg>
 
       <figcaption className="mt-1.5 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">
-          {TEST_LABEL[series.test] ?? series.test}
+          {TEST_LABEL[series.test] ? t(TEST_LABEL[series.test]) : series.test}
         </span>
         {" · "}
         <span className="whitespace-nowrap">
-          <span aria-hidden className="text-accent">●</span> start
+          <span aria-hidden className="text-accent">●</span> {t("ccgStartShort")}
           {" "}
-          <span aria-hidden>●</span> end
+          <span aria-hidden>●</span> {t("ccgEndShort")}
         </span>
         {Math.abs(deviationDeg) > 0.5 && (
           <>
             {" · "}
-            {Math.abs(deviationDeg).toFixed(1)}° to the{" "}
-            {deviationDeg > 0 ? "right" : "left"}
+            {t(deviationDeg > 0 ? "ccgToTheRight" : "ccgToTheLeft")
+              .replace("{deg}", Math.abs(deviationDeg).toFixed(1))}
           </>
         )}
       </figcaption>
@@ -201,14 +205,16 @@ function TracePlot({ series }: { series: TraceSeries }) {
   );
 }
 
-const METRIC_LABEL: Record<string, string> = {
-  unterberger_sway_path_cm: "Unterberger sway path",
-  unterberger_angular_deviation_deg: "Angular deviation",
-  tandem_walk_sway_path_cm: "Tandem walking sway",
-  tandem_stance_sway_path_cm: "Tandem stance sway",
-  romberg_eyes_open_sway_path_cm: "Romberg sway (eyes open)",
-  romberg_eyes_closed_sway_path_cm: "Romberg sway (eyes closed)",
-  romberg_quotient: "Romberg quotient",
+/** Exported: CcgComparison labels the same metrics in its delta table, and two lists that
+ *  can drift is how one view ends up naming a measure differently from the other. */
+export const METRIC_LABEL: Record<string, StringKey> = {
+  unterberger_sway_path_cm: "ccgMetricUnterbergerPath",
+  unterberger_angular_deviation_deg: "ccgMetricAngular",
+  tandem_walk_sway_path_cm: "ccgMetricTandemWalk",
+  tandem_stance_sway_path_cm: "ccgMetricTandemStance",
+  romberg_eyes_open_sway_path_cm: "ccgMetricRombergOpen",
+  romberg_eyes_closed_sway_path_cm: "ccgMetricRombergClosed",
+  romberg_quotient: "ccgMetricRombergQuotient",
 };
 
 const METRIC_UNIT: Record<string, string> = {
@@ -216,15 +222,18 @@ const METRIC_UNIT: Record<string, string> = {
 };
 
 export function CcgTrace({ data }: { data: CcgTraceData }) {
+  const { t, locale } = useI18n();
   const available = TEST_ORDER.filter((k) => data.traces[k]?.points?.length);
 
   return (
     <section className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold">Balance — movement trace</h3>
+        <h3 className="text-base font-semibold">{t("balanceTraceTitle")}</h3>
         <span className="text-xs text-muted-foreground">
-          {new Date(data.date).toLocaleDateString()} ·{" "}
-          {data.tests_captured}/{data.tests_total} tests
+          {formatDate(data.date, locale)} ·{" "}
+          {t("ccgTests")
+            .replace("{done}", String(data.tests_captured))
+            .replace("{total}", String(data.tests_total))}
         </span>
       </header>
 
@@ -233,21 +242,22 @@ export function CcgTrace({ data }: { data: CcgTraceData }) {
         <p className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs
                       text-amber-900 dark:border-amber-800 dark:bg-amber-950/40
                       dark:text-amber-200">
-          {data.note ??
-            "Partial capture — some tests need someone present and were not recorded."}
+          {/* Deliberately NOT `data.note ?? …`. The server sends one fixed English
+              sentence here, so preferring it made this the one amber box on the page
+              still speaking English. The payload keeps carrying `note` for API
+              consumers; this surface renders the translated copy. */}
+          {t("ccgPartial")}
           {!data.laterality_available && (
             <>
               {" "}
-              <strong>Sway is measured; the direction of deviation is not.</strong>
+              <strong>{t("ccgNoLaterality")}</strong>
             </>
           )}
         </p>
       )}
 
       {available.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No movement path recorded for this session.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("ccgNoPath")}</p>
       ) : (
         <div className="flex flex-wrap gap-5">
           {available.map((key) => (
@@ -261,7 +271,7 @@ export function CcgTrace({ data }: { data: CcgTraceData }) {
           .filter(([k]) => k in METRIC_LABEL)
           .map(([k, v]) => (
             <div key={k} className="flex items-baseline justify-between gap-2">
-              <dt className="text-muted-foreground">{METRIC_LABEL[k]}</dt>
+              <dt className="text-muted-foreground">{t(METRIC_LABEL[k])}</dt>
               <dd className="font-mono tabular-nums">
                 {v}
                 {METRIC_UNIT[k] ?? (k.endsWith("_deg") ? "°" : " cm")}
@@ -270,11 +280,10 @@ export function CcgTrace({ data }: { data: CcgTraceData }) {
           ))}
       </dl>
 
-      <p className="text-xs text-muted-foreground">
-        Distances are in centimetres, scaled using head width as the reference. Green marks
-        the start, red the finish. This reproduces the layout of a clinical
-        craniocorpography report so it can be read the same way.
-      </p>
+      {/* The old caption said green marks the start and red the finish. The markers were
+          moved off green/red precisely because in a clinical trace they read as a verdict
+          (see TracePlot) — the caption had been describing colours no longer on the chart. */}
+      <p className="text-xs text-muted-foreground">{t("ccgUnits")}</p>
     </section>
   );
 }
