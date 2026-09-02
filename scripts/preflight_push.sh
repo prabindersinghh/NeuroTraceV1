@@ -53,7 +53,18 @@ hist=$(git rev-list --objects --all 2>/dev/null | awk '{print $2}' | grep -icE '
   || bad "images exist in history — rewrite required, not just a delete"
 
 step "5 · privacy invariants pass (INV-11)"
-if (cd backend && ./.venv/Scripts/python.exe -m pytest tests/test_privacy.py -q \
+# The interpreter was hard-coded to backend/.venv/Scripts/python.exe, which only exists on
+# Windows — so on macOS and Linux this step failed for everyone, every time, with the same
+# message a REAL privacy breach would produce. A gate that always fails is worse than no
+# gate: it trains the person reading it to push anyway. Resolve whichever venv is here, and
+# say plainly when there is none rather than reporting a privacy failure that did not happen.
+PY_BIN=""
+for candidate in backend/.venv/bin/python backend/.venv/Scripts/python.exe; do
+  [ -x "$candidate" ] && { PY_BIN="$candidate"; break; }
+done
+if [ -z "$PY_BIN" ]; then
+  bad "no backend virtualenv found — cannot verify INV-11, so do not push"
+elif (cd backend && "../$PY_BIN" -m pytest tests/test_privacy.py -q \
       -p no:logging --tb=line >/dev/null 2>&1); then
   ok "tests/test_privacy.py green"
 else
