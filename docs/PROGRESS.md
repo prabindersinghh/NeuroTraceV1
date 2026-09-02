@@ -262,7 +262,7 @@ library** — D-039 (no GSAP) and D-064 (no three.js) were re-examined and uphel
 signed-out entry chunk grew 100.17 → 108.32 kB gzipped with **no dependency added**. Two
 sections the page genuinely lacked were written: `#reach`, which names the six assumptions a
 deployment is normally allowed to make and what this one does instead, and the overture
-itself. The Parkinson's confound merged into `#gates`. D-067.
+itself. The Parkinson's confound merged into `#gates`. D-079.
 
 **The bug worth remembering** is that the WebGL fallback was rendering *everywhere*, on every
 device, with nothing in the console: `ResizeObserver` fires on `observe()`, so the still
@@ -295,7 +295,7 @@ view, listener page, operator console and printed clinician report were all Engl
 translated header and the test passed. The glob is now `routes/**` + `components/**` with a
 written exclusion list, ~150 keys were added, and `formatDate` was routed through
 `usableLocale` (it printed "M08 31" on trimmed-ICU devices while `formatDateTime` beside it
-read "31 ਅਗ"). D-066. Still English on purpose: `Landing`, `LanguageGate`, `Diagnostics`,
+read "31 ਅਗ"). D-078. Still English on purpose: `Landing`, `LanguageGate`, `Diagnostics`,
 and `Score.reason` on the clinician report. Verified: backend `pytest -q` exit 0, frontend
 `tsc -b` + `vitest run` (208) + `build`, and a Chrome walkthrough at 430×900 toggling
 pa → en → hi with the FAST card and emergency-number labels following each time.

@@ -1238,7 +1238,7 @@ provider (`AUTH_EVENTS`), so the shell signs out instead of failing every reques
 reload; a refresh that cannot reach the server does NOT sign out — an offline patient stays
 signed in, which the airplane-mode demo depends on.
 
-### D-066 — the reader's language wins over the patient record, everywhere
+### D-078 — the reader's language wins over the patient record, everywhere
 
 **2026-09-02.** The FAST card was rendered server-side from `patient.languages[0]`, so a
 caregiver who switched the app to English kept reading a Punjabi emergency card and a
@@ -1269,7 +1269,7 @@ key plus parameters on the Score (a migration, and INV-8 says audit data is appe
 old rows would keep the old rendering anyway) or parsing the English back out. Both are
 engine changes rather than a language-toggle fix, and neither is on a patient surface.
 
-### D-067 — the landing page is one point cloud in six arrangements, drawn in raw WebGL2
+### D-079 — the landing page is one point cloud in six arrangements, drawn in raw WebGL2
 
 **2026-09-03.** The signed-out page was rebuilt around a single visual spine: `SignalScene`
 holds one cloud of points and *moves* it between six arrangements as the section scrolls —
@@ -1331,4 +1331,4 @@ deployment is normally allowed to make and what this one does instead, and the s
 overture that states the whole argument before the evidence for it. The Parkinson's confound
 was merged into `#gates`, because it is the only reason the third gate exists and separating
 them made Gate 3 read as fussiness. `Landing.tsx` and `components/landing/` remain outside
-the i18n and type-scale scans (D-066) — this work did not close that gap.
+the i18n and type-scale scans (D-078) — this work did not close that gap.

@@ -6,7 +6,7 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ## 2026-09-03 (latest) — The landing page, rebuilt around one point cloud
 
-Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-067. No migration,
+Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-079. No migration,
 no backend change, no new dependency.
 
 ### What changed
@@ -69,7 +69,7 @@ no backend change, no new dependency.
 - **Keyboard:** all seven domain buttons reachable by Tab; skip link first.
 
 ### Not done
-- `Landing.tsx` and `components/landing/` are still outside the i18n scan (D-066's written
+- `Landing.tsx` and `components/landing/` are still outside the i18n scan (D-078's written
   exclusion). The new copy is English, so the gap is now larger than it was.
 - Nothing has run on a physical phone. The `coarse` paths — 30 fps cap, 3 600-point budget,
   no pointer tilt — are desktop-emulated only.
@@ -78,7 +78,7 @@ no backend change, no new dependency.
 
 ## 2026-09-02 — The language choice now holds across the whole app
 
-Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-066. No
+Branch `feat/journey-experience`. **Not merged, not deployed.** Decision D-078. No
 migration.
 
 ### The reported symptom, and what it actually was
@@ -137,7 +137,7 @@ covered files so a future narrowing fails here rather than shipping.
 `Landing.tsx` and `components/landing/` (600 lines of marketing copy — an open content
 gap), `LanguageGate` (all three scripts at once, by design), `Diagnostics` (browser and
 model identifiers), and `Score.reason` on the clinician report (engine-generated, stored,
-append-only — see D-066).
+append-only — see D-078).
 
 ---
 
