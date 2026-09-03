@@ -44,6 +44,29 @@ export function isCaptureSupported(): boolean {
   );
 }
 
+/**
+ * Last-resort hardware release.
+ *
+ * Every caller below already stops its tracks on unmount, and each one is right to. This
+ * is the case none of them can see: the page itself going away — a back-navigation out of
+ * the SPA, a closed tab, a phone suspending the page into the back/forward cache — while a
+ * stream is still live. FaceMeshShowcase learned that one the expensive way (see its
+ * `stop`), and the guard belongs where every camera and microphone in the exam is opened
+ * rather than in whichever component remembers to write it.
+ *
+ * Deliberately `pagehide` and NOT `visibilitychange`: a measurement in progress must not be
+ * killed because a notification shade came down for a second. `lib/recording.ts` does use
+ * visibility, because the recordings there are user-driven and restartable.
+ *
+ * Returns the un-registration, which every teardown path calls, so a step opened and closed
+ * a hundred times does not leave a hundred listeners behind.
+ */
+function releaseOnPageHide(stream: MediaStream): () => void {
+  const release = () => stream.getTracks().forEach((t) => t.stop());
+  window.addEventListener("pagehide", release);
+  return () => window.removeEventListener("pagehide", release);
+}
+
 // --------------------------------------------------------------------------- audio
 export interface AudioCapture {
   /** Stop and return the captured PCM, resampled to the rate the DSP expects. */
@@ -102,9 +125,14 @@ export async function startAudioCapture(): Promise<AudioCapture> {
   processor.connect(mute);
   mute.connect(ctx.destination);
 
+  const unwatch = releaseOnPageHide(stream);
+  let torn = false;
   const teardown = () => {
+    if (torn) return; // a `stop()` after the page-hide release must not close ctx twice
+    torn = true;
     stopped = true;
     processor.onaudioprocess = null;
+    unwatch();
     try {
       processor.disconnect();
       mute.disconnect();
@@ -177,11 +205,13 @@ export async function startFaceCapture(video: HTMLVideoElement): Promise<FaceCap
 
   video.srcObject = stream;
   await video.play().catch(() => undefined);
+  const unwatch = releaseOnPageHide(stream);
 
   let landmarker: FaceLandmarker | null = null;
   try {
     landmarker = await loadFaceLandmarker();
   } catch {
+    unwatch();
     stream.getTracks().forEach((t) => t.stop());
     throw new CaptureError("failed", "Could not load the on-device face model");
   }
@@ -242,6 +272,7 @@ export async function startFaceCapture(video: HTMLVideoElement): Promise<FaceCap
     stop: () => {
       running = false;
       collecting = false;
+      unwatch();
       video.srcObject = null;
       stream.getTracks().forEach((t) => t.stop());
     },
@@ -278,8 +309,10 @@ export async function startFaceStream(
   }
   video.srcObject = stream;
   await video.play().catch(() => undefined);
+  const unwatch = releaseOnPageHide(stream);
 
   const landmarker = await loadFaceLandmarker().catch(() => {
+    unwatch();
     stream.getTracks().forEach((t) => t.stop());
     throw new CaptureError("failed", "Could not load the on-device face model");
   });
@@ -315,6 +348,7 @@ export async function startFaceStream(
   return {
     stop: () => {
       running = false;
+      unwatch();
       stream.getTracks().forEach((t) => t.stop());
     },
     fps: () => frames / Math.max(0.001, (performance.now() - started) / 1000),
@@ -349,8 +383,10 @@ export async function startPoseStream(
   }
   video.srcObject = stream;
   await video.play().catch(() => undefined);
+  const unwatch = releaseOnPageHide(stream);
 
   const landmarker = await loadPoseLandmarker().catch(() => {
+    unwatch();
     stream.getTracks().forEach((t) => t.stop());
     throw new CaptureError("failed", "Could not load the on-device pose model");
   });
@@ -386,6 +422,7 @@ export async function startPoseStream(
   return {
     stop: () => {
       running = false;
+      unwatch();
       stream.getTracks().forEach((t) => t.stop());
     },
     fps: () => frames / Math.max(0.001, (performance.now() - started) / 1000),

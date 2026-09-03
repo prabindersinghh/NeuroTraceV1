@@ -633,9 +633,9 @@ export const STRINGS = {
     pa: "ਇਹ ਬੋਰਡ ਸਿਰਫ਼ ਵਿਕਲਪ ਦਿੰਦਾ ਹੈ। ਤੁਹਾਡੇ ਟੈਪ ਤੋਂ ਬਿਨਾਂ ਕਦੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਨਹੀਂ ਬੋਲਦਾ।",
   },
   awaazDysarthriaNote: {
-    en: "Clear enough speech is said aloud automatically; anything uncertain asks first.",
-    hi: "साफ़ बोली अपने आप बोल दी जाती है; अनिश्चित होने पर पहले पूछा जाता है।",
-    pa: "ਸਾਫ਼ ਬੋਲੀ ਆਪਣੇ ਆਪ ਬੋਲ ਦਿੱਤੀ ਜਾਂਦੀ ਹੈ; ਅਨਿਸ਼ਚਿਤ ਹੋਣ 'ਤੇ ਪਹਿਲਾਂ ਪੁੱਛਿਆ ਜਾਂਦਾ ਹੈ।",
+    en: "Cards are spoken the moment you tap them. Anything typed is offered back to you first, so nothing is ever said that you did not choose.",
+    hi: "कार्ड दबाते ही बोल दिए जाते हैं। जो लिखा जाए वह पहले आपको दिखाया जाता है, ताकि कभी वह न बोला जाए जो आपने नहीं चुना।",
+    pa: "ਕਾਰਡ ਦਬਾਉਂਦੇ ਹੀ ਬੋਲ ਦਿੱਤੇ ਜਾਂਦੇ ਹਨ। ਜੋ ਲਿਖਿਆ ਜਾਵੇ ਉਹ ਪਹਿਲਾਂ ਤੁਹਾਨੂੰ ਦਿਖਾਇਆ ਜਾਂਦਾ ਹੈ, ਤਾਂ ਜੋ ਕਦੇ ਉਹ ਨਾ ਬੋਲਿਆ ਜਾਵੇ ਜੋ ਤੁਸੀਂ ਨਹੀਂ ਚੁਣਿਆ।",
   },
   awaazPracticeTitle: {
     en: "Help Awaaz learn naturally",
@@ -778,6 +778,106 @@ export const STRINGS = {
     en: "The archive was not created. A recording may have failed its integrity check; nothing was uploaded.",
     hi: "संग्रह नहीं बना। किसी रिकॉर्डिंग की सत्यापन जाँच विफल हो सकती है; कुछ भी अपलोड नहीं हुआ।",
     pa: "ਆਰਕਾਈਵ ਨਹੀਂ ਬਣਿਆ। ਕਿਸੇ ਰਿਕਾਰਡਿੰਗ ਦੀ ਜਾਂਚ ਅਸਫਲ ਹੋ ਸਕਦੀ ਹੈ; ਕੁਝ ਵੀ ਅੱਪਲੋਡ ਨਹੀਂ ਹੋਇਆ।",
+  },
+  awaazPlateIdle: {
+    en: "Tap a card and it will be spoken here.",
+    hi: "कोई कार्ड दबाएँ — वह यहाँ बोला जाएगा।",
+    pa: "ਕੋਈ ਕਾਰਡ ਦਬਾਓ — ਉਹ ਇੱਥੇ ਬੋਲਿਆ ਜਾਵੇਗਾ।",
+  },
+  awaazSayAgain: {
+    en: "Say it again",
+    hi: "फिर से बोलें",
+    pa: "ਫਿਰ ਬੋਲੋ",
+  },
+  awaazCaregiverTools: {
+    en: "Setup and caregiver tools",
+    hi: "सेटअप और देखभाल करने वाले के लिए",
+    pa: "ਸੈੱਟਅੱਪ ਅਤੇ ਦੇਖਭਾਲ ਕਰਨ ਵਾਲੇ ਲਈ",
+  },
+  awaazMicClosed: {
+    en: "The microphone was closed when the app left the screen. Nothing was saved; record again.",
+    hi: "ऐप स्क्रीन से हटते ही माइक्रोफ़ोन बंद कर दिया गया। कुछ भी सहेजा नहीं गया; फिर से रिकॉर्ड करें।",
+    pa: "ਐਪ ਸਕ੍ਰੀਨ ਤੋਂ ਹਟਦੇ ਹੀ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਬੰਦ ਕਰ ਦਿੱਤਾ ਗਿਆ। ਕੁਝ ਵੀ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ; ਦੁਬਾਰਾ ਰਿਕਾਰਡ ਕਰੋ।",
+  },
+  awaazProfileTitle: {
+    en: "Speech assessment",
+    hi: "वाणी का आकलन",
+    pa: "ਬੋਲੀ ਦਾ ਮੁਲਾਂਕਣ",
+  },
+  awaazProfileHelp: {
+    en: "Which difficulty is the bigger one decides whether this app may ever speak without a tap. A clinician decides it; a caregiver may set it on their advice.",
+    hi: "कौन-सी कठिनाई बड़ी है, यही तय करता है कि ऐप बिना दबाए कभी बोल सकता है या नहीं। यह डॉक्टर तय करते हैं; देखभाल करने वाला उनकी सलाह पर इसे लगा सकता है।",
+    pa: "ਕਿਹੜੀ ਮੁਸ਼ਕਲ ਵੱਡੀ ਹੈ, ਇਹੀ ਤੈਅ ਕਰਦਾ ਹੈ ਕਿ ਐਪ ਬਿਨਾਂ ਦਬਾਏ ਕਦੇ ਬੋਲ ਸਕਦਾ ਹੈ ਜਾਂ ਨਹੀਂ। ਇਹ ਡਾਕਟਰ ਤੈਅ ਕਰਦੇ ਹਨ; ਦੇਖਭਾਲ ਕਰਨ ਵਾਲਾ ਉਹਨਾਂ ਦੀ ਸਲਾਹ ਉੱਤੇ ਲਗਾ ਸਕਦਾ ਹੈ।",
+  },
+  awaazProfileDysarthria: {
+    en: "Speaking is hard, finding words is not",
+    hi: "बोलना मुश्किल है, शब्द ढूँढ़ना नहीं",
+    pa: "ਬੋਲਣਾ ਔਖਾ ਹੈ, ਸ਼ਬਦ ਲੱਭਣਾ ਨਹੀਂ",
+  },
+  awaazProfileDysarthriaHelp: {
+    en: "The words are already theirs, so a clear sentence may be spoken straight out.",
+    hi: "शब्द पहले से उनके अपने हैं, इसलिए साफ़ वाक्य सीधे बोला जा सकता है।",
+    pa: "ਸ਼ਬਦ ਪਹਿਲਾਂ ਹੀ ਉਹਨਾਂ ਦੇ ਆਪਣੇ ਹਨ, ਇਸ ਲਈ ਸਾਫ਼ ਵਾਕ ਸਿੱਧਾ ਬੋਲਿਆ ਜਾ ਸਕਦਾ ਹੈ।",
+  },
+  awaazProfileAphasia: {
+    en: "Finding words is hard",
+    hi: "शब्द ढूँढ़ना मुश्किल है",
+    pa: "ਸ਼ਬਦ ਲੱਭਣਾ ਔਖਾ ਹੈ",
+  },
+  awaazProfileAphasiaHelp: {
+    en: "Options are offered and nothing is ever spoken until they tap one.",
+    hi: "विकल्प दिखाए जाते हैं और जब तक वे कोई नहीं दबाते, कुछ नहीं बोला जाता।",
+    pa: "ਵਿਕਲਪ ਦਿਖਾਏ ਜਾਂਦੇ ਹਨ ਅਤੇ ਜਦੋਂ ਤੱਕ ਉਹ ਕੋਈ ਨਹੀਂ ਦਬਾਉਂਦੇ, ਕੁਝ ਨਹੀਂ ਬੋਲਿਆ ਜਾਂਦਾ।",
+  },
+  awaazProfileMixed: {
+    en: "Both are hard",
+    hi: "दोनों मुश्किल हैं",
+    pa: "ਦੋਵੇਂ ਔਖੇ ਹਨ",
+  },
+  awaazProfileMixedHelp: {
+    en: "Treated the same as word-finding, because that is the safer of the two.",
+    hi: "इसे शब्द ढूँढ़ने जैसा ही माना जाता है, क्योंकि वही ज़्यादा सुरक्षित है।",
+    pa: "ਇਸਨੂੰ ਸ਼ਬਦ ਲੱਭਣ ਵਾਂਗ ਹੀ ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ, ਕਿਉਂਕਿ ਉਹੀ ਵੱਧ ਸੁਰੱਖਿਅਤ ਹੈ।",
+  },
+  awaazProfileUnassessed: {
+    en: "Not assessed yet — options are confirmed until somebody decides.",
+    hi: "अभी आकलन नहीं हुआ — जब तक कोई तय न करे, विकल्प पुष्ट किए जाते हैं।",
+    pa: "ਹਾਲੇ ਮੁਲਾਂਕਣ ਨਹੀਂ ਹੋਇਆ — ਜਦੋਂ ਤੱਕ ਕੋਈ ਤੈਅ ਨਾ ਕਰੇ, ਵਿਕਲਪ ਪੁਸ਼ਟੀ ਕੀਤੇ ਜਾਂਦੇ ਹਨ।",
+  },
+  awaazAutoSpeakLabel: {
+    en: "Speak a clear sentence without asking first",
+    hi: "साफ़ वाक्य बिना पूछे बोलें",
+    pa: "ਸਾਫ਼ ਵਾਕ ਬਿਨਾਂ ਪੁੱਛੇ ਬੋਲੋ",
+  },
+  awaazAutoSpeakHelp: {
+    en: "Only offered when speaking is the difficulty and finding words is not. Cards are spoken on a tap either way — those are words this person picked themselves.",
+    hi: "यह तभी मिलता है जब कठिनाई बोलने की हो और शब्द ढूँढ़ने की नहीं। कार्ड दोनों हालात में दबाने पर बोले जाते हैं — वे शब्द उन्होंने खुद चुने हैं।",
+    pa: "ਇਹ ਤਾਂ ਹੀ ਮਿਲਦਾ ਹੈ ਜਦੋਂ ਮੁਸ਼ਕਲ ਬੋਲਣ ਦੀ ਹੋਵੇ ਅਤੇ ਸ਼ਬਦ ਲੱਭਣ ਦੀ ਨਾ ਹੋਵੇ। ਕਾਰਡ ਦੋਹਾਂ ਹਾਲਤਾਂ ਵਿੱਚ ਦਬਾਉਣ ਉੱਤੇ ਬੋਲੇ ਜਾਂਦੇ ਹਨ — ਉਹ ਸ਼ਬਦ ਉਹਨਾਂ ਨੇ ਆਪ ਚੁਣੇ ਹਨ।",
+  },
+  awaazAutoSpeakThreshold: {
+    en: "How clear it must be first",
+    hi: "पहले कितना साफ़ होना चाहिए",
+    pa: "ਪਹਿਲਾਂ ਕਿੰਨਾ ਸਾਫ਼ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ",
+  },
+  awaazAutoSpeakThresholdHelp: {
+    en: "Below this, they are asked to confirm even with automatic speaking on. It cannot be set under 70%.",
+    hi: "इससे कम होने पर, अपने-आप बोलना चालू होते हुए भी पुष्टि माँगी जाती है। इसे 70% से नीचे नहीं रखा जा सकता।",
+    pa: "ਇਸ ਤੋਂ ਘੱਟ ਹੋਣ ਉੱਤੇ, ਆਪਣੇ-ਆਪ ਬੋਲਣਾ ਚਾਲੂ ਹੁੰਦਿਆਂ ਵੀ ਪੁਸ਼ਟੀ ਮੰਗੀ ਜਾਂਦੀ ਹੈ। ਇਸਨੂੰ 70% ਤੋਂ ਹੇਠਾਂ ਨਹੀਂ ਰੱਖਿਆ ਜਾ ਸਕਦਾ।",
+  },
+  awaazAutoSpeakPending: {
+    en: "Recorded, but nothing changes on screen yet: automatic speaking applies to speech this app has recognised, and no speech recogniser is part of this build. Typed words are still offered back for a tap.",
+    hi: "दर्ज हो गया, पर अभी स्क्रीन पर कुछ नहीं बदलेगा: अपने-आप बोलना उस बोली पर लागू होता है जिसे ऐप ने पहचाना हो, और इस बिल्ड में कोई वाणी-पहचान शामिल नहीं है। लिखे शब्द अब भी टैप के लिए दिखाए जाते हैं।",
+    pa: "ਦਰਜ ਹੋ ਗਿਆ, ਪਰ ਹਾਲੇ ਸਕ੍ਰੀਨ ਉੱਤੇ ਕੁਝ ਨਹੀਂ ਬਦਲੇਗਾ: ਆਪਣੇ-ਆਪ ਬੋਲਣਾ ਉਸ ਬੋਲੀ ਉੱਤੇ ਲਾਗੂ ਹੁੰਦਾ ਹੈ ਜਿਸਨੂੰ ਐਪ ਨੇ ਪਛਾਣਿਆ ਹੋਵੇ, ਅਤੇ ਇਸ ਬਿਲਡ ਵਿੱਚ ਕੋਈ ਬੋਲੀ-ਪਛਾਣ ਸ਼ਾਮਲ ਨਹੀਂ ਹੈ। ਲਿਖੇ ਸ਼ਬਦ ਹੁਣ ਵੀ ਟੈਪ ਲਈ ਦਿਖਾਏ ਜਾਂਦੇ ਹਨ।",
+  },
+  awaazProfileSaved: {
+    en: "Speech assessment saved.",
+    hi: "वाणी का आकलन सहेजा गया।",
+    pa: "ਬੋਲੀ ਦਾ ਮੁਲਾਂਕਣ ਸੰਭਾਲਿਆ ਗਿਆ।",
+  },
+  awaazProfileSaveFailed: {
+    en: "The speech assessment was not saved. Nothing about how this board speaks has changed.",
+    hi: "आकलन सहेजा नहीं गया। यह बोर्ड कैसे बोलता है, उसमें कोई बदलाव नहीं हुआ।",
+    pa: "ਮੁਲਾਂਕਣ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ। ਇਹ ਬੋਰਡ ਕਿਵੇਂ ਬੋਲਦਾ ਹੈ, ਉਸ ਵਿੱਚ ਕੋਈ ਬਦਲਾਅ ਨਹੀਂ ਹੋਇਆ।",
   },
   balanceFraming: {
     en: "Prop the phone about 1.5 metres away, so the whole body is in the frame.",
