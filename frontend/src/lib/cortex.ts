@@ -117,12 +117,22 @@ export interface Field {
 export function particleBudget(opts: {
   coarse: boolean; cores: number; saveData: boolean; memory: number;
 }): number {
+  // The three DECLINE tiers are untouched on purpose. They are the low-end access
+  // guarantee, not a quality setting: a Data Saver handset, a two-core phone or a 2 GB
+  // device gets the still plate, and raising density must never be paid for by the people
+  // this product exists for. What follows is only how much the devices that already said
+  // yes actually draw.
   if (opts.saveData) return 0;
   if (opts.cores > 0 && opts.cores <= 2) return 0;
   if (opts.memory > 0 && opts.memory <= 2) return 0;
-  if (opts.coarse) return 3600;
-  if (opts.cores > 0 && opts.cores <= 4) return 8000;
-  return 18000;
+  // Raised roughly half again across the board: at the old counts the cloud read as a
+  // sparse dot field rather than a volume, and density is the whole argument — the front
+  // of the shell is meant to be brighter because more of it is there. The cost is GPU
+  // fill, not CPU: the draw is one `drawArrays` and nothing per-frame scales with the
+  // count, which is why this is a safe dial to turn where the device has already opted in.
+  if (opts.coarse) return 5600;
+  if (opts.cores > 0 && opts.cores <= 4) return 12000;
+  return 28000;
 }
 
 /** Read the budget signals off the browser, with safe values where they are unavailable. */
@@ -220,8 +230,26 @@ export function createField(count: number, seed = 42, hubs = 200): Field {
     const nx = sx / len;
     const ny = sy / len;
     const nz = sz / len;
-    const fold = 1 + 0.075 * Math.sin(ny * 9.5 + nz * 4.0) * Math.cos(nz * 7.5 - nx * 3.0);
-    const shell = (0.80 + rng() * 0.26) * fold;
+    // THE FOLDING, and why it is now the loudest thing about this shape rather than a
+    // 7.5% ripple. Gyri and sulci are the one feature a person recognises a cortex by —
+    // more than outline, which at this scale is just an ovoid. Two bands: a coarse one
+    // for the major convolutions and a finer one across it, because a single sine reads
+    // as corrugation, and two at different frequencies read as tissue.
+    const fold = 1
+      + 0.115 * Math.sin(ny * 9.5 + nz * 4.0) * Math.cos(nz * 7.5 - nx * 3.0)
+      + 0.055 * Math.sin(nz * 17.0 - ny * 11.0);
+    // BAND DEPTH, and both directions are wrong. At 0.26 on a ~0.9 radius — better than a
+    // quarter of the volume — points sat at every depth, the folds were buried behind the
+    // ones in front, and it read as a glowing mass. But taking it to 0.085 was worse: a
+    // thin shell under an ADDITIVE blend is see-through, so you get the far surface as
+    // well as the near one and the silhouette edge, where the shell runs tangent to the
+    // view, outshines everything. The lobe read as a hollow ring.
+    //
+    // 0.17 is the depth at which the band is opaque enough to have a front, while the
+    // fold amplitude above it (up to ~0.17) is comparable — so the convolutions are real
+    // relief on a surface rather than ripples inside a volume. Judged on screenshots at
+    // all three depths, not derived.
+    const shell = (0.86 + rng() * 0.17) * fold;
     // The gap. Every point is pushed to one side of the midline by a fixed amount, so
     // nothing lands in the middle — a seam you can see through, not a darker stripe.
     const side = nx >= 0 ? 1 : -1;

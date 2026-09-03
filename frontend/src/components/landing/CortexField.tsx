@@ -29,7 +29,10 @@
  *
  * It is `aria-hidden`: every word it illustrates is real text elsewhere on the page.
  */
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef, useEffect, useImperativeHandle, useRef,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   DOMAIN_COUNT, DOMAIN_RGB, FLARE_RGB, STATE, STATE_COUNT, STATE_VIEW,
@@ -56,6 +59,9 @@ uniform float uDpr;
 uniform float uFlare[7];
 uniform vec3 uDomainRgb[7];
 uniform vec3 uFlareRgb;
+// Pointer in the same device-pixel space as "screen", and 0/1 for whether it is over.
+uniform vec2 uPointer;
+uniform float uPointerOn;
 out vec4 vColor;
 
 void main() {
@@ -74,15 +80,35 @@ void main() {
   vec2 screen = uCenter + vec2(r.x, -r.y) * s * uZoom;
   gl_Position = vec4(screen.x / uViewport.x * 2.0 - 1.0,
                      1.0 - screen.y / uViewport.y * 2.0, 0.0, 1.0);
-  gl_PointSize = max(1.0, aSize * (0.55 + s * 1.4) * 1.6 * uDpr);
+  // THE CURSOR'S WAKE. A falloff in screen space, so the points nearest the pointer grow
+  // and brighten and the cloud reads as something being touched rather than something
+  // being watched. Screen space, not world space, on purpose: it costs one distance per
+  // vertex with no CPU work and no second pass, and it tracks what the eye is actually
+  // near rather than what is geometrically close behind the shell.
+  float reach = min(uViewport.x, uViewport.y) * 0.30;
+  float glow = uPointerOn * (1.0 - smoothstep(0.0, reach, distance(screen, uPointer)));
+  glow *= glow;                              // tighter core, so it is a touch, not a wash
+
+  gl_PointSize = max(1.0, aSize * (0.55 + s * 1.4) * 1.72 * uDpr * (1.0 + glow * 1.15));
 
   int d = int(aDomain);
   float f = uFlare[d];
   // Depth carries brightness rather than a fog colour: the plate has no atmosphere to
   // tint toward, and alpha is the only channel that survives additive blending honestly.
   float depth = clamp((s - 0.66) / 0.78, 0.0, 1.0);
-  vColor = vec4(mix(uDomainRgb[d], uFlareRgb, f),
-                (0.18 + depth * depth * 0.45) * (1.0 + f * 2.2));
+  // Raised from 0.18/0.45, then pulled back. At the old floor a point on the far face of
+  // the shell carried 0.18 alpha into an ADDITIVE blend, which on the near-black plate is
+  // very nearly nothing, so the cloud read as bright specks with emptiness behind them
+  // rather than a volume with a far side.
+  //
+  // But alpha and count multiply here. Raising the budget ~1.55x and the floor ~1.67x at
+  // the same time put roughly three times the light on the plate and the two lobes
+  // saturated to flat white — denser, and LESS legible, because blowout destroys exactly
+  // the depth the density was added to show. Density carries visibility now and the floor
+  // only has to lift the far face off the background, so these are lower than a
+  // brightness-only pass would set them. Judged on a screenshot, not from the numbers.
+  vColor = vec4(mix(uDomainRgb[d], uFlareRgb, max(f, glow * 0.55)),
+                (0.225 + depth * depth * 0.43) * (1.0 + f * 2.2) * (1.0 + glow * 0.85));
 }`;
 
 const POINT_FS = `#version 300 es
@@ -278,10 +304,16 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  /** Last pointer sample, for the drag delta. Null between drags. */
+  const last = useRef<{ x: number; y: number } | null>(null);
 
   // Targets the visitor steers, and the eased values actually drawn. Refs, not state:
   // nothing here may cause a render.
-  const target = useRef({ state: initialState, pointerX: 0, pointerY: 0, hasPointer: false });
+  const target = useRef({
+    state: initialState, pointerX: 0, pointerY: 0, hasPointer: false,
+    /** Orbit the visitor has dragged in, and the velocity it keeps when they let go. */
+    dragYaw: 0, dragPitch: 0, velYaw: 0, velPitch: 0, dragging: false,
+  });
   const flareTarget = useRef(new Float32Array(DOMAIN_COUNT));
   const reduced = usePrefersReducedMotion();
   const coarse = useCoarsePointer();
@@ -487,6 +519,8 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         domainRgb: context.getUniformLocation(program, "uDomainRgb"),
         flareRgb: context.getUniformLocation(program, "uFlareRgb"),
         lineAlpha: context.getUniformLocation(program, "uLineAlpha"),
+        pointer: context.getUniformLocation(program, "uPointer"),
+        pointerOn: context.getUniformLocation(program, "uPointerOn"),
       });
       const pointU = uniforms(pointProgram);
       const lineU = lineProgram ? uniforms(lineProgram) : null;
@@ -505,6 +539,7 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         state: initialState,
         yaw: STATE_VIEW[Math.round(initialState) * 2],
         pitch: STATE_VIEW[Math.round(initialState) * 2 + 1],
+        pointerOn: 0,
       };
       let clock = 0;
       let nextFrame = 0;
@@ -532,8 +567,30 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
           baseYaw += weights[i] * STATE_VIEW[i * 2];
           basePitch += weights[i] * STATE_VIEW[i * 2 + 1];
         }
-        const wantYaw = baseYaw + (t.hasPointer && !coarse ? (t.pointerX - 0.5) * 0.8 : 0);
-        const wantPitch = basePitch + (t.hasPointer && !coarse ? (t.pointerY - 0.5) * 0.38 : 0);
+        // THE THROW. Let go mid-drag and the cloud keeps turning and settles, instead of
+        // stopping dead under your finger — the difference between a control and a widget.
+        // Framerate-independent decay: `pow` per second, not a constant per frame, or the
+        // same gesture would coast twice as far on a 120 Hz panel.
+        if (!t.dragging) {
+          t.dragYaw += t.velYaw * dt;
+          t.dragPitch += t.velPitch * dt;
+          const decay = Math.pow(0.015, dt);
+          t.velYaw *= decay;
+          t.velPitch *= decay;
+          if (Math.abs(t.velYaw) < 1e-4) t.velYaw = 0;
+          if (Math.abs(t.velPitch) < 1e-4) t.velPitch = 0;
+        }
+        // Pitch is clamped; yaw is not. Turning the shell past vertical reads as broken,
+        // but spinning it right round is exactly what someone will try first.
+        t.dragPitch = Math.max(-0.85, Math.min(0.85, t.dragPitch));
+
+        // Hover tilt stays fine-pointer-only — on touch the finger IS the drag, and
+        // adding a tilt on top of it would fight the gesture.
+        const hover = t.hasPointer && !coarse && !t.dragging;
+        const wantYaw = baseYaw + (hover ? (t.pointerX - 0.5) * 0.8 : 0) + t.dragYaw;
+        const wantPitch = basePitch + (hover ? (t.pointerY - 0.5) * 0.38 : 0) + t.dragPitch;
+        // Eased so the wake fades in and out rather than popping on at the edge.
+        shown.pointerOn = approach(shown.pointerOn, t.hasPointer ? 1 : 0, dt, 6);
         const sway = reduced ? 0 : Math.sin(clock * 0.075) * 0.09;
         shown.yaw = approach(shown.yaw, wantYaw + sway, dt, 3);
         shown.pitch = approach(shown.pitch, wantPitch, dt, 3);
@@ -590,6 +647,10 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         context.uniform1fv(pointU.flare, flare);
         context.uniform3fv(pointU.domainRgb, DOMAIN_RGB);
         context.uniform3fv(pointU.flareRgb, FLARE_RGB);
+        // Device pixels: `screen` in the shader is built from `uCenter`, which is the
+        // canvas size, not the CSS size.
+        context.uniform2f(pointU.pointer, t.pointerX * canvas.width, t.pointerY * canvas.height);
+        context.uniform1f(pointU.pointerOn, shown.pointerOn);
         context.bindVertexArray(pointVao);
         context.drawArrays(context.POINTS, 0, field!.count);
         context.bindVertexArray(null);
@@ -656,8 +717,77 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
 
   // `start()` is re-entered when the plate scrolls back in, so the loop restarts without
   // rebuilding the field — the guard at the top of it returns early once `gl` exists.
+  /**
+   * Interaction lives HERE rather than in each parent. Before this, `setPointer` was
+   * called only by `HeroConsole`, so the six-act scroll cloud in `SignalScene` — the
+   * largest thing on the page — could not be touched at all. One set of handlers on the
+   * component means every instance is grabbable, present and future.
+   *
+   * `touchAction: "pan-y"` is the whole reason this is safe on a phone. The browser keeps
+   * vertical panning for the page and gives us the horizontal axis, so dragging the cloud
+   * sideways orbits it while a normal scroll still scrolls. Taking `none` here would trap
+   * the visitor's thumb on a page whose entire argument is delivered by scrolling.
+   */
+  const localPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const box = boxRef.current;
+    if (!box) return null;
+    const r = box.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const t = target.current;
+    t.dragging = true;
+    t.velYaw = 0;
+    t.velPitch = 0;
+    last.current = { x: e.clientX, y: e.clientY };
+    const p = localPointer(e);
+    if (p) { t.pointerX = p.x; t.pointerY = p.y; t.hasPointer = true; }
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const t = target.current;
+    const p = localPointer(e);
+    if (p) { t.pointerX = p.x; t.pointerY = p.y; t.hasPointer = true; }
+    if (!t.dragging) return;
+    const prev = last.current;
+    last.current = { x: e.clientX, y: e.clientY };
+    if (!prev) return;
+    // Radians per pixel. Tuned so a drag across a hero-sized plate is a bit more than a
+    // half turn — enough to feel like the cloud is in your hand, not enough to lose the
+    // arrangement the section is currently making an argument about.
+    const k = 0.0055;
+    const dx = (e.clientX - prev.x) * k;
+    const dy = (e.clientY - prev.y) * k * 0.6;
+    t.dragYaw += dx;
+    t.dragPitch += dy;
+    // Velocity for the throw. Instantaneous delta is too noisy at high frame rates, so
+    // it is smoothed toward the latest sample.
+    t.velYaw = t.velYaw * 0.72 + dx * 26;
+    t.velPitch = t.velPitch * 0.72 + dy * 26;
+  };
+
+  const endDrag = () => {
+    target.current.dragging = false;
+    last.current = null;
+  };
+
   return (
-    <div ref={boxRef} aria-hidden className={className}>
+    <div
+      ref={boxRef}
+      aria-hidden
+      className={className}
+      style={{ touchAction: "pan-y", cursor: coarse ? undefined : "grab" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onPointerLeave={() => {
+        endDrag();
+        target.current.hasPointer = false;
+      }}
+    >
       <canvas ref={canvasRef} className="block h-full w-full" />
     </div>
   );

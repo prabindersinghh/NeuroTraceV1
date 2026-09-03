@@ -142,6 +142,6 @@ describe("the device budget", () => {
   });
 
   it("treats an unreported core count or memory as no evidence, not as low-end", () => {
-    expect(particleBudget({ coarse: false, cores: 0, saveData: false, memory: 0 })).toBe(18000);
+    expect(particleBudget({ coarse: false, cores: 0, saveData: false, memory: 0 })).toBe(28000);
   });
 });
