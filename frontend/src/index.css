@@ -360,6 +360,21 @@
     50%      { opacity: 1; }
   }
 
+  /* The voice indicator on the Awaaz utterance plate. Bars, not a spinner: it is a
+   * readout of a voice actually running, and it stops the moment the utterance ends.
+   * `scaleY` on a fixed-height bar rather than an animated height, so it never triggers
+   * layout — and the global reduced-motion backstop collapses it to a static full bar,
+   * which still reads correctly as "this is being spoken". */
+  .speak-bar {
+    height: 100%;
+    transform-origin: bottom;
+    animation: speak-bar 780ms var(--ease-in-out) infinite alternate;
+  }
+  @keyframes speak-bar {
+    from { transform: scaleY(0.16); }
+    to   { transform: scaleY(1); }
+  }
+
   /* Light: a stop on the path completing. SVG circles animate via transform, with
    * the box set so the scale is about the circle's own centre. */
   .path-stop {

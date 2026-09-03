@@ -453,7 +453,7 @@ export const api = {
     request<unknown>(`/awaaz/${patientId}/policy/outcome`, {
       method: "POST", json: payload,
     }),
-  awaazUpdateProfile: (patientId: string, payload: { endpoint_silence_seconds?: number }) =>
+  awaazUpdateProfile: (patientId: string, payload: import("./types").AwaazProfileUpdate) =>
     request<import("./types").AwaazProfile>(`/awaaz/${patientId}/profile`, {
       method: "PATCH", json: payload,
     }),

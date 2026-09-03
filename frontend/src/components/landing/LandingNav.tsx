@@ -1,10 +1,12 @@
 /**
  * The signed-out header.
  *
- * Two behaviours, both functional: it acquires a ground and a rule once the page has
- * scrolled off the hero, so display type never collides with nav labels; and it carries a
+ * Three behaviours, all functional: it acquires a ground and a rule once the page has
+ * scrolled off the hero, so display type never collides with nav labels; it carries a
  * one-pixel read of how far through the story the visitor is, which on a page built as a
- * single argument is orientation rather than ornament.
+ * single argument is orientation rather than ornament; and it marks WHICH section that
+ * read has arrived at, so the bar, the picture and the words are never telling the visitor
+ * three different things about where they are.
  *
  * The section links are real anchors, so they work with the keyboard, with a middle click
  * and with JavaScript broken. `scroll-margin-top` in index.css keeps the target heading
@@ -37,12 +39,39 @@ const ALL_SECTIONS = [
   ["#limits", "Limits"],
 ];
 
+/**
+ * Which DESKTOP link to mark, given the section actually under the bar.
+ *
+ * The bar shows seven of the ten sections — an eighth wraps at 1280px — so three of them
+ * mark nothing, and a mark that simply blinks off for a third of the page reads as a bug
+ * rather than as honesty. The visitor in `#measures` is past "21 days" and has not reached
+ * "Reach", so "21 days" stays lit: it names the stretch they are in, which is what a
+ * section mark is for. Not exported, because a component file that exports anything else
+ * stops fast refresh working.
+ *
+ * `ALL_SECTIONS` is in document order, which is what makes "at or before" meaningful; if
+ * that ever stops being true this returns a section the visitor has not reached.
+ */
+const desktopActive = (active: string | null): string | null => {
+  if (!active) return null;
+  const at = ALL_SECTIONS.findIndex(([href]) => href === active);
+  if (at < 0) return null;
+  const shown = new Set(SECTIONS.map(([href]) => href));
+  for (let i = at; i >= 0; i -= 1) if (shown.has(ALL_SECTIONS[i][0])) return ALL_SECTIONS[i][0];
+  return null;
+};
+
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [progress, setProgress] = useState(0);
   // The page has two dark chapters, and a white bar laid over either of them reads as a
   // slab someone forgot to style. The header takes the tone of whatever is under it.
   const [onDark, setOnDark] = useState(false);
+  // Which section is under the bar right now, as an href. Its own observer rather than a
+  // scroll handler doing arithmetic: the question "what is crossing the header line" is
+  // exactly what an IntersectionObserver with a one-pixel root band answers, and it costs
+  // nothing between crossings.
+  const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
     const marked = document.querySelectorAll("[data-tone='dark']");
@@ -58,6 +87,30 @@ export function LandingNav() {
       setOnDark(live.size > 0);
     }, { rootMargin: "-56px 0px -100% 0px" });
     marked.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    // Every href the two menus can reach, deduplicated — the phone menu is a superset.
+    const hrefs = [...new Set([...SECTIONS, ...ALL_SECTIONS].map(([href]) => href))];
+    const targets = hrefs
+      .map((href) => [href, document.getElementById(href.slice(1))] as const)
+      .filter((pair): pair is [string, HTMLElement] => pair[1] !== null);
+    if (!targets.length) return;
+    const live = new Set<string>();
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const href = "#" + entry.target.id;
+        if (entry.isIntersecting) live.add(href);
+        else live.delete(href);
+      }
+      // The band is one pixel tall, so usually exactly one section is in it — but on the
+      // seam between two, both are, and the LATER one is the one being entered.
+      const order = targets.map(([href]) => href).filter((href) => live.has(href));
+      setActive(order.length ? order[order.length - 1] : null);
+    }, { rootMargin: "-57px 0px -100% 0px" });
+    targets.forEach(([, el]) => io.observe(el));
     return () => io.disconnect();
   }, []);
 
@@ -80,6 +133,8 @@ export function LandingNav() {
     };
   }, []);
 
+  const marked = desktopActive(active);
+
   return (
     <header
       className="sticky top-0 z-50"
@@ -100,15 +155,36 @@ export function LandingNav() {
           NeuroTrace
         </a>
         <nav aria-label="Sections" className="hidden min-w-0 flex-1 items-center gap-5 lg:flex">
-          {SECTIONS.map(([href, label]) => (
-            <a
-              key={href}
-              href={href}
-              className={`focus-ring rounded text-[13px] transition-colors ${onDark ? "text-white/55 hover:text-white" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {label}
-            </a>
-          ))}
+          {SECTIONS.map(([href, label]) => {
+            const on = href === marked;
+            return (
+              <a
+                key={href}
+                href={href}
+                aria-current={on ? "true" : undefined}
+                className={`focus-ring relative rounded text-[13px] transition-colors ${
+                  on
+                    ? (onDark ? "text-white" : "text-foreground")
+                    : (onDark ? "text-white/55 hover:text-white" : "text-muted-foreground hover:text-foreground")
+                }`}
+              >
+                {label}
+                {/* A rule under the label rather than a pill or a fill: the mark has to be
+                    findable without becoming a second piece of furniture in a bar whose
+                    whole job is to stay out of the way. Colour alone would also be the
+                    only carrier of the state, which is not enough on its own. */}
+                <span
+                  aria-hidden
+                  className="absolute -bottom-1.5 left-0 h-px w-full origin-left bg-current transition-transform"
+                  style={{
+                    transform: `scaleX(${on ? 1 : 0})`,
+                    transitionDuration: `${DURATION.fast}ms`,
+                    transitionTimingFunction: EASE.out,
+                  }}
+                />
+              </a>
+            );
+          })}
         </nav>
         {/* The phone menu. `<details>` rather than a state-driven panel: the platform
             already gives us the disclosure semantics, the keyboard behaviour and the
@@ -116,7 +192,7 @@ export function LandingNav() {
             be broken by a slow first load. */}
         <details className="group relative ml-auto lg:hidden">
           <summary className={`focus-ring flex list-none items-center gap-1.5 rounded-lg px-3 py-2 text-sm marker:hidden [&::-webkit-details-marker]:hidden ${onDark ? "text-white/70" : "text-muted-foreground"}`}>
-            Sections
+            {ALL_SECTIONS.find(([href]) => href === active)?.[1] ?? "Sections"}
             <span aria-hidden className="transition-transform duration-200 group-open:rotate-180">▾</span>
           </summary>
           {/* Closing on choose is the one thing `<details>` does not give us: without it
@@ -130,7 +206,10 @@ export function LandingNav() {
               <a
                 key={href}
                 href={href}
-                className="focus-ring block rounded-lg px-3 py-2.5 text-[14px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                aria-current={href === active ? "true" : undefined}
+                className={`focus-ring block rounded-lg px-3 py-2.5 text-[14px] hover:bg-surface hover:text-foreground ${
+                  href === active ? "bg-surface text-foreground" : "text-muted-foreground"
+                }`}
               >
                 {label}
               </a>

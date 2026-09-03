@@ -1,16 +1,24 @@
 /**
- * THE SPINE OF THE PAGE: six acts, one point cloud, one scroll.
+ * THE SPINE OF THE PAGE: seven acts, one point cloud, one scroll.
  *
- * The whole argument in order — the gap, the seven readings, the person they resolve
- * into, the ninety days they extend across, the four people who read them, and the
- * distance the whole thing has to travel to be worth anything. `CortexField` moves one
- * cloud of points between the six arrangements as the section scrolls; nothing is
- * swapped, faded or cross-dissolved, because the continuity is the claim.
+ * The whole argument in order — the event, the gap it opens, the seven readings, the
+ * person they resolve into, the ninety days they extend across, the four people who read
+ * them, and the distance the whole thing has to travel to be worth anything.
+ * `CortexField` moves one cloud of points between the seven arrangements as the section
+ * scrolls; nothing is swapped, faded or cross-dissolved, because the continuity is the
+ * claim: the point that was perfused tissue in the first act is the same point that
+ * becomes a reading, a day, and a household.
+ *
+ * ACT ONE IS THE PREMISE, NOT A CAPABILITY. It draws an arterial territory losing its
+ * supply, because that is the event every other act is downstream of — and the act says
+ * in its own words that this product cannot see it. The hero says the same thing a
+ * screen higher. Nothing on this page may leave a visitor thinking the software watches
+ * for a stroke; it reasons over days.
  *
  * THE TEXT IS REAL TEXT. Every act is an `<article>` with a real heading in the document
  * flow — the canvas behind it is `aria-hidden` and carries no information of its own. A
- * screen reader, a search crawler and a visitor with WebGL disabled all get the same six
- * paragraphs in the same order. That is also why the acts are laid out with a negative
+ * screen reader, a search crawler and a visitor with WebGL disabled all get the same
+ * seven paragraphs in the same order. That is also why the acts are laid out with a negative
  * margin over a `sticky` sibling rather than absolutely positioned: the reading order in
  * the DOM is the reading order on the page.
  *
@@ -24,7 +32,7 @@ import { useRef, useState } from "react";
 import { CortexField, type CortexHandle } from "@/components/landing/CortexField";
 import { Reveal } from "@/components/motion/Reveal";
 import { STATE_COUNT } from "@/lib/cortex";
-import { useScrollScene } from "@/lib/motion";
+import { useCoarsePointer, useScrollScene } from "@/lib/motion";
 
 interface Act {
   /** Two digits, shown as the act marker. */
@@ -47,16 +55,26 @@ interface Act {
 const ACTS: Act[] = [
   {
     n: "01",
-    kicker: "The gap",
-    head: "The emergency ends. The recovery does not.",
-    body: "A stroke is an emergency, and the system around it is built for emergencies — "
-      + "fast, staffed, and finished. What follows is neither fast nor staffed. It runs "
-      + "for months at home, where nothing is being measured and no one has been trained "
-      + "to notice a change until it has already become a second crisis.",
-    point: "Care stops at the door. Recovery walks out with the patient.",
+    kicker: "The event",
+    head: "A stroke is minutes. What follows is months.",
+    body: "An artery closes. The territory downstream of it stops being supplied, and the "
+      + "functions that territory carried change — on one side of the body, in the systems "
+      + "that vessel fed. That hour is an emergency, and the system around it is built for "
+      + "emergencies: fast, staffed, and finished.",
+    point: "NeuroTrace is not for that hour. It reasons over days, and cannot see a stroke "
+      + "that is happening now.",
   },
   {
     n: "02",
+    kicker: "The gap",
+    head: "The emergency ends. The recovery does not.",
+    body: "What follows is neither fast nor staffed. It runs for months at home, where "
+      + "nothing is being measured and no one has been trained to notice a change until it "
+      + "has already become a second crisis. The record simply stops at the hospital door.",
+    point: "Care stops at the door. Recovery walks out with the patient.",
+  },
+  {
+    n: "03",
     kicker: "The signal",
     head: "Recovery is not one thing getting better.",
     body: "It moves in the face, the hands, the balance, the voice, the words and the "
@@ -66,7 +84,7 @@ const ACTS: Act[] = [
     point: "Seven readings, taken before the day starts.",
   },
   {
-    n: "03",
+    n: "04",
     kicker: "The picture",
     head: "One reading is noise. Seven, held together, are a person.",
     body: "Each morning is compared to that person's own last twelve sessions rather than "
@@ -76,7 +94,7 @@ const ACTS: Act[] = [
     point: "Not a score. A description of what moved.",
   },
   {
-    n: "04",
+    n: "05",
     kicker: "The line",
     head: "A clinic visit is a point. Recovery is a line.",
     body: "Between appointments the record is simply empty, so any change has to be "
@@ -86,7 +104,7 @@ const ACTS: Act[] = [
     point: "The trajectory, not the appointment.",
   },
   {
-    n: "05",
+    n: "06",
     kicker: "The people",
     head: "One morning. Four different jobs.",
     body: "The survivor sees a short session and a button, never a score. The caregiver "
@@ -96,7 +114,7 @@ const ACTS: Act[] = [
     point: "The same morning, told four different ways.",
   },
   {
-    n: "06",
+    n: "07",
     kicker: "The distance",
     head: "Expertise should not depend on geography.",
     body: "The exam runs on the survivor's own phone, offline, in English, Hindi or "
@@ -109,8 +127,14 @@ const ACTS: Act[] = [
 
 export function SignalScene() {
   const cortex = useRef<CortexHandle>(null);
-  // The only value React ever sees from this section, and it changes six times over six
-  // screens of scrolling — not sixty times a second. The canvas is driven directly.
+  // Fitting the cloud to a big canvas spreads it thin: the same geometry that reads as a
+  // brain in the 358 px hero plate read as dust across 806 px, because the fit gave it five
+  // times the area for two and a half times the points. Pulling the fit in on a desktop
+  // restores the density. On a phone the canvas is already small and the same number would
+  // strand the cloud in the middle of the panel, so it keeps the full fit. D-087.
+  const coarse = useCoarsePointer();
+  // The only value React ever sees from this section, and it changes seven times over
+  // seven screens of scrolling — not sixty times a second. The canvas is driven directly.
   const [act, setAct] = useState(0);
   const actRef = useRef(0);
 
@@ -146,6 +170,7 @@ export function SignalScene() {
         <CortexField
           ref={cortex}
           initialState={0}
+          zoom={coarse ? 1 : 0.78}
           className="absolute inset-x-0 bottom-0 h-[56%] lg:inset-y-0 lg:right-auto lg:h-full lg:w-[56%]"
         />
         {/* The scrim exists for legibility, not for style. On a phone the text sits ABOVE
@@ -163,6 +188,9 @@ export function SignalScene() {
           <div className="mx-auto flex max-w-[1680px] items-center gap-3 px-6 pb-6">
             <span className="font-mono text-[10px] tracking-[0.22em] text-white/40">
               {ACTS[act].n} / {String(ACTS.length).padStart(2, "0")}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.20em] text-[#7FB2F0]/85 hidden sm:inline">
+              {ACTS[act].kicker}
             </span>
             <span aria-hidden className="flex flex-1 gap-1.5">
               {ACTS.map((a, i) => (

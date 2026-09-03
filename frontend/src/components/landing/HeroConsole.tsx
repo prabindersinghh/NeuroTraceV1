@@ -104,11 +104,16 @@ export function HeroConsole({ series }: { series: Series }) {
           </p>
         </div>
 
+        {/* Turning, always: one revolution every ~29 seconds. Slow enough that it never
+            competes with the lanes below it for attention, and the only way the folding
+            and the interhemispheric gap read as a form with a far side rather than as a
+            flat pattern. Drag still works — it offsets the turntable, it does not stop it. */}
         <CortexField
           ref={cortex}
           initialState={STATE.cortex}
           zoom={0.95}
           density={0.42}
+          spin={0.22}
           className="h-[200px] w-full sm:h-[268px]"
         />
 
