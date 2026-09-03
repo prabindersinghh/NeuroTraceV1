@@ -85,26 +85,46 @@ else
 fi
 
 step "6 · THE ONE THAT MATTERS — identical band sequence"
-bands=$(echo "$seeded" | python -c "
-import json,sys
-try:
-    d=json.load(sys.stdin)
-except Exception:
-    print(''); raise SystemExit
-print(''.join(b[0] if b!='PATTERN_ATYPICAL' else 'X' for b in d.get('bands',[])))
-" 2>/dev/null)
-final=$(echo "$seeded" | python -c "
-import json,sys
-try: print(json.load(sys.stdin).get('bands',[''])[-1])
-except Exception: print('')
-" 2>/dev/null)
+# The interpreter is resolved rather than assumed, and a missing one is its own failure.
+# This check was hardcoded to `python` with stderr discarded, so on a machine carrying only
+# `python3` — a stock modern macOS, among others — the parse died silently, `bands` came
+# back empty, and the script announced "the engine behaves differently in production" about
+# a deployment whose engine was in fact byte-identical. Same lesson as the seed timeout
+# above, through a different door: an unparsed answer must not read as a wrong answer.
+PY=""
+for cand in python3 python; do
+  command -v "$cand" >/dev/null 2>&1 && { PY="$cand"; break; }
+done
 
-echo "  local  : $EXPECT_BANDS -> $EXPECT_FINAL"
-echo "  deployed: ${bands:-<none>} -> ${final:-<none>}"
-[ "$bands" = "$EXPECT_BANDS" ] && ok "band sequence identical to local" \
-  || bad "band sequence DIFFERS — the engine behaves differently in production"
-[ "$final" = "$EXPECT_FINAL" ] && ok "final band is $EXPECT_FINAL" \
-  || bad "final band is '${final:-none}', expected $EXPECT_FINAL"
+if [ -z "$PY" ]; then
+  bad "no python interpreter on PATH — cannot parse the seed, check 6 did NOT run"
+else
+  parse() { printf '%s' "$seeded" | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)          # a malformed body must raise, not print ''
+bands = d.get('bands', [])
+if not bands:
+    raise SystemExit('no bands in response')
+if '$1' == 'seq':
+    print(''.join(b[0] if b != 'PATTERN_ATYPICAL' else 'X' for b in bands))
+else:
+    print(bands[-1])
+"; }
+  bands=$(parse seq) || bands=""
+  final=$(parse final) || final=""
+
+  echo "  local  : $EXPECT_BANDS -> $EXPECT_FINAL"
+  echo "  deployed: ${bands:-<unparsed>} -> ${final:-<unparsed>}"
+
+  if [ -z "$bands" ] || [ -z "$final" ]; then
+    bad "could not parse the seed response — check 6 did NOT run (this is NOT an engine difference)"
+  else
+    [ "$bands" = "$EXPECT_BANDS" ] && ok "band sequence identical to local" \
+      || bad "band sequence DIFFERS — the engine behaves differently in production"
+    [ "$final" = "$EXPECT_FINAL" ] && ok "final band is $EXPECT_FINAL" \
+      || bad "final band is '$final', expected $EXPECT_FINAL"
+  fi
+fi
 
 step "7 · gate states and laterality identical"
 echo "  (needs a clinician login; see DEPLOY.md step 7 for the manual check)"

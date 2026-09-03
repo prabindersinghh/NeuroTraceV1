@@ -22,6 +22,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { rememberAwaazPatient } from "@/lib/awaazTarget";
 import { useI18n } from "@/lib/i18n";
 import type { ExamSession, Patient, SessionType } from "@/lib/types";
 import { cn, formatDateTime, usableLocale } from "@/lib/utils";
@@ -40,6 +41,9 @@ export function PatientHome() {
     try {
       const list = await api.listPatients();
       setPatients(list);
+      // This screen has no `:patientId`, so the header would otherwise have nothing to
+      // point Awaaz at on the one screen the patient opens first. Costs no request.
+      rememberAwaazPatient(list[0]?.id);
       if (list[0]) {
         // Deliberately non-fatal. If the scheduler is unreachable — offline, most likely —
         // the patient still gets their button. Losing the "about 3 minutes" line is a

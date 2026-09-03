@@ -23,6 +23,7 @@ import { Metric } from "@/components/ui/metric";
 import { EmptyState, ErrorState, LoadingState, Spinner } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { rememberAwaazPatient } from "@/lib/awaazTarget";
 import { useI18n } from "@/lib/i18n";
 import type { ExamSession, Lang, Patient } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -39,7 +40,12 @@ export function CaregiverHome() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setPatients(await api.listPatients());
+      const roster = await api.listPatients();
+      setPatients(roster);
+      // Same reason as PatientHome: no `:patientId` on this route. A caregiver looking
+      // after two parents gets the first as the default; opening either dashboard moves
+      // the header to that one, because route params win.
+      rememberAwaazPatient(roster[0]?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errLoadPatients"));
     }

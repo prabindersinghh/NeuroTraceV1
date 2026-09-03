@@ -964,7 +964,7 @@ export default function Awaaz() {
     return (
       <AppShell>
         <div
-          className="mx-auto flex max-w-xl flex-col gap-4"
+          className="mx-auto flex w-full max-w-xl flex-col gap-4 lg:max-w-5xl"
           onPointerDown={beginLongPress}
           onPointerMove={moveLongPress}
           onPointerUp={cancelLongPress}
@@ -1016,7 +1016,13 @@ export default function Awaaz() {
   return (
     <AppShell>
       <div
-        className="mx-auto flex max-w-xl flex-col gap-5"
+        /* `max-w-xl` was applied at EVERY width, so a 1440px laptop rendered a 576px
+           phone column with two card columns and ~430px of dead space on each side --
+           the same "phone layout blown up rather than a desktop one" that
+           DESIGN_LANGUAGE §6 already called out for buttons. The cap widens with the
+           viewport instead, and the board below adds columns rather than stretching
+           tiles, so a card never grows past a comfortable tap target. */
+        className="mx-auto flex w-full max-w-xl flex-col gap-5 lg:max-w-5xl"
         onPointerDown={beginLongPress}
         onPointerMove={moveLongPress}
         onPointerUp={cancelLongPress}
@@ -1249,7 +1255,11 @@ export default function Awaaz() {
           )}
         </details>
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Columns, not wider tiles. Two on a phone is the floor a 64px tap target and
+            Gurmukhi/Devanagari phrase text need; beyond that, extra width buys more
+            cards on screen at the same size, which is what shortens the reach for
+            someone using one working hand. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {currentBoard.cards.filter((card) => !card.is_emergency).map((c) => (
             <button
               key={c.id}
@@ -1268,12 +1278,17 @@ export default function Awaaz() {
           <label className="block text-base text-muted-foreground">
             {isAphasia ? t("awaazTypeConfirm") : t("awaazTypeSpeak")}
           </label>
-          <div className="mt-2 flex gap-2">
+          {/* `flex-1` without `min-w-0` cannot shrink below its content, and the button
+              beside it does not shrink at all, so at 390px this row was 442px wide and
+              pushed "Show options" off the right edge of the phone the product targets.
+              `min-w-0` lets the field give way; `flex-wrap` puts the button on its own
+              line rather than squeezing it under a longer translation. */}
+          <div className="mt-2 flex flex-wrap gap-2">
             <input
               value={freeText}
               disabled={usingOfflineBoard}
               onChange={(e) => setFreeText(e.target.value)}
-              className="min-h-14 flex-1 rounded-xl border border-line px-4 text-xl disabled:opacity-50"
+              className="min-h-14 min-w-0 flex-1 basis-48 rounded-xl border border-line px-4 text-xl disabled:opacity-50"
             />
             <Button className="min-h-14 px-5" disabled={
               usingOfflineBoard || busy || !freeText.trim()
