@@ -7,7 +7,7 @@
  * would put them in a product that structurally cannot watch for what threatens them.
  * The form says so plainly rather than letting the server reject it silently.
  */
-import { ChevronRight, Plus, Users } from "lucide-react";
+import { ChevronRight, Plus, ShieldCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -161,19 +161,30 @@ function PatientCard({ patient, sessions }: { patient: Patient; sessions: ExamSe
   // the screen shouted two different next steps at a caregiver who wanted one.
   const setupPending = !patient.onboarding_complete;
   const learning = patient.baseline_state !== "LOCKED";
+  // Part 5.4 tombstone: every measurement is gone and every identifying field is cleared.
+  // Nothing on this card would work against it — the dashboard has no data, the exam has
+  // no baseline to build, and a second erasure 409s — so the card becomes a record of what
+  // happened rather than a set of dead controls.
+  const erased = patient.erased_at !== null;
 
   return (
     <Card
       className="chip-edge flex flex-col"
       style={{
         ["--chip-edge-color" as string]:
-          setupPending || learning ? "hsl(var(--watch))" : "hsl(var(--stable))",
+          erased ? "hsl(var(--border))"
+          : setupPending || learning ? "hsl(var(--watch))" : "hsl(var(--stable))",
       }}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="text-title-3">{patient.name}</CardTitle>
+            {/* `name` is "" after an erasure — the row survives so `audit_log.patient_id`
+                keeps its foreign key (Part 5.4). Without this branch the card rendered as
+                a permanently blank, broken-looking entry with no explanation. */}
+            <CardTitle className="text-title-3">
+              {erased ? t("erasedBadge") : patient.name}
+            </CardTitle>
             <CardDescription>
               {[
                 patient.age ? `${patient.age}` : null,
@@ -186,7 +197,7 @@ function PatientCard({ patient, sessions }: { patient: Patient; sessions: ExamSe
           </div>
           {/* The state belongs beside the name, where the eye already is — not stranded
               between two buttons further down, which is where it used to sit. */}
-          {learning && (
+          {learning && !erased && (
             <span className="shrink-0 rounded-full bg-watch-soft px-2.5 py-1 text-sm font-medium text-watch">
               {t("buildingBaseline")}
             </span>
@@ -195,6 +206,12 @@ function PatientCard({ patient, sessions }: { patient: Patient; sessions: ExamSe
       </CardHeader>
 
       <CardContent className="mt-auto flex flex-col gap-2">
+        {erased ? (
+          <p className="text-sm text-muted-foreground">
+            {t("erasedRosterNote").replace("{d}", formatDateTime(patient.erased_at!, locale))}
+          </p>
+        ) : (
+        <>
         {/* How the week has gone, above the actions — the question a caregiver opens
             this screen with, answered before they have to click into anything. */}
         <div className="mb-1">
@@ -253,6 +270,19 @@ function PatientCard({ patient, sessions }: { patient: Patient; sessions: ExamSe
           <Users className="mr-1 h-4 w-4" aria-hidden />
           {t("familyAccessTitle")}
         </Link>
+
+        {/* Consent and erasure, per patient for the same reason family access is: a
+            caregiver looking after two parents makes these decisions separately for each.
+            Owning-caregiver only, enforced on every route behind it. */}
+        <Link
+          to={`/privacy/${patient.id}`}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "w-full")}
+        >
+          <ShieldCheck className="mr-1 h-4 w-4" aria-hidden />
+          {t("privacyOpen")}
+        </Link>
+        </>
+        )}
       </CardContent>
     </Card>
   );

@@ -4,6 +4,348 @@ Dated entries per work session: what changed, what was verified, and how.
 
 ---
 
+## 2026-09-03 — Consent and erasure got their UI; the Awaaz merge was driven, not read
+
+Second slice of the same audit. Part 4's seven consents and Part 5.4's erasure had backends
+and no callers; the Awaaz merge was verified against a running server.
+
+### `/privacy/:patientId` — the seven consents and the erasure (D-082)
+
+Consents were only ever WRITTEN, by enrolment and by `POST /clinician/links` (which grants C3
+in the same transaction as the link). Nothing read them back, so a caregiver could grant
+clinician sharing by adding a doctor and had no way to see it or take it back.
+`DELETE /patients/{id}` had no caller at all.
+
+The screen says only what is true. C3 and C7 have a runtime gate; the other five are recorded
+decisions with nothing behind them, and their rows say so and point at erasure rather than
+implying an enforcement that does not exist. "Never asked" is stated in words, because an
+unchecked box could read as a chosen default — which matters immediately: the demo seed
+grants C3 and leaves C1 and C2 with no row, so the demo patient is monitored with no recorded
+consent to use the product.
+
+Erasure is confirmed by a required reason plus an explicit acknowledgement, **not** by typing
+the patient's name: names here are in Devanagari or Gurmukhi, the keyboard is often set to
+English, and the confirming person is 55-75, so that gesture blocks the legitimate case far
+more than the accidental one. Both halves of what erasure does are stated before the button —
+what is deleted, and what is retained and why.
+
+### The bug the UI work uncovered: one erasure bricked the whole roster
+
+`erase_patient_data` sets `patient.name = ""`. `PatientBase.name` had `Field(min_length=1)`
+and `PatientRead` inherited it, so every `response_model=PatientRead` route raised
+`string_too_short` on that row — and since `GET /patients` validates the whole list, **a
+single erasure returned 500 for that caregiver's entire roster, permanently**, including
+patients never erased. Erasing one parent's data would have bricked the other's card.
+
+It survived because `test_erasure.py` proves the deletion against the database directly and
+nothing listed the roster over HTTP afterwards. Found by driving a real erasure against a
+running server. Fixed on the read schema only; `test_erasure_roster.py` (3 tests) pins the
+roster, the single-patient route, and that create/update still refuse an empty name.
+`erased_at` is exposed on the same schema so a client can tell a tombstone from a patient
+whose name failed to load — the roster used to render a permanently blank card.
+
+### The Awaaz merge: driven end to end (D-083)
+
+Migrations `0021`/`0022` clean to one head. Every Awaaz read route 200. The listener
+capability mints, opens for an unauthenticated stranger, shows the caregiver's display name
+and **not** the enrolled patient name, and 404s after revocation.
+
+| Policy contract check | Result |
+|---|---|
+| decision without logging consent | **409** — explicit consent required |
+| decision with `requires_confirmation: false` | **409** — no randomising where speech may go out unconfirmed |
+| decision with both satisfied | 200, server-drawn `logged_action_probability` **0.92**, `randomised: true` (0.90/0.88 near-tie — D-063's 0.05 band, ≥0.84 floor) |
+| outcome missing its evidence | 422 — a `selected` outcome requires `selected_action_id` |
+| outcome replayed under the same `event_id` | 200 returning the **same row id**; one row in the table, not two |
+| `awaaz_policy_events` columns | no patient column; `logged_on` is a DATE |
+
+**A correction.** An earlier entry in this file said the RL logging loop had no producer. It
+was wrong: it grepped components for `awaazPolicyDecision` and missed the indirection through
+`lib/awaazPolicyLog.ts`, which `Awaaz.tsx` calls at ten sites. Corrected in place rather than
+deleted, because that shape of wrong claim gets working code removed.
+
+**The one seam that does not meet, and why it must stay that way.**
+`/awaaz/{id}/speak` returns `candidates: list[str]` — unscored, and exactly one across five
+probed inputs. `AwaazPolicyDecisionRequest` requires ≥2 candidates each carrying a `score`.
+So `scoredSlateFromSpeakResult` returns `null` unconditionally: the pipeline is built, wired
+and inert until the speak contract carries per-candidate scores. Inventing those scores would
+manufacture the tie structure the exploration distribution is drawn over, making every
+recorded propensity the probability of a draw across a ranking that does not exist — the
+exact corruption "the server owns the randomisation" exists to prevent. `42ac6dc` stopped
+short for this reason and so does this session. It needs a real ranker, which is product
+work, not a merge defect.
+
+**A second seam, and this one is a real collision.** Policy-logging consent is a
+`localStorage` flag the client asserts and the server trusts. It is invisible to
+`GET /consents/{id}`, not withdrawable on the privacy screen this session just built, lost on
+a cache clear, and unprovable server-side. PRD_AWAAZ §10.2 is right that it is its own
+purpose — which argues for an eighth `ConsentType`, not a weaker mechanism beside the seven.
+Left alone deliberately: it needs a migration and an enum value.
+
+### Verified
+
+- `backend` — full suite exit 0, including the 3 new erasure-roster tests.
+- `frontend` — vitest **237 passed** (189 before; +48 new), `tsc -b` clean, `npm run build`
+  clean.
+- Mutation checks, all three bite: renaming `api.erasePatient` → 1 failure; dropping C7 from
+  the screen → 1 failure; restoring `min_length=1` on `PatientRead` → 2 failures.
+- Consent, erasure and the whole Awaaz surface driven over HTTP against a running server on a
+  scratch SQLite database migrated `0001 → 0022`, as tabulated above.
+- **Not run:** the deployed instance, `verify_deploy.sh`, a physical phone, and no browser
+  drive of the privacy screen — the wire contracts are proven, the rendering is not.
+
+---
+
+## 2026-09-03 — The baseline gate got its frontend, and two dead ML twins were deleted
+
+**The headline is a live product defect that every suite was green through.** An audit of
+backend-to-frontend coverage — all 82 routes against every path `frontend/src` actually
+calls — found twelve routes with no client at all. One of them was load-bearing.
+
+### A completed baseline was a permanent dead end
+
+`_refresh_baseline_state` moves a patient to `DOCTOR_REVIEW_PENDING` the moment every module
+locks. Bands and alerts are suppressed while the state is not `LOCKED`, and `record_review`
+is the only exit. `record_review` is reachable from exactly one route,
+`POST /clinician/baseline/{id}/review`, and **nothing in the frontend called it** — `api.ts`
+carried no baseline method of any kind.
+
+A real patient therefore completed twelve or more sessions, entered `DOCTOR_REVIEW_PENDING`,
+and stayed there permanently: not monitored, not alerted on, with no screen able to move
+them out. Their caregiver saw "baseline progress 12 / 12" with the bar at 100%, forever —
+one card served every non-`LOCKED` state, so an `ABANDONED` baseline rendered identically.
+
+The demo worked because `services/seed.py` calls `record_review` in Python. The only
+exercised path skipped HTTP, so the route that mattered had tests and no caller. See D-080.
+
+**What landed**
+
+- `components/BaselineReviewPanel.tsx` — the clinician's decision. Per-module evidence
+  including `cadence_note`, so a Comprehensive-only module's ~6 observations are not misread
+  as thin data beside a Daily Pulse module's ~21 (D-043/D-044); the server's own
+  synthetic-model disclosure verbatim; the append-only log of earlier decisions; and the
+  three actions the server accepts. `CONFIRM` is the only one that states its consequence,
+  because it is the only one that is irreversible and the only one that starts monitoring.
+  A note is required for `EXTEND` and `FLAG_CONCERN`, optional for `CONFIRM` — matching
+  `record_review` exactly.
+- `BaselineStatusCard` — the caregiver's half. Awaiting-review and abandoned are now
+  distinct from still-collecting, and say plainly that nothing is being compared yet.
+  All three languages.
+- `Clinic.tsx` — a roster badge for patients blocked on this clinician, and a corrected
+  metric: it counted every non-`LOCKED` patient under an "awaiting review" caption, folding
+  patients waiting on nobody into the clinician's own queue.
+- `api.ts` — `baselineReview`, `submitBaselineReview`, `invalidateBaseline`. The last sends
+  `reason` as a **query** parameter, which is how `routers/clinician.py:invalidate` declares
+  it; as JSON it 422s with no obvious cause.
+
+### The reachability test had to be rewritten before it was worth keeping
+
+`frontend/src/lib/baselineGate.test.ts` (9 tests) pins the class of bug. Its first draft
+asserted `toContain("submitBaselineReview")` against `api.ts` source — which **still passed**
+after the method was renamed to `submitBaselineReviewXX`, because the rename is a superstring.
+The client-method assertions now run against the exported `api` object. The mutation was run
+both ways: 1 failed / 8 passed with the method renamed, 9 passed with it restored.
+
+### `app/ml/scoring.py` and `app/ml/face.py` deleted
+
+Zero callers outside their own tests, and both dangerous to read (D-081).
+
+`scoring.py` was a **second, complete alert implementation with no laterality gate** — it
+would raise an `ALERT` on precisely the symmetric Parkinsonian decline INV-2 and
+`engine/gates.py` exist to exclude. Its test, `test_alert_gate_sim.py`, was labelled the
+PRD §7 acceptance criterion and verified it against the dead path. `test_engine.py` and
+`test_laterality.py` were checked first and already cover that criterion against the live
+gate, so no coverage was lost.
+
+`face.py` took a **video path** and opened it with OpenCV — the exact shape INV-1 forbids —
+and was the only reason `mediapipe`, `opencv-python` and `protobuf` were runtime
+dependencies, and therefore the only reason this backend was pinned to Python 3.11 and
+numpy 1.x. Removing it makes INV-1 structural on the face path the way removing
+`python-multipart` did on the upload path (D-052). `libgl1`/`libglib2.0-0` and the unused
+writable `/app/media` directory are gone from the Dockerfile with it.
+
+`requirements.lock.txt` is left **stale and labelled stale** rather than hand-pruned: it is a
+transitive freeze, and editing it by hand produces a lock that is wrong invisibly. The
+Dockerfile installs from `requirements.txt`, so deploys are correct now.
+
+### Verified
+
+- `backend` — full suite, exit 0 (`pytest -q`), after the deletions.
+- `frontend` — vitest **189 passed** (180 before; +9 new), `tsc -b` clean, `npm run build`
+  clean.
+- The new test's mutation check, both directions, described above.
+- **Every new client call driven over HTTP against a running server** — a scratch SQLite
+  database migrated `0001 → 0022`, `POST /demo/seed`, then the patient forced back to
+  `DOCTOR_REVIEW_PENDING` and each URL exercised exactly as `api.ts` builds it. The seed
+  report named the bypass on its way past: `"baseline_confirmed_on_day": 19`.
+
+  | Call | Result |
+  |---|---|
+  | `GET /clinician/baseline-review/{id}` | 200; all seven keys present, 17 modules, `cadence_note` and `capture_quality_rate` populated, `previous_reviews` non-empty |
+  | `POST .../review` `EXTEND`, no note | **400** `EXTEND requires a note explaining why` — the server gate the UI mirrors |
+  | `POST .../review` `FLAG_CONCERN` + note | 201; state **holds** at `DOCTOR_REVIEW_PENDING`, as designed |
+  | `POST .../review` `CONFIRM` | 201; state → **`LOCKED`**. This is the exit that did not exist |
+  | `POST .../invalidate?reason=…` | 200; state → `ABANDONED` |
+  | `POST .../invalidate` with `reason` in the **body** | **422** `loc: ["query","reason"]` — the mistake the comment in `api.ts` exists to prevent |
+
+- **Not run:** the deployed instance, `verify_deploy.sh`, a physical phone, and no browser
+  drive of the panel itself — the wire contract is proven, the rendering is not. Nothing
+  here has been pushed.
+
+### Found and NOT fixed — the rest of the coverage audit
+
+Eleven further routes still have no UI. Recorded so the next session starts from the list
+rather than rediscovering it: `GET/PUT /consents/{id}` (**Part 4's six withdrawable consents
+cannot be viewed or withdrawn by anyone**), `POST/DELETE /clinician/links` (a caregiver
+cannot link a doctor — only the seed can), `DELETE /patients/{id}` (erasure, D-050),
+`GET/PUT /clinician/profile`, `GET /admin/doctors` (Part 3.7e), `GET /audit/{patient_id}`.
+
+Also open, and separate from the above:
+
+- **`POST /awaaz/policy/retention/sweep` has never been invoked.** No cron, no startup task,
+  no admin control — only tests. The 120-day retention policy has no mechanism to execute.
+- **The RL logging loop IS wired, and an earlier draft of this entry said it was not.** The
+  claim was made by grepping components for `awaazPolicyDecision` and missing the
+  indirection through `lib/awaazPolicyLog.ts`, which `Awaaz.tsx` imports and calls at ten
+  real sites — slate open, and all five outcomes. Corrected here rather than quietly, because
+  "no component calls this" was wrong and someone would have deleted working code on it.
+  What is genuinely dormant is the far end: nothing READS `awaaz_policy_events`, so
+  `compare_policies` is never invoked by any route or job, and no ranker is fitted
+  (`42ac6dc` stopped short of that deliberately).
+- **Policy-logging consent does not go through Part 4.** It is a `localStorage` flag
+  (`lib/awaazPolicyLog.ts:readPolicyLoggingConsent`) that the client asserts as
+  `payload.policy_logging_consent`, and `routers/awaaz.py:policy_decision` trusts it. So it
+  is invisible to `GET /consents/{id}`, not withdrawable from the new privacy screen, lost
+  on a cache clear or a device change, and unprovable server-side. The Awaaz line and main's
+  line each built a consent mechanism and neither knows about the other.
+- **`PatientHome` dead-ends on "No check-ins yet."** for an account with no patient record,
+  with no explanation and nothing to do next. Same shape for a caretaker with no links.
+- `app/ml/baseline.py`, `explain.py`, `reaction.py` are the same dead-twin class as the two
+  deleted here, kept only until their tests are ported.
+- `GET /auth/clinician-check`'s docstring claims the frontend uses it. It does not.
+
+---
+
+## 2026-09-03 — Repository structure: a clean root, an indexed `docs/`, contributor scaffolding
+
+**No functional change.** Every code edit in this session is a comment, a docstring, or a
+test-scope constant. The full diff of changed lines under `backend/` and `frontend/src/` is
+21 comment pairs plus two constants in `test_regulatory_claims.py`.
+
+### The root is now eight visible entries, down from sixteen
+
+Nine documents (200 KB) sat beside `README.md`. Five were executed build briefs and finished
+run reports; three were live references; one was a superseded draft.
+
+```
+CLINICAL_AMENDMENT_v3.md            → docs/archive/     (executed brief)
+FINAL_PRODUCT_SPEC_v4.md            → docs/archive/     (executed brief)
+TASK_FINAL_TECHNICAL_COMPLETION.md  → docs/archive/     (executed brief, cited by live code)
+COMPLETION_RUN_REPORT.md            → docs/archive/     (run report, unmerged branch)
+UX-CHANGES.md                       → docs/archive/     (run report, cited by live code)
+DESIGN_LANGUAGE.md                  → docs/            (live reference)
+FRONTEND_ENGINEERING.md             → docs/            (live reference)
+design.md                           → docs/LANDING_DESIGN_SPEC.md   (live, renamed to match its sibling)
+content.md                          → deleted          (landing-copy revamp; it shipped into Landing.tsx)
+```
+
+All five archived files are cited by live code as provenance, so they are archived rather
+than deleted — `docs/archive/README.md` says what each was and what replaced it, and carries
+the old-path → new-path map so older entries in **this file** still resolve without any
+history being rewritten.
+
+### `docs/` got an index, not a reorganisation
+
+**Deep-subfoldering `docs/` was considered and rejected.** 170 `docs/X.md` references exist
+across the repo plus ~100 sibling mentions, and three tests depend on exact paths under
+`docs/` (`test_regulatory_claims.py`, `test_privacy.py`, `test_train.py`). Rewriting all of
+that, over the corpus a stranger is supposed to resume from, buys what a grouped index
+delivers at no risk. So: **living reference flat, subdirectories for generated cards
+(`models/`), unlanded work (`plans/`), and history (`archive/`).**
+
+`docs/README.md` is new — all thirty-nine documents grouped by the question each answers,
+with the doc contract and layout conventions stated at the bottom. **Verified**: a script
+asserts every `docs/*.md` is linked from it and that every relative markdown link in
+`docs/**`, `README.md` and `CLAUDE.md` resolves. Both clean.
+
+### One invariant-test scope change, and why it is not a weakening
+
+Moving the archive into `docs/` swept five files into `_claim_bearing_files()`, which
+matches `docs/**.md`. Three tests failed on them — the ninety-second figure, a capability
+overclaim, an unlabelled accuracy figure.
+
+Every hit was the corrected claim being **recorded**, not asserted: `~~still say
+"90-second"~~ **DONE**`; the original brief's own `DAILY PULSE — target 90 seconds` that
+D-045 later corrected; "**diagnosing** an imaginary deadlock" (a software deadlock); and a
+quoted *published* VNG reference range. Keeping them in scope would have meant deleting the
+correction's own history to keep a test green — the exact thing
+`STALE_DURATION_HISTORICAL_OK`'s comment says is "the opposite of what D-045 is for".
+
+`docs/archive/` is therefore excluded from `_claim_bearing_files()`, and
+`docs/LANDING_DESIGN_SPEC.md` added to `STALE_DURATION_HISTORICAL_OK` (its two hits are a
+struck-through table row marked **REJECTED, D-045** and the paragraph saying the superseded
+claims are "reproduced above on purpose").
+
+**This preserves coverage rather than relaxing it.** All five files sat at the repository
+root until today, where `_claim_bearing_files()` never reached them either — it matches
+`docs/**.md`, `frontend/src/**`, and two named READMEs. Nothing that was scanned before
+stops being scanned. **Verified** by evaluating both file sets: five of the six files in
+`docs/archive/` remain under the strict INV-13 scan (`_scan` over `git ls-files`, honouring
+only `DOCUMENTATION_ALLOWLIST`); the sixth,
+`TASK_FINAL_TECHNICAL_COMPLETION.md`, was already allowlisted before this session and only
+its path string changed.
+
+### Contributor scaffolding — none of this existed
+
+- **`CONTRIBUTING.md`** — the fourteen invariants, the verification commands, the privacy
+  gate, commit and PR expectations. Links to `docs/DEVELOPMENT.md` for setup rather than
+  duplicating it, so it cannot drift.
+- **`.github/workflows/ci.yml`** — three jobs: invariants alone first (so a violation is
+  legible in seconds), the full backend suite, and the frontend suite. Python 3.11, the four
+  apt packages the Dockerfile needs for OpenCV/MediaPipe/librosa, pip and npm caching.
+- **`.github/`** — PR template (exit codes, invariants touched, claims, living docs,
+  privacy), two issue forms that refuse patient data in their first paragraph and route
+  security to `docs/SECURITY.md`, and `CODEOWNERS` pinning the clinical, safety and
+  invariant-test surfaces.
+- **`.editorconfig`** — 2 spaces web, 4 Python, no tabs, matching what the tree already does.
+- **`scripts/README.md`** — one line per script plus the hook-enabling command.
+
+### Corrections and hygiene
+
+- **`README.md` §Repository layout was stale** — it said `NeuroTraceV1/`, listed 7 of 39
+  documents, and omitted `auth/`, `awaaz/`, `rl/`, `train/`, `motion/`, `landing/` and
+  `brand/`. Rewritten from the real tree with counts read from the code: **21 exam modules,
+  14 routers, 22 migrations, 42 test modules, 11 exam step components.** Added the
+  `git config core.hooksPath .githooks` step to Quick start and a Contributing section.
+- **The test count in `CLAUDE.md` was stale** — 1191 → **1456**, from `--collect-only`.
+- **Four scripts were not executable** despite their own headers documenting
+  `./scripts/x.sh` invocation: `download_datasets.sh`, `seed_demo.sh`, `verify_deploy.sh`
+  (documented in `CLAUDE.md`) and `hooks/registry-guard.sh`.
+- **`.gitignore`** gained `.remember/` and `.claude/settings.local.json`. `.remember/`
+  self-ignores through its own file, but only where one exists — a stray copy had appeared
+  under `frontend/` when a command ran from that directory.
+- Removed from the working tree: `backend/neurotrace.db`, `backend/neurotrace-journey.db`
+  (1.4 MB of local SQLite scratch, gitignored), three `.DS_Store`, and `frontend/.remember/`.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| `pytest -q` (backend) | **1453 passed, 3 skipped, 0 failed — exit 0** |
+| `vitest run` (frontend) | **180 passed, 20 files — exit 0** |
+| `tsc -b` | exit 0 |
+| `npm run build` | exit 0 |
+| `oxlint` | exit 0 (9 pre-existing warnings, unchanged) |
+| Link integrity | 0 broken relative links in `docs/**`, `README.md`, `CLAUDE.md`; all 39 docs linked from `docs/README.md` |
+| `.github/**.yml` | parse clean |
+
+`./scripts/verify_deploy.sh` was **not** run — nothing in this session can reach the
+deployment. Nothing was pushed.
+
+Git recorded all eight moves as renames, so `git log --follow` still works on every one.
+
+---
+
 ## 2026-09-02 — Merge: the Awaaz contract-foundation branch, rebased onto main
 
 `anish/awaaz-contract-foundation` (36 commits) merged into `main`. The branch forked at

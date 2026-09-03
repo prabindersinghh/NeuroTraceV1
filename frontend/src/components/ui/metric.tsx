@@ -1,5 +1,5 @@
 /**
- * The one metric component every dashboard uses — DESIGN_LANGUAGE.md §3, "KPI cards".
+ * The one metric component every dashboard uses — docs/DESIGN_LANGUAGE.md §3, "KPI cards".
  *
  * A micro-label in caps, a large tabular number, and an optional one-line context. The
  * shape is what makes a clinical screen read as instrumentation rather than prose, and

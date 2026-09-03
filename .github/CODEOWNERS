@@ -1,0 +1,20 @@
+# Default owner for everything.
+*                                   @prabindersinghh
+
+# Clinical calibration and safety-critical surfaces. A change here can alter what the
+# product tells a stroke survivor, so it does not merge without the owner.
+/docs/CLINICAL_REFERENCE.md         @prabindersinghh
+/docs/INTENDED_USE.md               @prabindersinghh
+/docs/CLAIMS_MATRIX.md              @prabindersinghh
+/docs/ML_STATUS.md                  @prabindersinghh
+/backend/app/safety/                @prabindersinghh
+/backend/app/engine/                @prabindersinghh
+
+# The invariant tests are the enforcement mechanism. Weakening one is a product decision.
+/backend/tests/test_invariants.py         @prabindersinghh
+/backend/tests/test_privacy.py            @prabindersinghh
+/backend/tests/test_regulatory_claims.py  @prabindersinghh
+
+# The privacy gate itself.
+/scripts/preflight_push.sh          @prabindersinghh
+/.githooks/                         @prabindersinghh

@@ -101,6 +101,11 @@ export interface Patient {
   aphasia_mode: boolean;
   consent_version: string | null;
   onboarding_complete: boolean;
+  /** Part 5.4. Non-null means this row is an erasure TOMBSTONE: every measurement is gone
+   *  and every identifying field is cleared, so `name` is `""`. The row survives because
+   *  `audit_log.patient_id` cascades on delete and removing it would destroy the record of
+   *  who saw this person's data. Check this before rendering a patient's name. */
+  erased_at: string | null;
 }
 
 /** One exam module, as described by GET /sessions/battery/{schedule}. */
@@ -254,6 +259,91 @@ export interface BaselineProgress {
   window_min_days: number;
   window_max_days: number;
 }
+
+/** One module's evidence in the doctor's baseline review — `build_review` in
+ *  `services/baseline_review.py`. The cadence asymmetry is deliberately visible: a
+ *  twice-weekly module carries ~6 observations to a daily module's ~21, and a doctor
+ *  who is not shown `cadence_note` reads six points as thin data (D-043/D-044). */
+export interface BaselineReviewModule {
+  module_code: string;
+  name: string;
+  domain: string | null;
+  schedule: string;
+  cadence_note: string;
+  n_sessions: number;
+  n_rejected: number;
+  n_discarded_as_practice: number;
+  capture_quality_rate: number | null;
+  locked: boolean;
+  reason: string | null;
+  window_start: string | null;
+  window_end: string | null;
+  median: Record<string, number>;
+  variability_mad: Record<string, number>;
+  trajectory: Record<string, number>;
+}
+
+export interface BaselineCompletion {
+  ready_for_review: boolean;
+  blockers: string[];
+  all_modules_locked: boolean;
+  days_elapsed: number;
+  sessions: number;
+  adherence: number;
+  first_session: string | null;
+  last_session: string | null;
+}
+
+export type BaselineReviewAction = "CONFIRM" | "EXTEND" | "FLAG_CONCERN";
+
+export interface BaselineReviewEntry {
+  action: BaselineReviewAction;
+  note: string | null;
+  reviewed_at: string;
+  clinician_id: string | null;
+  sessions_in_window: number | null;
+}
+
+export interface BaselineReviewView {
+  patient_id: string;
+  baseline_state: BaselineState;
+  completion: BaselineCompletion;
+  modules: BaselineReviewModule[];
+  summary: string;
+  previous_reviews: BaselineReviewEntry[];
+  /** Stated on every render: the advisory models behind these numbers are synthetic
+   *  (ML_STATUS.md), and a clinician signing a baseline should know that. */
+  disclosure: string;
+}
+
+/** The seven consents, Part 4. `models.py:ConsentType` is the source of truth — C7
+ *  (`CARETAKER_SHARING`) was added with the caretaker work and every docstring around it
+ *  still says "six", which is why this list is spelled out rather than counted. */
+export type ConsentType =
+  | "FOLLOW_UP"
+  | "DATA_PROCESSING"
+  | "CLINICIAN_SHARING"
+  | "RESEARCH"
+  | "MEDIA_TESTIMONIAL"
+  | "TELECONSULTATION"
+  | "CARETAKER_SHARING";
+
+export interface ConsentState {
+  granted: boolean;
+  /** The wording version actually agreed to. Null when never asked — which is NOT consent. */
+  version: string | null;
+  current_version: string;
+  /** In force, but agreed at older wording. A prompt to re-ask, never an access gate:
+   *  `services/consent.py` is explicit that yesterday's wording is still valid consent. */
+  stale: boolean;
+  granted_at: string | null;
+  withdrawn_at: string | null;
+  /** C4/C5 only. The product works without them, so silence must not read as yes. */
+  default_off: boolean;
+}
+
+/** `GET /consents/{id}` — every type, always all of them, keyed by `ConsentType`. */
+export type ConsentStatus = Record<ConsentType, ConsentState>;
 
 export interface QuestionnaireRead {
   id: string;

@@ -437,7 +437,7 @@ MODULES: dict[str, ExamModule] = {
         instructions_hi="क्या कुछ नया या अलग हुआ है?",
     ),
     "M21": ExamModule(
-        # Moved from MONTHLY to WEEKLY (D-044): TASK_FINAL_TECHNICAL_COMPLETION.md Part 2
+        # Moved from MONTHLY to WEEKLY (D-044): docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md Part 2
         # lists SVV explicitly inside Comprehensive Follow-up's content, alongside the rest
         # of the posterior/vestibular battery (M3, M9) it shares a domain with. Leaving it
         # at MONTHLY while M3 and M9 moved to Comprehensive would have split one domain's

@@ -4,9 +4,18 @@
 # Use this for a byte-identical rebuild:      pip install -r requirements.lock.txt
 # Use requirements.txt for a normal install:  pip install -r requirements.txt
 #
-# Difference between the two: `pip install -r requirements.txt` also pulls jax, jaxlib and
-# opencv-contrib-python, because mediapipe 0.10.14 declares them. FaceMesh does not import
-# any of the three at runtime (cv2 comes from opencv-python, already pinned), so this lock
+# STALE AS OF THE app/ml/face.py DELETION. `mediapipe`, `opencv-python` and `protobuf` were
+# removed from requirements.txt when `app/ml/face.py` went (see `app/ml/__init__.py`), and
+# so were mediapipe's transitive pulls — jax, jaxlib, opencv-contrib-python, sounddevice,
+# flatbuffers, absl-py. Those lines are still BELOW because a transitive freeze that is
+# hand-pruned is worse than one that says it is stale: regenerate with
+# `pip freeze > requirements.lock.txt` from a clean 3.11 venv built off requirements.txt.
+# requirements.txt is the source of truth and the Dockerfile installs from it, so a deploy
+# is already correct; only a byte-identical rebuild from THIS file is affected.
+#
+# Historical note, kept because it explains the shape below: `pip install -r
+# requirements.txt` also pulled jax, jaxlib and opencv-contrib-python, because mediapipe
+# 0.10.14 declared them. FaceMesh did not import any of the three at runtime, so this lock
 # omits them — roughly 200 MB less to download. Both installs pass the suite.
 
 absl-py==2.5.0

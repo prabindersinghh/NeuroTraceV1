@@ -1072,6 +1072,214 @@ export const STRINGS = {
     hi: "जब उनके सामान्य स्तर के लिए पर्याप्त जाँच हो जाएँगी, तब तुलना शुरू होगी।",
     pa: "ਜਦੋਂ ਉਹਨਾਂ ਦੇ ਆਮ ਪੱਧਰ ਲਈ ਕਾਫ਼ੀ ਜਾਂਚਾਂ ਹੋ ਜਾਣਗੀਆਂ, ਤਾਂ ਤੁਲਨਾ ਸ਼ੁਰੂ ਹੋਵੇਗੀ।",
   },
+  // ---- consent and erasure (Part 4, Part 5.4) ----
+  privacyEyebrow: { en: "Privacy", hi: "निजता", pa: "ਨਿੱਜਤਾ" },
+  privacyTitle: { en: "Consent and data", hi: "सहमति और डेटा", pa: "ਸਹਿਮਤੀ ਅਤੇ ਡਾਟਾ" },
+  privacyIntro: {
+    en: "Each of these is a separate decision. You can say yes to one and no to another, and you can change any of them at any time.",
+    hi: "इनमें से हर एक अलग निर्णय है। आप किसी एक को हाँ और दूसरे को ना कह सकते हैं, और किसी को भी कभी भी बदल सकते हैं।",
+    pa: "ਇਹਨਾਂ ਵਿੱਚੋਂ ਹਰ ਇੱਕ ਵੱਖਰਾ ਫ਼ੈਸਲਾ ਹੈ। ਤੁਸੀਂ ਕਿਸੇ ਇੱਕ ਨੂੰ ਹਾਂ ਅਤੇ ਦੂਜੇ ਨੂੰ ਨਾਂਹ ਕਹਿ ਸਕਦੇ ਹੋ, ਅਤੇ ਕਿਸੇ ਨੂੰ ਵੀ ਕਦੇ ਵੀ ਬਦਲ ਸਕਦੇ ਹੋ।",
+  },
+  privacyOwnerOnly: {
+    en: "Only you can change these. A doctor or a family member cannot.",
+    hi: "इन्हें केवल आप बदल सकते हैं। डॉक्टर या परिवार का सदस्य नहीं।",
+    pa: "ਇਹਨਾਂ ਨੂੰ ਸਿਰਫ਼ ਤੁਸੀਂ ਬਦਲ ਸਕਦੇ ਹੋ। ਡਾਕਟਰ ਜਾਂ ਪਰਿਵਾਰ ਦਾ ਮੈਂਬਰ ਨਹੀਂ।",
+  },
+  consentGrantedOn: { en: "Agreed on {d}", hi: "{d} को सहमति दी", pa: "{d} ਨੂੰ ਸਹਿਮਤੀ ਦਿੱਤੀ" },
+  consentWithdrawnOn: { en: "Withdrawn on {d}", hi: "{d} को वापस ली", pa: "{d} ਨੂੰ ਵਾਪਸ ਲਈ" },
+  consentNeverAsked: {
+    en: "Not agreed to. Nothing is being done under this.",
+    hi: "सहमति नहीं दी गई। इसके तहत कुछ नहीं हो रहा।",
+    pa: "ਸਹਿਮਤੀ ਨਹੀਂ ਦਿੱਤੀ ਗਈ। ਇਸ ਤਹਿਤ ਕੁਝ ਨਹੀਂ ਹੋ ਰਿਹਾ।",
+  },
+  consentStale: {
+    en: "The wording changed since you agreed. Please read it again.",
+    hi: "आपकी सहमति के बाद शब्द बदले हैं। कृपया दोबारा पढ़ें।",
+    pa: "ਤੁਹਾਡੀ ਸਹਿਮਤੀ ਤੋਂ ਬਾਅਦ ਸ਼ਬਦ ਬਦਲੇ ਹਨ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਪੜ੍ਹੋ।",
+  },
+  consentEnforcedNow: {
+    en: "Turning this off takes effect immediately.",
+    hi: "इसे बंद करना तुरंत लागू होता है।",
+    pa: "ਇਸਨੂੰ ਬੰਦ ਕਰਨਾ ਤੁਰੰਤ ਲਾਗੂ ਹੁੰਦਾ ਹੈ।",
+  },
+  consentRecordedOnly: {
+    en: "This is recorded as your decision. To remove the data itself, use the section below.",
+    hi: "यह आपके निर्णय के रूप में दर्ज है। डेटा हटाने के लिए नीचे का भाग देखें।",
+    pa: "ਇਹ ਤੁਹਾਡੇ ਫ਼ੈਸਲੇ ਵਜੋਂ ਦਰਜ ਹੈ। ਡਾਟਾ ਹਟਾਉਣ ਲਈ ਹੇਠਲਾ ਭਾਗ ਦੇਖੋ।",
+  },
+  consentSaveFailed: {
+    en: "That change was not saved. Nothing has been altered.",
+    hi: "वह बदलाव सहेजा नहीं गया। कुछ भी नहीं बदला।",
+    pa: "ਉਹ ਬਦਲਾਅ ਸੰਭਾਲਿਆ ਨਹੀਂ ਗਿਆ। ਕੁਝ ਵੀ ਨਹੀਂ ਬਦਲਿਆ।",
+  },
+
+  // The seven, in `models.py:ConsentType` order. Body copy says what actually happens,
+  // not what the legal category is called.
+  c1Title: { en: "Use NeuroTrace for follow-up", hi: "फ़ॉलो-अप के लिए NeuroTrace का उपयोग", pa: "ਫ਼ਾਲੋ-ਅੱਪ ਲਈ NeuroTrace ਦੀ ਵਰਤੋਂ" },
+  c1Body: {
+    en: "Doing the daily check-ins so changes after the stroke can be noticed early.",
+    hi: "रोज़ाना जाँच करना ताकि स्ट्रोक के बाद के बदलाव जल्दी दिखें।",
+    pa: "ਰੋਜ਼ਾਨਾ ਜਾਂਚ ਕਰਨਾ ਤਾਂ ਜੋ ਸਟ੍ਰੋਕ ਤੋਂ ਬਾਅਦ ਦੇ ਬਦਲਾਅ ਜਲਦੀ ਦਿਸਣ।",
+  },
+  c2Title: { en: "Store health information", hi: "स्वास्थ्य जानकारी संग्रहित करना", pa: "ਸਿਹਤ ਜਾਣਕਾਰੀ ਸੰਭਾਲਣਾ" },
+  c2Body: {
+    en: "Keeping the measurements from each check-in. Photos, video and audio never leave the phone — only numbers are stored.",
+    hi: "हर जाँच के माप रखना। फ़ोटो, वीडियो और आवाज़ फ़ोन से बाहर नहीं जाते — केवल संख्याएँ रखी जाती हैं।",
+    pa: "ਹਰ ਜਾਂਚ ਦੇ ਮਾਪ ਰੱਖਣਾ। ਫ਼ੋਟੋ, ਵੀਡੀਓ ਅਤੇ ਆਵਾਜ਼ ਫ਼ੋਨ ਤੋਂ ਬਾਹਰ ਨਹੀਂ ਜਾਂਦੇ — ਸਿਰਫ਼ ਸੰਖਿਆਵਾਂ ਰੱਖੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।",
+  },
+  c3Title: { en: "Share with the doctor", hi: "डॉक्टर के साथ साझा करना", pa: "ਡਾਕਟਰ ਨਾਲ ਸਾਂਝਾ ਕਰਨਾ" },
+  c3Body: {
+    en: "Letting the linked doctor see these measurements. Turn this off and they lose access at once, even though the link stays on record.",
+    hi: "जुड़े डॉक्टर को ये माप देखने देना। इसे बंद करते ही उनकी पहुँच तुरंत बंद हो जाती है, भले ही रिकॉर्ड में जुड़ाव बना रहे।",
+    pa: "ਜੁੜੇ ਡਾਕਟਰ ਨੂੰ ਇਹ ਮਾਪ ਦੇਖਣ ਦੇਣਾ। ਇਸਨੂੰ ਬੰਦ ਕਰਦੇ ਹੀ ਉਹਨਾਂ ਦੀ ਪਹੁੰਚ ਤੁਰੰਤ ਬੰਦ ਹੋ ਜਾਂਦੀ ਹੈ, ਭਾਵੇਂ ਰਿਕਾਰਡ ਵਿੱਚ ਜੁੜਾਅ ਬਣਿਆ ਰਹੇ।",
+  },
+  c4Title: { en: "Help improve the system", hi: "सिस्टम सुधारने में मदद", pa: "ਸਿਸਟਮ ਸੁਧਾਰਨ ਵਿੱਚ ਮਦਦ" },
+  c4Body: {
+    en: "Using these measurements in research to make the system work better for others. The check-ins work exactly the same if you say no.",
+    hi: "इन मापों का शोध में उपयोग ताकि सिस्टम दूसरों के लिए बेहतर बने। ना कहने पर जाँचें बिल्कुल वैसी ही चलती हैं।",
+    pa: "ਇਹਨਾਂ ਮਾਪਾਂ ਦੀ ਖੋਜ ਵਿੱਚ ਵਰਤੋਂ ਤਾਂ ਜੋ ਸਿਸਟਮ ਦੂਜਿਆਂ ਲਈ ਬਿਹਤਰ ਬਣੇ। ਨਾਂਹ ਕਹਿਣ 'ਤੇ ਜਾਂਚਾਂ ਬਿਲਕੁਲ ਉਸੇ ਤਰ੍ਹਾਂ ਚੱਲਦੀਆਂ ਹਨ।",
+  },
+  c5Title: { en: "Photo or story for publicity", hi: "प्रचार के लिए फ़ोटो या कहानी", pa: "ਪ੍ਰਚਾਰ ਲਈ ਫ਼ੋਟੋ ਜਾਂ ਕਹਾਣੀ" },
+  c5Body: {
+    en: "Using a photo or their story publicly. Nothing is used unless you turn this on.",
+    hi: "फ़ोटो या उनकी कहानी सार्वजनिक रूप से उपयोग करना। जब तक आप इसे चालू न करें, कुछ उपयोग नहीं होता।",
+    pa: "ਫ਼ੋਟੋ ਜਾਂ ਉਹਨਾਂ ਦੀ ਕਹਾਣੀ ਜਨਤਕ ਤੌਰ 'ਤੇ ਵਰਤਣਾ। ਜਦੋਂ ਤੱਕ ਤੁਸੀਂ ਇਸਨੂੰ ਚਾਲੂ ਨਾ ਕਰੋ, ਕੁਝ ਨਹੀਂ ਵਰਤਿਆ ਜਾਂਦਾ।",
+  },
+  c6Title: { en: "Consultation over video or phone", hi: "वीडियो या फ़ोन पर परामर्श", pa: "ਵੀਡੀਓ ਜਾਂ ਫ਼ੋਨ 'ਤੇ ਸਲਾਹ" },
+  c6Body: {
+    en: "Speaking to the doctor remotely instead of travelling, where that is offered.",
+    hi: "जहाँ उपलब्ध हो, यात्रा के बजाय डॉक्टर से दूर से बात करना।",
+    pa: "ਜਿੱਥੇ ਉਪਲਬਧ ਹੋਵੇ, ਸਫ਼ਰ ਦੀ ਬਜਾਏ ਡਾਕਟਰ ਨਾਲ ਦੂਰੋਂ ਗੱਲ ਕਰਨਾ।",
+  },
+  c7Title: { en: "Share with family", hi: "परिवार के साथ साझा करना", pa: "ਪਰਿਵਾਰ ਨਾਲ ਸਾਂਝਾ ਕਰਨਾ" },
+  c7Body: {
+    en: "Letting the family members you added see the full picture. Turn this off and they lose access at once.",
+    hi: "आपके जोड़े परिवार के सदस्यों को पूरी जानकारी देखने देना। इसे बंद करते ही उनकी पहुँच तुरंत बंद हो जाती है।",
+    pa: "ਤੁਹਾਡੇ ਜੋੜੇ ਪਰਿਵਾਰਕ ਮੈਂਬਰਾਂ ਨੂੰ ਪੂਰੀ ਜਾਣਕਾਰੀ ਦੇਖਣ ਦੇਣਾ। ਇਸਨੂੰ ਬੰਦ ਕਰਦੇ ਹੀ ਉਹਨਾਂ ਦੀ ਪਹੁੰਚ ਤੁਰੰਤ ਬੰਦ ਹੋ ਜਾਂਦੀ ਹੈ।",
+  },
+
+  // ---- erasure (Part 5.4) ----
+  eraseTitle: { en: "Remove all data", hi: "सारा डेटा हटाएँ", pa: "ਸਾਰਾ ਡਾਟਾ ਹਟਾਓ" },
+  eraseOpen: { en: "Remove all data…", hi: "सारा डेटा हटाएँ…", pa: "ਸਾਰਾ ਡਾਟਾ ਹਟਾਓ…" },
+  eraseCancel: { en: "Keep the data", hi: "डेटा रखें", pa: "ਡਾਟਾ ਰੱਖੋ" },
+  eraseWhatGoes: {
+    en: "Deleted for good: every check-in, every measurement, the learned baseline, all trends, alerts and reports, and anything saved in Awaaz.",
+    hi: "हमेशा के लिए हटेगा: हर जाँच, हर माप, सीखा गया आधार, सभी रुझान, अलर्ट और रिपोर्ट, और Awaaz में सहेजा गया सब कुछ।",
+    pa: "ਹਮੇਸ਼ਾ ਲਈ ਹਟੇਗਾ: ਹਰ ਜਾਂਚ, ਹਰ ਮਾਪ, ਸਿੱਖਿਆ ਗਿਆ ਆਧਾਰ, ਸਾਰੇ ਰੁਝਾਨ, ਅਲਰਟ ਅਤੇ ਰਿਪੋਰਟਾਂ, ਅਤੇ Awaaz ਵਿੱਚ ਸੰਭਾਲਿਆ ਸਭ ਕੁਝ।",
+  },
+  eraseWhatStays: {
+    en: "Kept: the record of who opened this person's data and when, and the history of these consent decisions. Both identify nobody on their own, and keeping them is what makes the removal itself checkable.",
+    hi: "रखा जाएगा: किसने और कब इस व्यक्ति का डेटा खोला, और इन सहमतियों का इतिहास। दोनों अकेले किसी की पहचान नहीं करते, और इन्हें रखने से ही हटाने की जाँच संभव रहती है।",
+    pa: "ਰੱਖਿਆ ਜਾਵੇਗਾ: ਕਿਸਨੇ ਅਤੇ ਕਦੋਂ ਇਸ ਵਿਅਕਤੀ ਦਾ ਡਾਟਾ ਖੋਲ੍ਹਿਆ, ਅਤੇ ਇਹਨਾਂ ਸਹਿਮਤੀਆਂ ਦਾ ਇਤਿਹਾਸ। ਦੋਵੇਂ ਇਕੱਲੇ ਕਿਸੇ ਦੀ ਪਛਾਣ ਨਹੀਂ ਕਰਦੇ, ਅਤੇ ਇਹਨਾਂ ਨੂੰ ਰੱਖਣ ਨਾਲ ਹੀ ਹਟਾਉਣ ਦੀ ਜਾਂਚ ਸੰਭਵ ਰਹਿੰਦੀ ਹੈ।",
+  },
+  eraseIrreversible: {
+    en: "This cannot be undone, and the check-ins cannot be started again on this profile.",
+    hi: "इसे पलटा नहीं जा सकता, और इस प्रोफ़ाइल पर जाँचें दोबारा शुरू नहीं हो सकतीं।",
+    pa: "ਇਸਨੂੰ ਪਲਟਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ, ਅਤੇ ਇਸ ਪ੍ਰੋਫ਼ਾਈਲ 'ਤੇ ਜਾਂਚਾਂ ਦੁਬਾਰਾ ਸ਼ੁਰੂ ਨਹੀਂ ਹੋ ਸਕਦੀਆਂ।",
+  },
+  eraseReasonLabel: { en: "Why are you removing it?", hi: "आप इसे क्यों हटा रहे हैं?", pa: "ਤੁਸੀਂ ਇਸਨੂੰ ਕਿਉਂ ਹਟਾ ਰਹੇ ਹੋ?" },
+  eraseUnderstand: {
+    en: "I understand this cannot be undone.",
+    hi: "मैं समझता/समझती हूँ कि इसे पलटा नहीं जा सकता।",
+    pa: "ਮੈਂ ਸਮਝਦਾ/ਸਮਝਦੀ ਹਾਂ ਕਿ ਇਸਨੂੰ ਪਲਟਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ।",
+  },
+  eraseConfirm: { en: "Remove it permanently", hi: "स्थायी रूप से हटाएँ", pa: "ਸਥਾਈ ਤੌਰ 'ਤੇ ਹਟਾਓ" },
+  eraseDone: {
+    en: "The data has been removed.",
+    hi: "डेटा हटा दिया गया है।",
+    pa: "ਡਾਟਾ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ।",
+  },
+  erasedBadge: { en: "Data removed", hi: "डेटा हटाया गया", pa: "ਡਾਟਾ ਹਟਾਇਆ ਗਿਆ" },
+  erasedRosterNote: {
+    en: "Removed on {d}. Nothing clinical remains; this entry stays only so the access record keeps its place.",
+    hi: "{d} को हटाया गया। कोई नैदानिक जानकारी नहीं बची; यह प्रविष्टि केवल इसलिए है ताकि पहुँच का रिकॉर्ड बना रहे।",
+    pa: "{d} ਨੂੰ ਹਟਾਇਆ ਗਿਆ। ਕੋਈ ਕਲੀਨਿਕਲ ਜਾਣਕਾਰੀ ਨਹੀਂ ਬਚੀ; ਇਹ ਐਂਟਰੀ ਸਿਰਫ਼ ਇਸ ਲਈ ਹੈ ਤਾਂ ਜੋ ਪਹੁੰਚ ਦਾ ਰਿਕਾਰਡ ਬਣਿਆ ਰਹੇ।",
+  },
+  privacyOpen: { en: "Consent and data", hi: "सहमति और डेटा", pa: "ਸਹਿਮਤੀ ਅਤੇ ਡਾਟਾ" },
+
+  // ---- the doctor-in-the-loop baseline gate (Part 3.3/3.4) ----
+  // The caregiver half. Two states that used to render as "progress 12/12" forever.
+  baselinePendingTitle: {
+    en: "Waiting for the doctor to confirm",
+    hi: "डॉक्टर की पुष्टि का इंतज़ार",
+    pa: "ਡਾਕਟਰ ਦੀ ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ",
+  },
+  baselinePendingNote: {
+    en: "Enough check-ins have been recorded. A doctor has to confirm what is normal for them before comparison starts, so nothing is being compared yet. Keep doing the check-ins.",
+    hi: "पर्याप्त जाँचें दर्ज हो चुकी हैं। तुलना शुरू होने से पहले डॉक्टर को यह पुष्टि करनी होगी कि उनके लिए सामान्य क्या है, इसलिए अभी कोई तुलना नहीं हो रही। जाँचें करते रहें।",
+    pa: "ਕਾਫ਼ੀ ਜਾਂਚਾਂ ਦਰਜ ਹੋ ਚੁੱਕੀਆਂ ਹਨ। ਤੁਲਨਾ ਸ਼ੁਰੂ ਹੋਣ ਤੋਂ ਪਹਿਲਾਂ ਡਾਕਟਰ ਨੂੰ ਇਹ ਪੁਸ਼ਟੀ ਕਰਨੀ ਪਵੇਗੀ ਕਿ ਉਹਨਾਂ ਲਈ ਆਮ ਕੀ ਹੈ, ਇਸ ਲਈ ਹਾਲੇ ਕੋਈ ਤੁਲਨਾ ਨਹੀਂ ਹੋ ਰਹੀ। ਜਾਂਚਾਂ ਕਰਦੇ ਰਹੋ।",
+  },
+  baselineAbandonedTitle: {
+    en: "This baseline was stopped",
+    hi: "यह आधार रोक दिया गया",
+    pa: "ਇਹ ਆਧਾਰ ਰੋਕ ਦਿੱਤਾ ਗਿਆ",
+  },
+  baselineAbandonedNote: {
+    en: "A new one will be collected from the next check-ins. Nothing is being compared until it is complete.",
+    hi: "अगली जाँचों से नया आधार बनाया जाएगा। पूरा होने तक कोई तुलना नहीं होगी।",
+    pa: "ਅਗਲੀਆਂ ਜਾਂਚਾਂ ਤੋਂ ਨਵਾਂ ਆਧਾਰ ਬਣਾਇਆ ਜਾਵੇਗਾ। ਪੂਰਾ ਹੋਣ ਤੱਕ ਕੋਈ ਤੁਲਨਾ ਨਹੀਂ ਹੋਵੇਗੀ।",
+  },
+  // The clinician half — the decision itself.
+  reviewEyebrow: { en: "Baseline review", hi: "आधार समीक्षा", pa: "ਆਧਾਰ ਸਮੀਖਿਆ" },
+  baselineReviewTitle: {
+    en: "This patient is waiting on you",
+    hi: "यह मरीज़ आप पर निर्भर है",
+    pa: "ਇਹ ਮਰੀਜ਼ ਤੁਹਾਡੇ 'ਤੇ ਨਿਰਭਰ ਹੈ",
+  },
+  reviewNotMonitored: {
+    en: "Bands and alerts stay suppressed until you confirm. Until then this patient is not being monitored.",
+    hi: "जब तक आप पुष्टि नहीं करते, बैंड और अलर्ट रुके रहेंगे। तब तक इस मरीज़ की निगरानी नहीं हो रही।",
+    pa: "ਜਦੋਂ ਤੱਕ ਤੁਸੀਂ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕਰਦੇ, ਬੈਂਡ ਅਤੇ ਅਲਰਟ ਰੁਕੇ ਰਹਿਣਗੇ। ਉਦੋਂ ਤੱਕ ਇਸ ਮਰੀਜ਼ ਦੀ ਨਿਗਰਾਨੀ ਨਹੀਂ ਹੋ ਰਹੀ।",
+  },
+  reviewBlockers: {
+    en: "Not yet met",
+    hi: "अभी पूरा नहीं",
+    pa: "ਹਾਲੇ ਪੂਰਾ ਨਹੀਂ",
+  },
+  reviewColModule: { en: "Module", hi: "मॉड्यूल", pa: "ਮਾਡਿਊਲ" },
+  reviewColCadence: { en: "How often", hi: "कितनी बार", pa: "ਕਿੰਨੀ ਵਾਰ" },
+  reviewColSessions: { en: "Observations", hi: "अवलोकन", pa: "ਨਿਰੀਖਣ" },
+  reviewColQuality: { en: "Capture quality", hi: "कैप्चर गुणवत्ता", pa: "ਕੈਪਚਰ ਗੁਣਵੱਤਾ" },
+  reviewColState: { en: "State", hi: "स्थिति", pa: "ਸਥਿਤੀ" },
+  reviewRejected: { en: "rejected", hi: "अस्वीकृत", pa: "ਰੱਦ" },
+  reviewModuleReady: { en: "Enough repeats", hi: "पर्याप्त दोहराव", pa: "ਕਾਫ਼ੀ ਦੁਹਰਾਓ" },
+  reviewModuleCollecting: { en: "Still collecting", hi: "अभी एकत्र हो रहा", pa: "ਹਾਲੇ ਇਕੱਠਾ ਹੋ ਰਿਹਾ" },
+  reviewPrevious: { en: "Earlier decisions", hi: "पिछले निर्णय", pa: "ਪਿਛਲੇ ਫ਼ੈਸਲੇ" },
+  reviewDecision: { en: "Your decision", hi: "आपका निर्णय", pa: "ਤੁਹਾਡਾ ਫ਼ੈਸਲਾ" },
+  reviewConfirm: { en: "Confirm baseline", hi: "आधार पुष्टि करें", pa: "ਆਧਾਰ ਪੁਸ਼ਟੀ ਕਰੋ" },
+  reviewExtend: { en: "Collect more", hi: "और एकत्र करें", pa: "ਹੋਰ ਇਕੱਠਾ ਕਰੋ" },
+  reviewFlag: { en: "Flag a concern", hi: "चिंता दर्ज करें", pa: "ਚਿੰਤਾ ਦਰਜ ਕਰੋ" },
+  reviewConfirmWarning: {
+    en: "This locks the baseline and cannot be undone. Monitoring starts immediately, and every future comparison is made against these values.",
+    hi: "इससे आधार लॉक हो जाएगा और इसे पलटा नहीं जा सकता। निगरानी तुरंत शुरू होगी, और आगे की हर तुलना इन्हीं मानों से होगी।",
+    pa: "ਇਸ ਨਾਲ ਆਧਾਰ ਲਾਕ ਹੋ ਜਾਵੇਗਾ ਅਤੇ ਇਸਨੂੰ ਪਲਟਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ। ਨਿਗਰਾਨੀ ਤੁਰੰਤ ਸ਼ੁਰੂ ਹੋਵੇਗੀ, ਅਤੇ ਅੱਗੇ ਦੀ ਹਰ ਤੁਲਨਾ ਇਹਨਾਂ ਮੁੱਲਾਂ ਨਾਲ ਹੋਵੇਗੀ।",
+  },
+  reviewExtendHelp: {
+    en: "The patient keeps checking in and the window grows. Say why this one is not representative.",
+    hi: "मरीज़ जाँच करता रहेगा और अवधि बढ़ेगी। बताएँ कि यह अवधि प्रतिनिधि क्यों नहीं है।",
+    pa: "ਮਰੀਜ਼ ਜਾਂਚ ਕਰਦਾ ਰਹੇਗਾ ਅਤੇ ਮਿਆਦ ਵਧੇਗੀ। ਦੱਸੋ ਕਿ ਇਹ ਮਿਆਦ ਪ੍ਰਤੀਨਿਧ ਕਿਉਂ ਨਹੀਂ ਹੈ।",
+  },
+  reviewFlagHelp: {
+    en: "Nothing is locked. Record what needs a person to look at it.",
+    hi: "कुछ भी लॉक नहीं होगा। दर्ज करें कि किस बात पर किसी को ध्यान देना चाहिए।",
+    pa: "ਕੁਝ ਵੀ ਲਾਕ ਨਹੀਂ ਹੋਵੇਗਾ। ਦਰਜ ਕਰੋ ਕਿ ਕਿਸ ਗੱਲ 'ਤੇ ਕਿਸੇ ਨੂੰ ਧਿਆਨ ਦੇਣਾ ਚਾਹੀਦਾ ਹੈ।",
+  },
+  reviewNoteRequired: { en: "Reason (required)", hi: "कारण (आवश्यक)", pa: "ਕਾਰਨ (ਲਾਜ਼ਮੀ)" },
+  reviewNoteOptional: { en: "Note (optional)", hi: "टिप्पणी (वैकल्पिक)", pa: "ਟਿੱਪਣੀ (ਵਿਕਲਪਿਕ)" },
+  reviewNoteMissing: {
+    en: "A reason is required for this decision.",
+    hi: "इस निर्णय के लिए कारण आवश्यक है।",
+    pa: "ਇਸ ਫ਼ੈਸਲੇ ਲਈ ਕਾਰਨ ਲਾਜ਼ਮੀ ਹੈ।",
+  },
+  reviewSubmit: { en: "Record decision", hi: "निर्णय दर्ज करें", pa: "ਫ਼ੈਸਲਾ ਦਰਜ ਕਰੋ" },
+  // Roster badge, so a waiting patient is visible without opening every row.
+  reviewAwaiting: { en: "Awaiting your review", hi: "आपकी समीक्षा बाकी", pa: "ਤੁਹਾਡੀ ਸਮੀਖਿਆ ਬਾਕੀ" },
+  reviewAwaitingCount: {
+    en: "Baselines awaiting you",
+    hi: "आधार जो आप पर रुके हैं",
+    pa: "ਆਧਾਰ ਜੋ ਤੁਹਾਡੇ 'ਤੇ ਰੁਕੇ ਹਨ",
+  },
+
   adherence: { en: "Medicines taken", hi: "दवाइयाँ ली गईं", pa: "ਦਵਾਈਆਂ ਲਈਆਂ" },
   dayStreak: { en: "day streak", hi: "दिन लगातार", pa: "ਦਿਨ ਲਗਾਤਾਰ" },
   readOnly: { en: "Read-only view", hi: "केवल पढ़ने के लिए", pa: "ਸਿਰਫ਼ ਪੜ੍ਹਨ ਲਈ" },

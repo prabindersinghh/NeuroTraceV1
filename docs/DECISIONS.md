@@ -370,7 +370,7 @@ and find-in-page, which is not a trade worth making to avoid one small package.
 **D-042 · 2026-08-24 · The "outside CDSCO" claim was wrong and is removed everywhere.**
 The repo stated, in PRD.md and propagated from there into the safety-guardrail rationale,
 the Onboarding consent screen, the landing page (hero disclaimer and footer), and
-FINAL_PRODUCT_SPEC_v4.md: "D2C — Recovery Companion — Outside CDSCO device classification."
+docs/archive/FINAL_PRODUCT_SPEC_v4.md: "D2C — Recovery Companion — Outside CDSCO device classification."
 That is the project owner's own error, introduced into the specs this codebase was built
 from, and it is a live credibility risk in front of any doctor, investor, or regulator —
 not a documentation nit.
@@ -1460,3 +1460,229 @@ cleared casually: adding a key is a governance act, and whoever can run training
 the person who commits it, or the boundary the file exists to create is defeated. The
 procedure for a clinical owner to generate a keypair offline and publish only the public half
 is in `docs/GOVERNANCE_KEYS.md`. What remains open is custody, not code.
+
+**D-078 · 2026-09-03 · `docs/` stays flat. The index is the navigation, not the directory
+tree.** Thirty-nine documents in one directory is a fair complaint, and the obvious fix —
+group them into `product/`, `clinical/`, `engineering/`, `ml/` — was measured and rejected.
+The cost is 170 `docs/X.md` references across the repository plus roughly a hundred sibling
+mentions inside the documents themselves, and three tests that depend on exact paths under
+`docs/`: `test_regulatory_claims.py` (its allowlists and its `docs/**.md` scan scope),
+`test_privacy.py` (`CLINICAL_DOCS`) and `test_train.py` (model cards). Mechanically
+rewriting all of that is possible; doing it across the corpus a stranger is meant to resume
+from, to gain what a grouped index gives for free, is not a trade worth making.
+
+So the rule is: **living reference documents sit flat in `docs/`, and a subdirectory means
+one specific thing** — `plans/` is work not yet landed, `models/` is generated output,
+`archive/` is history. `docs/README.md` carries the grouping instead, as an index of what
+each document answers. If you are adding a document and it is none of those three things, it
+goes flat.
+
+The reason to record this rather than leave it implicit: a flat directory of thirty-nine
+files reads like neglect, so the next person to look at it will reach for exactly the
+reorganisation rejected here. It was not neglect, and the index is where the effort went.
+
+**D-079 · 2026-09-03 · `docs/archive/` is not a claim-bearing surface, and that is a
+preservation, not a relaxation.** Moving five executed briefs and run reports from the
+repository root into `docs/archive/` swept them into `_claim_bearing_files()`, which matches
+`docs/**.md`. Three tests failed immediately — the ninety-second figure (D-045), a
+capability overclaim, and an unlabelled accuracy figure.
+
+Every hit was the corrected claim being *recorded*: `~~still say "90-second"~~ **DONE**`;
+the original brief's own `DAILY PULSE — target 90 seconds`, which is the line D-045 later
+corrected; "*diagnosing* an imaginary deadlock", about a software deadlock; and a quoted
+*published* VNG reference range. Keeping the archive in scope would mean deleting the
+correction's own history to keep a test green, which is what `STALE_DURATION_HISTORICAL_OK`
+already calls "the opposite of what D-045 is for" when it allowlists `docs/PRD.md` §7.
+
+`docs/archive/` is excluded from `_claim_bearing_files()`, and `docs/LANDING_DESIGN_SPEC.md`
+(previously `design.md`, at the root) joins `STALE_DURATION_HISTORICAL_OK`.
+
+**The coverage is unchanged.** All five files were at the repository root until today, where
+`_claim_bearing_files()` never reached them either — it matches `docs/**.md`,
+`frontend/src/**`, and two named READMEs, and nothing else. No file that was scanned before
+stops being scanned. The strict INV-13 scan is untouched and still walks every tracked file
+honouring only `DOCUMENTATION_ALLOWLIST`: five of the six files under `docs/archive/` remain
+in it, and the sixth was already allowlisted before this session for quoting the banned
+phrasing in order to forbid it.
+
+This is written down because "a refactor made three invariant tests fail, so the invariant
+tests were narrowed" is the shape of a genuinely bad change, and the only thing separating
+this from that shape is the fact that the files were never in scope to begin with. Check
+that claim before trusting this entry — the two file sets are cheap to evaluate.
+
+**D-080 · 2026-09-03 · The doctor-in-the-loop baseline gate needed a frontend before it was
+a gate. Without one it was a trap.** Part 3.3 made a completed baseline produce a *request
+for review* rather than a lock, and the backend implements that correctly:
+`_refresh_baseline_state` moves a patient to `DOCTOR_REVIEW_PENDING` once every module
+locks, bands and alerts are suppressed while the state is not `LOCKED`, and `record_review`
+is the only exit. `PROGRESS.md` recorded the missing review UI as "a follow-up commit".
+
+It was not a follow-up. It was the difference between a demo and a product. `record_review`
+is reachable from exactly one route, `POST /clinician/baseline/{id}/review`, and **nothing
+in the frontend called it** — `api.ts` had no baseline method of any kind. So a real patient
+completed twelve or more sessions, entered `DOCTOR_REVIEW_PENDING`, and stayed there
+permanently: never monitored, never alerted on, with no screen anywhere able to move them
+out. The caregiver's dashboard rendered every non-`LOCKED` state through one card, so what
+they saw was "baseline progress 12 / 12" with the bar pinned at 100% — forever — and the
+identical card for a baseline that had been `ABANDONED`.
+
+**Every suite was green throughout, and the demo worked.** It worked because
+`services/seed.py` calls `record_review` in Python. The only exercised path skipped HTTP
+entirely, so the one route that mattered was covered by route tests and reachable by nobody.
+That is the shape worth remembering: a route with no caller is invisible to `tsc`, to
+`vitest`, and to `pytest` at once, and no amount of green says otherwise.
+
+What landed: `BaselineReviewPanel` (the three actions the server accepts, the per-module
+evidence including `cadence_note` so a Comprehensive-only module's ~6 observations are not
+misread as thin data against a Daily Pulse module's ~21 — D-043/D-044, the server's own
+synthetic-model disclosure, and the previous-decision log), the caregiver-facing
+`BaselineStatusCard` that separates awaiting-review and abandoned from still-collecting in
+all three languages, and a roster badge plus a corrected metric on `Clinic.tsx` — that
+metric counted every non-`LOCKED` patient under an "awaiting review" caption, folding
+patients who were waiting on nobody into a clinician's own queue.
+
+`CONFIRM` is the only action whose consequence is spelled out, because it is the only one
+that is irreversible and the only one that starts monitoring. A note is required for
+`EXTEND` and `FLAG_CONCERN` and optional for `CONFIRM`, matching `record_review` exactly —
+demanding prose for the common action is how a clinical gate becomes a box someone types
+"ok" into.
+
+`frontend/src/lib/baselineGate.test.ts` pins reachability. Its client-method assertions run
+against the **exported `api` object**, not the source text: the first draft used
+`toContain("submitBaselineReview")`, which still passed after the method was renamed to
+`submitBaselineReviewXX` — a reachability test that cannot detect the method disappearing
+is decoration. The mutation was run both ways before the test was kept.
+
+**D-081 · 2026-09-03 · `app/ml/scoring.py` and `app/ml/face.py` are deleted, and INV-1 is
+now structural on the face path too.** Both had zero callers outside their own tests, and
+both were actively dangerous to read.
+
+`scoring.py` was a second, complete alert implementation — bands, a sustained-deviation
+window, a cross-modality requirement — with **no laterality gate at all**. It would raise an
+`ALERT` on exactly the symmetric Parkinsonian decline that INV-2 and `engine/gates.py`
+exist to keep out, and it did so in seventy well-commented lines that read like the product.
+Its acceptance test, `test_alert_gate_sim.py`, was labelled the PRD §7 criterion — zero
+false alerts across a stable week — and verified it against the dead implementation.
+`test_engine.py` and `test_laterality.py` already cover the same criterion against the live
+gate (`test_quiet_sessions_are_stable`, `test_two_domains_sustained_is_alert`,
+`test_two_domains_sustained_without_laterality_is_not_an_alert`), which is why deleting the
+sim test loses no coverage. This was checked before it was deleted, not after.
+
+`face.py` took a **video path** and opened it with OpenCV. Server-side media processing is
+the exact shape INV-1 forbids, and it was the sole reason `mediapipe`, `opencv-python` and
+`protobuf` were runtime dependencies — and therefore the sole reason this backend was pinned
+to Python 3.11 and numpy 1.x. Removing it does for the face path what removing
+`python-multipart` did for uploads (D-052): the libraries required to process media on the
+server are simply absent, so a future attempt fails at import rather than at review. `libgl1`
+and `libglib2.0-0` are gone from the Dockerfile for the same reason, and so is its unused
+writable `/app/media` directory.
+
+`requirements.lock.txt` is left **stale and labelled stale** rather than hand-pruned. It is
+a transitive freeze; editing it by hand to drop mediapipe's pulls without regenerating it
+from a clean environment produces a lock that is wrong in a way nobody can see. The
+Dockerfile installs from `requirements.txt`, so deploys are already correct.
+
+`baseline.py`, `explain.py` and `reaction.py` are the same class of dead twin — superseded
+by `app/engine/` — and are kept for now only because tests still exercise them. They are
+labelled in `app/ml/__init__.py`. Do not build on them.
+
+**D-082 · 2026-09-03 · Consent and erasure got the surfaces they were always missing, and
+`PatientRead` had to stop rejecting its own tombstones.** Part 4 shipped seven independently
+withdrawable consents and Part 5.4 shipped a real erasure. Neither had a caller. Consents
+were only ever WRITTEN — by enrolment and by `POST /clinician/links`, which grants C3 in the
+same transaction as the link — so a caregiver could grant clinician sharing by adding a
+doctor and then had no way to see it, let alone withdraw it. `DELETE /patients/{id}` had no
+caller at all.
+
+`/privacy/:patientId` now lists all seven with their real state, and carries the erasure.
+Three things it deliberately gets right:
+
+**It does not claim enforcement it does not have.** Only C3 and C7 have a runtime gate —
+`consent_currently_granted` is read by `clinician_may_access_patient` and
+`caretaker_may_access_patient` on every scoped route, so a withdrawal bites immediately and
+independently of whether the link row is still active. This was verified against a running
+server, not assumed: withdrawing C3 with the link still ACTIVE dropped the demo clinician's
+roster from 1 to 0 and turned `GET /dashboard/{id}` from 200 into 403, and re-granting
+restored both. The other five are recorded decisions with nothing behind them, so their rows
+say so and point at erasure, which is the control that actually removes data. Telling a
+caregiver that switching off `DATA_PROCESSING` stops the processing would be a lie.
+
+**Never asked is not consent.** `consent_currently_granted` returns false for a missing row.
+An unchecked box alone could read as a default someone chose, so the absence is stated in
+words. The demo seed makes this concrete: it grants C3 and leaves C1 and C2 with no row at
+all, so the demo patient is monitored with no recorded consent to use the product. The screen
+now says that rather than hiding it.
+
+**The erasure confirmation is two deliberate acts, not a typed name.** "Type the patient's
+name to confirm" is hostile to this cohort specifically: names are in Devanagari or Gurmukhi,
+the phone keyboard is frequently set to English, and the person confirming is 55-75. It would
+block the legitimate case far more often than the accidental one. A required reason plus an
+explicit acknowledgement is two considered acts with no script trap, and the reason is stored
+on the tombstone and in the audit row.
+
+**The bug this work found is worse than the missing UI.** `erase_patient_data` sets
+`patient.name = ""` — correct, because the honest value after an erasure is nothing rather
+than a fabricated placeholder. `PatientBase.name` carried `Field(min_length=1)` and
+`PatientRead` inherited it, so every route with `response_model=PatientRead` raised
+`string_too_short` on that row. Because `GET /patients` validates the whole list, **one
+erasure returned 500 for that caregiver's entire roster, permanently** — including patients
+who were never erased. Erasing one parent's data would have bricked the other's card.
+
+It survived because `test_erasure.py` proves the deletion by querying the database directly
+and nothing ever listed the caregiver's patients over HTTP afterwards. It was found by
+driving a real erasure against a running server. The constraint is right for input and wrong
+for output — a read schema has to represent what the database legitimately holds — so it is
+overridden on `PatientRead` only; `PatientCreate` and `PatientUpdate` still refuse an empty
+name, and `test_erasure_roster.py` asserts all three. `erased_at` is exposed on the same
+schema for the same reason: without it a client cannot tell a tombstone from a patient whose
+name failed to load, and the roster rendered a permanently blank card.
+
+**D-083 · 2026-09-03 · The Awaaz merge is integrated and working, except at one seam — and
+the seam is deliberate.** Asked to confirm that main's line and the merged
+`anish/awaaz-contract-foundation` actually work together, the whole surface was driven
+against a running server rather than read.
+
+**What works.** Migrations `0021`/`0022` apply clean to a single head. Every Awaaz read route
+returns 200. The listener capability mints, is openable by an unauthenticated stranger,
+carries the caregiver's chosen display name and **not** the enrolled patient name, and 404s
+after revocation. The policy contract enforces both of its gates — 409 without explicit
+logging consent, and 409 when `requires_confirmation` is false, because randomising a slate
+that may be spoken unconfirmed is exploration on a patient's mouth. With both satisfied the
+server draws the propensity itself (0.92 on a 0.90/0.88 near-tie, matching D-063's 0.05 band
+and its ≥0.84 floor), the outcome write validates its own evidence, and a replayed outcome
+returns the SAME row id rather than a second observation. The written row carries no patient
+column and `logged_on` is a DATE, as designed.
+
+**An earlier audit note in this session claimed the client never calls any of it. That was
+wrong** — it grepped components for `awaazPolicyDecision` and missed the indirection through
+`lib/awaazPolicyLog.ts`, which `Awaaz.tsx` imports and calls at ten sites covering slate open
+and all five outcomes. The claim is corrected in `PROGRESS.md` and `CHANGELOG.md` rather than
+quietly removed, because "no component calls this" is the kind of wrong that gets working
+code deleted.
+
+**The seam.** `/awaaz/{patient_id}/speak` returns `candidates: list[str]` — unscored, and in
+practice exactly one, confirmed across five different inputs. `AwaazPolicyDecisionRequest`
+requires two or more candidates each carrying the ranker's `score`. So
+`scoredSlateFromSpeakResult` returns `null` unconditionally and no slate is ever opened:
+the entire pipeline is built, wired, and inert, and `awaaz_policy_events` will not receive a
+real product event until the speak contract carries per-candidate scores.
+
+**This must not be "fixed" by inventing scores**, and the commit that built it (`42ac6dc`)
+stopped short for the same reason. The near-tie exploration distribution is defined entirely
+in terms of those scores, so a client that supplied all-equal values or a decay by position
+would be manufacturing the tie structure the propensity is drawn over, and every recorded
+propensity would be the probability of a draw across a ranking that does not exist. That is
+precisely the corruption the "server owns the randomisation" rule exists to prevent. The
+integration is therefore correct as it stands; what is missing is a real ranker producing
+alternatives, which is product work and not a merge defect.
+
+**A second seam, and this one is a genuine collision.** Policy-logging consent is a
+`localStorage` flag (`readPolicyLoggingConsent`) that the client asserts as
+`payload.policy_logging_consent`, and the server trusts it. It is therefore invisible to
+`GET /consents/{patient_id}`, cannot be withdrawn from the privacy screen D-082 just built,
+is lost on a cache clear or a change of device, and is unprovable server-side. The two lines
+each built a consent mechanism and neither knows the other exists. PRD_AWAAZ §10.2 is right
+that analytics logging is its own purpose and must not ride on another consent — but "its own
+purpose" argues for an eighth `ConsentType`, not for a different storage mechanism with
+weaker guarantees than the seven beside it. Not changed here: it needs a migration and an
+enum value, and it is worth doing deliberately rather than as a footnote to a UI commit.

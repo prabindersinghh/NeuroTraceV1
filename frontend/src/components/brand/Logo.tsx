@@ -11,7 +11,7 @@
  * WHY IT IS NOT THE PNG. INV-11 permits no tracked image in this repository: the privacy
  * scanner treats any tracked image as a possible patient photo, and `preflight_push.sh`
  * fails on one before a reviewer ever sees it. Tracing keeps the exact mark and adds no
- * raster. It also gives what DESIGN_LANGUAGE.md §2.0 asks for — a geometric mark that holds
+ * raster. It also gives what docs/DESIGN_LANGUAGE.md §2.0 asks for — a geometric mark that holds
  * its shape at ~16px and takes its colour from `currentColor`.
  *
  * The source ratio is 1.156:1 (1133x980), preserved by centring the trace in a square

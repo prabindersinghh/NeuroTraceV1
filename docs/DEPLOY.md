@@ -111,8 +111,8 @@ cannot risk it, Neon's paid tier disables suspend.
    > [railway] prepare railpack-v0.37.0
    >     ├── scripts/
    >     ├── .gitignore
-   >     ├── CLINICAL_AMENDMENT_v3.md
-   >     ├── FINAL_PRODUCT_SPEC_v4.md
+   >     ├── CLAUDE.md
+   >     ├── docs/
    >     └── README.md
    > Failed to build an image.
    > ```

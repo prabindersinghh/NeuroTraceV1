@@ -1,0 +1,75 @@
+name: Bug report
+description: Something behaves differently from what the documents say it does.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you write anything: no patient data.** No names, no hospital identifiers,
+        no photographs, no audio, no session exports. INV-11 forbids a patient identifier
+        anywhere in this repository, and an issue is part of the repository.
+
+        If this is a security or privacy problem, close this and follow
+        [docs/SECURITY.md](../blob/main/docs/SECURITY.md) instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The observed behaviour, and what you expected instead.
+    validations: { required: true }
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest sequence that produces it. A failing test is ideal.
+      placeholder: |
+        1. …
+        2. …
+        3. Observed: …  Expected: …
+    validations: { required: true }
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Backend — engine / gates / baseline
+        - Backend — exam modules or scheduling
+        - Backend — API, auth or migrations
+        - Backend — ML or training runtime
+        - Frontend — exam flow
+        - Frontend — dashboard or clinician views
+        - Frontend — on-device extraction (camera / mic / MediaPipe)
+        - Awaaz (communication assistant)
+        - Documentation
+        - Deployment / infrastructure
+        - Not sure
+    validations: { required: true }
+
+  - type: input
+    id: invariant
+    attributes:
+      label: Invariant involved
+      description: >-
+        If a test from CONTRIBUTING.md §3 fails, name it. A failing invariant is the
+        finding, not an obstacle.
+      placeholder: INV-2 — an ALERT was raised with no lateralised finding
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      value: |
+        - Where: local / neurotracev1-production.up.railway.app / neuro-trace-v1.vercel.app
+        - Commit:
+        - Python / Node:
+        - Browser and device (if frontend):
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Test output, tracebacks or console errors. Redact anything patient-shaped.
+      render: shell

@@ -708,33 +708,48 @@ Show the FAST card and make the distinction explicit:
 # Repository layout
 
 ```text
-NeuroTraceV1/
-├── backend/
+NeuroTrace/
+├── backend/                  FastAPI · SQLAlchemy · Alembic · Python 3.11
 │   ├── app/
-│   │   ├── engine/        baseline · robust deviation · RCI · CUSUM · gates · confounders
-│   │   ├── exam/          neurological exam modules and session orchestration
-│   │   ├── safety/        FAST · acute bypass · forbidden-language guards
-│   │   ├── slm/           prompts · guardrails · deterministic templates
-│   │   ├── ml/            reference extractors + training-stage models
-│   │   ├── routers/       auth · patients · sessions · dashboards · clinical data · safety
-│   │   └── services/      session pipeline · seed · synthetic fixtures
-│   ├── tests/             backend test suite
-│   └── tools/             parity-fixture generation
-├── frontend/
+│   │   ├── auth/             JWT · password hashing · route dependencies
+│   │   ├── awaaz/            communication assistant — listener · convergence · safety
+│   │   ├── engine/           baseline · robust deviation · RCI · CUSUM · gates · confounders
+│   │   ├── exam/             21 exam modules · registry · scheduler · session planning
+│   │   ├── ml/               reference extractors · scoring · explanation layer
+│   │   │   ├── rl/           offline policy evaluation for Awaaz ranking (offline only)
+│   │   │   └── train/        training pipeline + governance-gated ASR runtime
+│   │   ├── routers/          14 routers — auth · patients · sessions · dashboards · safety
+│   │   ├── safety/           FAST · acute-symptom bypass · forbidden-language guards
+│   │   ├── services/         session pipeline · consent · erasure · notifications · seed
+│   │   ├── slm/              prompts · guardrails · deterministic templates
+│   │   ├── models.py         ORM tables and the enums the API mirrors
+│   │   └── schemas.py        every wire model — no field anywhere accepts a file
+│   ├── alembic/              22 migrations
+│   ├── tests/                42 test modules
+│   └── tools/                parity-fixture generation
+├── frontend/                 React 18 · TypeScript · Vite · Tailwind · PWA
 │   └── src/
-│       ├── lib/ondevice/  on-device extractors + JS↔Python parity tests
-│       ├── lib/           API · auth · i18n · capture · offline queue · speech
-│       ├── components/    FastCard · EmergencyButton · charts · app shell
-│       └── routes/        Login · Patient · Caregiver · Exam · Dashboard · Clinic
-└── docs/
-    ├── CONTEXT_BRIEF.md
-    ├── PRD.md
-    ├── TRD.md
-    ├── DATASETS.md
-    ├── DEVELOPMENT.md
-    ├── DEMO_SCRIPT.md
-    └── DEPLOY.md
+│       ├── components/       app shell · FAST card · emergency button · charts
+│       │   ├── brand/        logo and wordmark
+│       │   ├── landing/      public landing-page sections
+│       │   ├── motion/       shared animation primitives
+│       │   └── ui/           the component vocabulary — button · card · field · metric
+│       ├── lib/              API · auth · i18n · capture · offline queue · Awaaz
+│       │   └── ondevice/     on-device extractors + JS↔Python parity tests
+│       └── routes/           Login · Patient · Caregiver · Clinic · Dashboard · Awaaz
+│           └── exam/         the protocol runner and its eleven task steps
+├── docs/                     39 documents — start at docs/README.md
+│   ├── plans/                feature plans not yet landed
+│   ├── models/               generated model cards
+│   └── archive/              executed briefs and run reports — nothing current
+├── scripts/                  privacy preflight · deploy verification · demo seeding
+└── .github/                  CI · issue templates · CODEOWNERS
 ```
+
+**Where to start reading.** [`docs/README.md`](docs/README.md) maps every document by the
+question it answers. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the invariants, the
+verification commands, and the privacy gate. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+§6 is the invariant list itself — each one has a test.
 
 ---
 
@@ -777,6 +792,10 @@ Requires **Python 3.11**, **Node 18+**, **PostgreSQL 15**.
 git clone https://github.com/prabindersinghh/NeuroTraceV1.git
 cd NeuroTraceV1
 
+# The privacy gate. Once per clone, before your first push — it runs seven checks that
+# keep patient material out of the repository, and it is not optional. See CONTRIBUTING.md.
+git config core.hooksPath .githooks
+
 # backend
 cd backend
 py -3.11 -m venv .venv && .venv/Scripts/activate    # macOS/Linux: source .venv/bin/activate
@@ -807,6 +826,27 @@ No PostgreSQL? The backend test suite can run against SQLite:
 cd backend
 pytest
 ```
+
+---
+
+# Contributing
+
+Read **[CONTRIBUTING.md](CONTRIBUTING.md)** first. It has the fourteen invariants, the
+verification commands, the privacy gate, and the three things this repository learned the
+hard way about running its own test suite.
+
+The short version:
+
+| | |
+|---|---|
+| **Where is the documentation?** | [`docs/README.md`](docs/README.md) maps all thirty-nine documents by the question each one answers. |
+| **What is the current state?** | [`docs/PROGRESS.md`](docs/PROGRESS.md). |
+| **Why is it like this?** | [`docs/DECISIONS.md`](docs/DECISIONS.md) — check before changing something that looks wrong. |
+| **What must never break?** | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6. Each invariant has a test; a failing one is the finding, not an obstacle. |
+| **Can I quote an accuracy number?** | No. [`docs/ML_STATUS.md`](docs/ML_STATUS.md) — every model here is trained on synthetic fixtures. |
+
+Security or privacy issues do **not** go in a public issue — follow
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 ---
 

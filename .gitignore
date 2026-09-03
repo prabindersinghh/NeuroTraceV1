@@ -20,6 +20,13 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# ---- local agent/session state ----
+# `.claude/settings.json` IS tracked - it is the shared project configuration. Personal
+# overrides are not. `.remember/` self-ignores via its own .gitignore, but only where one
+# exists; a stray copy appeared once under frontend/ when a command ran from there.
+.claude/settings.local.json
+.remember/
+
 # ---- build / tooling caches ----
 .cache/
 .tmp/

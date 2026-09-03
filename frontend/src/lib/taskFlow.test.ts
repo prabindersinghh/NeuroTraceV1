@@ -13,7 +13,7 @@
  * adding jsdom and @testing-library inside a UX branch. Source scanning is already this
  * codebase's idiom for exactly this class of guard — `backend/tests/test_privacy.py`,
  * `test_invariants.py` and `test_regulatory_claims.py` all work this way. The limitation is
- * real and recorded in UX-CHANGES.md: a render-level harness is the right follow-up, and
+ * real and recorded in docs/archive/UX-CHANGES.md: a render-level harness is the right follow-up, and
  * these scans are chosen so they fail on the specific regressions that actually occurred,
  * not merely on the presence of a keyword.
  */

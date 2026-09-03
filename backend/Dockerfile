@@ -1,4 +1,6 @@
-# NeuroTrace backend — Python 3.11 (mediapipe 0.10.14 has no 3.12 wheels).
+# NeuroTrace backend — Python 3.11.
+# The 3.11 pin was mediapipe's; mediapipe is gone (see app/ml/__init__.py). Kept because
+# 3.11 is the verified environment, not because anything here still requires it.
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -6,15 +8,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# libgl1 / libglib2.0-0  -> OpenCV + MediaPipe runtime
-# ffmpeg / libsndfile1    -> librosa & soundfile audio decoding (webm/ogg from the browser)
-# build-essential         -> praat-parselmouth sdist fallback if no wheel matches
+# ffmpeg / libsndfile1  -> librosa & soundfile audio decoding (webm/ogg from the browser)
+# build-essential       -> praat-parselmouth sdist fallback if no wheel matches
+# libgl1 / libglib2.0-0 are GONE with OpenCV/MediaPipe. Do not re-add them to "fix" an
+# import error: on this backend that error means something is trying to process media
+# server-side, which is INV-1.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ffmpeg \
         libsndfile1 \
-        libgl1 \
-        libglib2.0-0 \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,8 +31,9 @@ COPY app ./app
 COPY tests ./tests
 COPY pytest.ini .
 
+# No /app/media. Nothing wrote to it, and a writable media directory on this server is a
+# standing invitation to break INV-1.
 RUN useradd --create-home --uid 10001 neurotrace \
-    && mkdir -p /app/media \
     && chown -R neurotrace:neurotrace /app
 USER neurotrace
 

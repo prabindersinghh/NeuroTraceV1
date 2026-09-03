@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security or privacy issue
+    url: https://github.com/prabindersinghh/NeuroTraceV1/blob/main/docs/SECURITY.md
+    about: >-
+      Do NOT open a public issue. NeuroTrace handles patient data — follow the reporting
+      path in docs/SECURITY.md instead.
+  - name: Where is the documentation?
+    url: https://github.com/prabindersinghh/NeuroTraceV1/blob/main/docs/README.md
+    about: All thirty-nine documents, mapped by what they answer.

@@ -44,7 +44,7 @@ TIME_OF_DAY_TOLERANCE_HOURS = 2.0
 # `build_baseline` was always parameterised to accept a different `lock_at` per call — but
 # every call site passed the same flat constant, for every module, regardless of how often
 # that module is actually measured. That was silently fine for as long as every module ran
-# daily (the case until Part 2 of TASK_FINAL_TECHNICAL_COMPLETION.md), because "12
+# daily (the case until Part 2 of docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md), because "12
 # observations" and "12 days" were the same thing. They stop being the same thing the
 # moment a Comprehensive-only module runs twice weekly instead of daily: 12 observations at
 # 2/week is six calendar weeks, not the ~21-day window the product positions as core
@@ -53,7 +53,7 @@ TIME_OF_DAY_TOLERANCE_HOURS = 2.0
 # The fix is a lower n for slower cadences, chosen so the REAL-WORLD lock time lands near
 # the same ~3-week neighbourhood a daily module reaches, rather than leaving it at whatever
 # a flat count happens to imply. These are the DEFAULT session-type cadences from
-# TASK_FINAL_TECHNICAL_COMPLETION.md Part 2 (Daily Pulse = daily, Comprehensive Follow-up =
+# docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md Part 2 (Daily Pulse = daily, Comprehensive Follow-up =
 # twice weekly default) plus the pre-existing WEEKLY/MONTHLY module schedules
 # (`exam/registry.py`) for modules that fall outside both layers (e.g. the monthly-only
 # battery). DISCARD_FIRST_N_SESSIONS is deliberately left flat at 3 for every cadence here:

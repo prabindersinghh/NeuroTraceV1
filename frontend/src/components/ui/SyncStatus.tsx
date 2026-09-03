@@ -17,7 +17,7 @@
  * sessions without anyone asking is a behaviour change on the data path, not a UX polish —
  * `syncPending` replays in strict capture order because the alert gate is a function of
  * consecutive sessions, and an unattended retry loop needs its own thinking about
- * concurrency, partial failure and duplicates. That is recorded in UX-CHANGES.md as
+ * concurrency, partial failure and duplicates. That is recorded in docs/archive/UX-CHANGES.md as
  * deferred. Here the send is explicit, one tap, and the user can see the count go down.
  *
  * RESTRAINT

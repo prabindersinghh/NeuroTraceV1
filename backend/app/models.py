@@ -89,7 +89,7 @@ class WearableMetric(str, enum.Enum):
 
 
 class SessionType(str, enum.Enum):
-    """What kind of session this was — TASK_FINAL_TECHNICAL_COMPLETION.md Part 2.
+    """What kind of session this was — docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md Part 2.
 
     Renamed from `daily | weekly | monthly` (D-044): those values described a MODULE's
     measurement schedule, not a SESSION, and the values never actually differentiated

@@ -60,7 +60,7 @@ DOCUMENTATION_ALLOWLIST = {
     "docs/DECISIONS.md",
     "docs/CHANGELOG.md",
     "docs/PROGRESS.md",
-    "TASK_FINAL_TECHNICAL_COMPLETION.md",
+    "docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md",
 }
 
 #: Each pattern is a regulatory-exemption ASSERTION shape, not a bare risky word — "exempt"
@@ -385,6 +385,24 @@ def _claim_bearing_files() -> list[str]:
     for rel in _tracked_files():
         if rel in DOCUMENTATION_ALLOWLIST or rel.startswith("backend/tests/"):
             continue
+        # `docs/archive/` is executed build briefs and finished run reports. A report's job
+        # is to record that a claim WAS made and then corrected -- "~~still say '90-second'~~
+        # DONE", "the figure D-045 corrected" -- so scanning it as a live claim surface
+        # would force the correction's own history to be deleted to keep the test green.
+        # That is the reasoning `STALE_DURATION_HISTORICAL_OK` already applies to
+        # `docs/PRD.md`, applied to a whole directory whose README opens with "Nothing here
+        # is current."
+        #
+        # This preserves coverage rather than relaxing it: all five files sat at the
+        # repository ROOT until 2026-09-03, where this function never reached them either.
+        # Nothing that was scanned before this exclusion stops being scanned.
+        #
+        # They remain under the STRICT INV-13 scan below (`_scan` walks `_tracked_files()`
+        # and honours only `DOCUMENTATION_ALLOWLIST`), so a regulatory-exemption claim in an
+        # archived file still fails the build. Only the softer capability/duration/metric
+        # heuristics skip them.
+        if rel.startswith("docs/archive/"):
+            continue
         if rel.startswith("frontend/src/") and rel.endswith((".tsx", ".ts")):
             out.append(rel)
         elif rel.startswith("docs/") and rel.endswith(".md"):
@@ -422,6 +440,11 @@ STALE_DURATION = re.compile(
 #: from "recording that we used to say 90s" is exactly the kind that fails open (D-030).
 STALE_DURATION_HISTORICAL_OK = {
     "docs/PRD.md",
+    # Was `design.md` at the repository root (never scanned) until 2026-09-03. Both of its
+    # hits are the rejected claim quoted in order to reject it -- a table row reading
+    # "~~a ninety-second promise~~ **REJECTED, D-045**", and the paragraph under it saying
+    # the superseded claims are "reproduced above on purpose". Same category as PRD.md §7.
+    "docs/LANDING_DESIGN_SPEC.md",
 }
 
 

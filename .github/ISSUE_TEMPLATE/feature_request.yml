@@ -1,0 +1,53 @@
+name: Change or feature
+description: Propose something the product should do differently.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Check [docs/DECISIONS.md](../blob/main/docs/DECISIONS.md) first.** This project
+        records why things are the way they are, and a surprising amount of what looks like
+        an oversight is a decision with a reason attached. If you are contradicting one, say
+        which — that is a much stronger proposal than one that has not noticed.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Who is stuck, and on what? Describe the situation, not the solution.
+    validations: { required: true }
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations: { required: true }
+
+  - type: input
+    id: decision
+    attributes:
+      label: Decision this contradicts
+      description: A D-number from docs/DECISIONS.md, or "none".
+      placeholder: none
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints this respects
+      description: These are not negotiable. Tick each one you have thought about.
+      options:
+        - label: Raw media still never leaves the device (INV-1)
+          required: true
+        - label: No patient identifier enters the repository (INV-11)
+          required: true
+        - label: It makes no accuracy, lead-time or outcome claim — every model here is trained on synthetic fixtures
+          required: true
+        - label: Patient-facing text stays English + Hindi + Punjabi, 20px minimum, 64px tap targets
+        - label: It still works on a low-end phone, offline
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else you considered
+      description: Including doing nothing. The best outcome for many proposals is a
+        documented decision not to build it.

@@ -27,8 +27,13 @@ import type {
   AwaazPolicyOutcomePayload,
   AwaazReviewLabelPayload,
   AwaazSpeakPayload,
+  BaselineReviewAction,
+  BaselineReviewView,
+  BaselineState,
   Battery,
   ClinicPatientRow,
+  ConsentStatus,
+  ConsentType,
   Dashboard,
   ExamReport,
   ExamSession,
@@ -272,6 +277,60 @@ export const api = {
     onboarding_complete?: boolean;
   }) => request<Patient>(`/patients/${id}`, { method: "PATCH", json: payload }),
 
+
+  // --- consent and erasure (Part 4, Part 5.4) ---
+  // Both are owning-caregiver-only server-side. Until these existed, the seven consents
+  // could be granted (the enrolment flow and `POST /clinician/links` write them) but never
+  // READ BACK OR WITHDRAWN by anyone, and erasure had no caller at all — a right that
+  // cannot be exercised is not a right.
+  consents: (patientId: string) => request<ConsentStatus>(`/consents/${patientId}`),
+
+  // Returns the FULL status, not just the one that changed, so a settings screen re-renders
+  // from the server's answer rather than from what it hoped happened. Withdrawing C3 or C7
+  // takes effect immediately and server-side (`consent_currently_granted`), independently of
+  // whether the link row is still active.
+  setConsent: (
+    patientId: string,
+    consentType: ConsentType,
+    payload: { granted: boolean; version?: string | null; device_context?: string | null },
+  ) =>
+    request<ConsentStatus>(`/consents/${patientId}/${consentType}`, {
+      method: "PUT", json: payload,
+    }),
+
+  // `reason` is a QUERY parameter here, exactly as on `invalidateBaseline` — see
+  // `routers/patients.py:delete_patient`, where it is a bare `str | None` default arg.
+  // 409 if already erased; the response `detail` carries the per-table removal counts.
+  erasePatient: (patientId: string, reason: string) =>
+    request<{ detail: string }>(
+      `/patients/${patientId}?reason=${encodeURIComponent(reason)}`,
+      { method: "DELETE" }),
+
+  // --- the doctor-in-the-loop baseline gate (Part 3.3/3.4) ---
+  // Until these existed, `DOCTOR_REVIEW_PENDING` was a terminal state in practice: the
+  // engine puts a patient there once every module locks, `record_review` is the only way
+  // out, and nothing on this side could call it. A real patient completed their baseline
+  // and was then never monitored, with no screen able to say so. The demo only worked
+  // because `services/seed.py` calls `record_review` in Python, bypassing HTTP entirely.
+  baselineReview: (patientId: string) =>
+    request<BaselineReviewView>(`/clinician/baseline-review/${patientId}`),
+
+  submitBaselineReview: (
+    patientId: string, payload: { action: BaselineReviewAction; note?: string | null },
+  ) =>
+    request<{
+      id: string;
+      action: BaselineReviewAction;
+      baseline_state: BaselineState;
+      reviewed_at: string;
+    }>(`/clinician/baseline/${patientId}/review`, { method: "POST", json: payload }),
+
+  // `reason` is a QUERY parameter on this route, not a body field - see
+  // `routers/clinician.py:invalidate`. Sending it as JSON silently 422s.
+  invalidateBaseline: (patientId: string, reason: string) =>
+    request<{ detail: string }>(
+      `/clinician/baseline/${patientId}/invalidate?reason=${encodeURIComponent(reason)}`,
+      { method: "POST" }),
 
   // --- wearables (TIER_2+) ---
   wearableSeries: (patientId: string, metric?: string, days = 30) =>

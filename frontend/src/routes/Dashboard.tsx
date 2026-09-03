@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { BaselineReviewPanel, BaselineStatusCard } from "@/components/BaselineReviewPanel";
 import { CcgComparison } from "@/components/CcgComparison";
 import { DomainChart } from "@/components/DomainChart";
 import { Metric } from "@/components/ui/metric";
@@ -269,25 +270,18 @@ export function Dashboard() {
       </div>
 
       {data.baseline.state !== "LOCKED" && (
-        <Card className="mb-6 border-accent/30 bg-accent/5">
-          <CardContent className="flex flex-wrap items-center gap-4 p-5">
-            <div className="flex-1">
-              <p className="font-medium">
-                {t("baselineProgress")} — {data.baseline.min_sessions} / {data.baseline.required_sessions}{" "}
-                {t("sessionsRecorded")}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{t("baselineNote")}</p>
-            </div>
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full bg-accent"
-                style={{
-                  width: `${Math.min(100, (data.baseline.min_sessions / data.baseline.required_sessions) * 100)}%`,
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <BaselineStatusCard
+          state={data.baseline.state}
+          minSessions={data.baseline.min_sessions}
+          requiredSessions={data.baseline.required_sessions}
+        />
+      )}
+
+      {/* The decision itself, for the clinician who can actually make it. Rendered above
+          everything clinical because until it is made there is nothing clinical to read:
+          bands and alerts are suppressed server-side in this state. */}
+      {readOnly && data.baseline.state === "DOCTOR_REVIEW_PENDING" && (
+        <BaselineReviewPanel patientId={data.patient.id} onReviewed={() => void load()} />
       )}
 
       {data.latest ? (

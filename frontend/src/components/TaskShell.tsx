@@ -12,7 +12,7 @@
  *
  * Whether to route the runner through this component or retire it is a deliberate open
  * decision, to be taken on its own branch and ideally after physical-phone validation —
- * see UX-CHANGES.md, "Deferred — needs its own PLAN". Until then the LIVE rules are
+ * see docs/archive/UX-CHANGES.md, "Deferred — needs its own PLAN". Until then the LIVE rules are
  * enforced in `ProtocolRunner` and pinned by `lib/taskFlow.test.ts`; the two-retry limit
  * itself is shared from `lib/taskFlow.ts` so the two cannot drift apart.
  *
