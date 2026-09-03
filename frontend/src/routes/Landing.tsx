@@ -17,7 +17,7 @@
  * claiming a reach we have not achieved.
  *
  * THE SHAPE. An overture, then the evidence. `SignalScene` states the whole argument in
- * six acts against one continuous visual; everything after it is the substantiation, in
+ * seven acts against one continuous visual; everything after it is the substantiation, in
  * the order a sceptic would ask for it — whose normal, what stops a false alarm, what a
  * real run looks like, what is actually measured, what leaves the phone, where it can run,
  * and what we do not claim.
@@ -33,7 +33,7 @@
  * MOTION
  * ------
  * Every scroll-linked effect on this page runs off the single rAF ticker in `lib/motion`
- * and writes to the DOM or a canvas directly, so scrubbing six arrangements does not
+ * and writes to the DOM or a canvas directly, so scrubbing seven arrangements does not
  * reconcile a React tree sixty times a second. The GPU field is `CortexField`, which is
  * raw WebGL2 and no library — see D-039, D-064 and that file's header for why three.js
  * and GSAP are both absent on a page that is unusually motion-heavy. Smooth scrolling is

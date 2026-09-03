@@ -495,6 +495,28 @@ export interface ExamReport {
 
 
 // ------------------------------------------------------------------ Awaaz
+/**
+ * Which impairment dominates — the gate INV-9 turns on. Mirrors `SpeechProfile` in
+ * `backend/app/awaaz/safety.py`; the server is the authority and rejects anything else.
+ * `unassessed` is not offered as a choice, only reported: it is the state of not having
+ * decided, and choosing it deliberately is not a thing a clinician does.
+ */
+export const AWAAZ_SPEECH_PROFILES = [
+  "dysarthria_dominant",
+  "aphasia_dominant",
+  "mixed",
+] as const;
+
+export type AwaazSpeechProfile = (typeof AWAAZ_SPEECH_PROFILES)[number] | "unassessed";
+
+export interface AwaazProfileUpdate {
+  speech_profile?: AwaazSpeechProfile;
+  auto_speak_enabled?: boolean;
+  /** Clamped server-side to >= 0.70. Nobody may buy fewer taps below that. */
+  auto_speak_threshold?: number;
+  endpoint_silence_seconds?: number;
+}
+
 export interface AwaazProfile {
   patient_id: string;
   /** dysarthria_dominant may auto-speak; everything else confirms first (INV-9). */

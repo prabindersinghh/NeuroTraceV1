@@ -49,6 +49,15 @@ export interface SpeakOptions {
   rate?: number;
   onEnd?: () => void;
   /**
+   * Speak even when the patient's "spoken instructions" switch is off.
+   *
+   * That switch means "do not read the screen to me". On Awaaz the speech IS the output —
+   * it is the patient talking, not the app narrating — so muting it there would silence a
+   * person rather than quieten an interface. The communication board sets this; nothing
+   * that merely narrates should.
+   */
+  essential?: boolean;
+  /**
    * Say this AFTER whatever is already being said, instead of cutting it off.
    *
    * The default cancels, which is right for a new instruction replacing an old one. It
@@ -64,7 +73,9 @@ export function isVoiceEnabled(): boolean {
 }
 
 export function speak(text: string, lang: Lang, options: SpeakOptions = {}): void {
-  if (!isSpeechSupported() || !text.trim() || !isVoiceEnabled()) {
+  if (!isSpeechSupported() || !text.trim() || (!isVoiceEnabled() && !options.essential)) {
+    // The caller's completion still runs: a screen that shows a "speaking" state must
+    // leave it when there is no voice, or it hangs there forever.
     options.onEnd?.();
     return;
   }
@@ -80,7 +91,15 @@ export function speak(text: string, lang: Lang, options: SpeakOptions = {}): voi
   }
   utterance.rate = options.rate ?? 0.9;
   utterance.pitch = 1.0;
-  if (options.onEnd) utterance.onend = () => options.onEnd?.();
+  if (options.onEnd) {
+    // An error is an ending too: a voice that fails mid-phrase, or an engine that reports
+    // a `cancel()` as an error rather than an end, would otherwise leave a caller showing
+    // a phrase as still being spoken forever. Latched so the callback runs exactly once.
+    let ended = false;
+    const finish = () => { if (!ended) { ended = true; options.onEnd?.(); } };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+  }
   window.speechSynthesis.speak(utterance);
 }
 

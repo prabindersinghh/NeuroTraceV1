@@ -150,9 +150,28 @@ export async function startAudioRecording(): Promise<AudioRecorder> {
   processor.connect(mute);
   mute.connect(ctx.destination);
 
+  /**
+   * Release the microphone.
+   *
+   * THIS RUNS WITHOUT THE CALLER ASKING, and that is the point. Every caller already
+   * releases on its own stop path, but none of them can see the phone being locked, the
+   * user switching to WhatsApp, or a component that unmounted while `startAudioRecording`
+   * was still awaiting permission — and all three leave the track live and the recording
+   * indicator lit with nobody speaking into it. On a product whose whole argument is that
+   * media never leaves the device, a microphone held open while the app is not on screen
+   * is the worst possible thing to be wrong.
+   *
+   * Whatever was captured up to that point survives: `stop()` still returns it, because
+   * the chunks are already in memory. The caller loses the rest of the take, not the take.
+   */
+  let torn = false;
   const teardown = () => {
+    if (torn) return; // `stop()` after an automatic release must not close the context twice
+    torn = true;
     stopped = true;
     processor.onaudioprocess = null;
+    document.removeEventListener("visibilitychange", releaseWhenHidden);
+    window.removeEventListener("pagehide", teardown);
     try {
       processor.disconnect();
       mute.disconnect();
@@ -163,6 +182,12 @@ export async function startAudioRecording(): Promise<AudioRecorder> {
     stream.getTracks().forEach((track) => track.stop());
     void ctx.close();
   };
+
+  function releaseWhenHidden() {
+    if (document.visibilityState === "hidden") teardown();
+  }
+  document.addEventListener("visibilitychange", releaseWhenHidden);
+  window.addEventListener("pagehide", teardown);
 
   return {
     level: () => peak,
@@ -227,7 +252,18 @@ export async function startVideoRecording(): Promise<VideoRecorder> {
   };
   recorder.start(200);
 
-  const release = () => stream.getTracks().forEach((track) => track.stop());
+  // Same contract as the audio recorder above: the camera is not held open behind another
+  // app or after the page is gone, whether or not the caller remembers to stop it.
+  const release = () => {
+    document.removeEventListener("visibilitychange", releaseWhenHidden);
+    window.removeEventListener("pagehide", release);
+    stream.getTracks().forEach((track) => track.stop());
+  };
+  function releaseWhenHidden() {
+    if (document.visibilityState === "hidden") release();
+  }
+  document.addEventListener("visibilitychange", releaseWhenHidden);
+  window.addEventListener("pagehide", release);
 
   return {
     stream,
