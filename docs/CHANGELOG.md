@@ -15,7 +15,9 @@ existed in the working tree.** `Login.tsx` was main's plain form, which imports 
 no canvas was ever mounted and nothing errored: there was no failure to see in the console,
 which is why it read as a broken visual rather than absent code.
 
-Twenty-nine files were missing in total, the whole of the branch's new surface:
+Twenty-nine frontend files were missing -- the whole of the branch's new client surface --
+plus four outside it (`alembic/versions/0023_refresh_tokens.py`, `app/auth/ratelimit.py`,
+`tests/test_auth_hardening.py`, and the branch's design spec):
 
 | area | files |
 |---|---|
