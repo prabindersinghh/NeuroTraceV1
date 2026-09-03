@@ -5,6 +5,7 @@
 **Implementation:** `frontend/src/routes/Landing.tsx` and `frontend/src/components/landing/`
 **Purpose:** Preserve the visual language, interaction model, responsive behavior, and
 accessibility constraints of the public NeuroTrace landing page.
+**Companion:** `docs/LANDING_CONTENT_SPEC.md` records the words on that page.
 
 ## 1. Design intent
 

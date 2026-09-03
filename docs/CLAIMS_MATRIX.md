@@ -11,7 +11,7 @@ ALLOWED and NEEDS EVIDENCE lists are judgment calls this file records; they are 
 currently machine-checked, because a good claim can be phrased many honest ways and a
 substring test would either miss rewordings or false-positive on the word "monitor" itself.
 
-Source: `TASK_FINAL_TECHNICAL_COMPLETION.md` Part 8, seeded verbatim, extended where this
+Source: `docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md` Part 8, seeded verbatim, extended where this
 session found a gap. See `docs/INTENDED_USE.md` for the regulatory-status wording this
 matrix assumes.
 

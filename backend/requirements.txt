@@ -1,9 +1,13 @@
-# NeuroTrace backend — Python 3.11 ONLY (mediapipe has no 3.12/3.13 wheels for this pin).
+# NeuroTrace backend — Python 3.11.
+#
+# The 3.11 pin was mediapipe's (no 3.12/3.13 wheels), and mediapipe is gone. The pin is
+# kept for now because the verified environment is 3.11 and moving it is a separate,
+# testable change — but it is no longer a hard constraint. numba/llvmlite below carry
+# their own ceiling; check those before bumping.
 # Every direct dependency is pinned for reproducibility (TRD §7).
 #
 # requirements.lock.txt holds the full transitive freeze of the environment the test suite
-# was verified against — use it when you want a byte-identical rebuild, or when you are on
-# a slow link (it skips ~200 MB of mediapipe-declared but unused jax/jaxlib/opencv-contrib).
+# was verified against — use it when you want a byte-identical rebuild.
 
 # ---------------------------------------------------------------- web / api
 fastapi==0.115.6
@@ -31,7 +35,8 @@ passlib==1.7.4
 bcrypt==4.0.1
 
 # ---------------------------------------------------------------- numeric core
-# numpy is held at 1.x: the mediapipe 0.10.14 wheels are built against the numpy 1 ABI.
+# numpy is held at 1.x. This was mediapipe's ABI constraint; with mediapipe gone the
+# remaining reason is numba 0.59.1, which does not support numpy 2.
 numpy==1.26.4
 scipy==1.13.1
 scikit-learn==1.5.2
@@ -50,9 +55,14 @@ pooch==1.8.2
 praat-parselmouth==0.4.5
 
 # ---------------------------------------------------------------- ml: face
-opencv-python==4.10.0.84
-mediapipe==0.10.14
-protobuf==4.25.3
+# NOTHING HERE. Face features are extracted IN THE BROWSER by
+# `@mediapipe/tasks-vision`; the server receives numbers (INV-1). `opencv-python`,
+# `mediapipe` and `protobuf` were pinned here for `app/ml/face.py`, which took a video
+# path, opened it with OpenCV, and had no caller anywhere. Deleting it made INV-1
+# structural on the face path the same way removing `python-multipart` did on the upload
+# path (D-052): the libraries needed to process media server-side are simply absent.
+# Do not re-add them without a decision record — they were also the only reason this
+# backend was pinned to Python 3.11 and numpy 1.x.
 
 # ---------------------------------------------------------------- governance crypto
 # Ed25519 verification of ASR training approval receipts. This is a SAFETY gate, not part

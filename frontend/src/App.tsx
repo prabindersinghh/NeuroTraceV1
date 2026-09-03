@@ -24,6 +24,7 @@ import { Login } from "@/routes/Login";
 const CaregiverHome = lazy(() => import("@/routes/CaregiverHome").then((m) => ({ default: m.CaregiverHome })));
 const CaretakerHome = lazy(() => import("@/routes/CaretakerHome").then((m) => ({ default: m.CaretakerHome })));
 const FamilyAccess = lazy(() => import("@/routes/FamilyAccess").then((m) => ({ default: m.FamilyAccess })));
+const Privacy = lazy(() => import("@/routes/Privacy").then((m) => ({ default: m.Privacy })));
 const Clinic = lazy(() => import("@/routes/Clinic").then((m) => ({ default: m.Clinic })));
 const ClinicianReport = lazy(() => import("@/routes/ClinicianReport"));
 const Dashboard = lazy(() => import("@/routes/Dashboard").then((m) => ({ default: m.Dashboard })));
@@ -129,6 +130,9 @@ export default function App() {
           <Route path="/onboarding/:patientId" element={<RequireAuth><Onboarding /></RequireAuth>} />
           <Route path="/exam/:patientId/practice" element={<RequireAuth><ExamPractice /></RequireAuth>} />
           <Route path="/family/:patientId" element={<RequireAuth><FamilyAccess /></RequireAuth>} />
+          {/* Consent and erasure. Owning-caregiver-only, enforced server-side on every
+              route it calls — the guard here is only that you are signed in. */}
+          <Route path="/privacy/:patientId" element={<RequireAuth><Privacy /></RequireAuth>} />
           <Route path="/dashboard/:patientId" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

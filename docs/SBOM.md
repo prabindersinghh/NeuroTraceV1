@@ -137,5 +137,5 @@ which is what makes the offline demo possible (Part 7.4 verification is outstand
 ## Outstanding
 
 - Run `pip-audit` and `npm audit` against a live advisory feed. Not possible in this
-  environment; listed as blocked in `COMPLETION_RUN_REPORT.md`.
+  environment; listed as blocked in `docs/archive/COMPLETION_RUN_REPORT.md`.
 - Decide on finding 2 (migrate off `passlib`). Finding 1 is **done** — see D-052.

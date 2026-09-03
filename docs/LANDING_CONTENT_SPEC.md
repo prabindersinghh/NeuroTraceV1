@@ -1,9 +1,10 @@
 # NeuroTrace landing page — content specification
 
-> Arrived on the `anish/awaaz-contract-foundation` branch as `content.md`. Renamed on
-> integration: `main` already had a different `content.md` — a proposed copy REVAMP for
-> the landing page. This file is the opposite document, a record of what the deployed
-> page currently says. Both are worth keeping, so they no longer share a name.
+> Arrived on the `anish/awaaz-contract-foundation` branch as `content.md`, and was renamed
+> on integration because `main` already had a `content.md` — a proposed copy revamp. That
+> revamp has since shipped into `frontend/src/routes/Landing.tsx` and its draft was removed,
+> so this is the single content document: a record of what the deployed page says.
+> Its companion `docs/LANDING_DESIGN_SPEC.md` records how that page looks and behaves.
 
 **Reference site:** [neuro-trace-v1.vercel.app](https://neuro-trace-v1.vercel.app/)
 **Observed:** 2026-08-31

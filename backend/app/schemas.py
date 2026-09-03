@@ -100,6 +100,20 @@ class PatientUpdate(BaseModel):
 
 class PatientRead(PatientBase):
     model_config = ORM
+    #: Overrides `PatientBase.name`'s `min_length=1`, and this is not cosmetic.
+    #:
+    #: `erase_patient_data` sets `name = ""` on the tombstone (Part 5.4) — deliberately,
+    #: because the honest value after an erasure is nothing, not a fabricated placeholder.
+    #: But every route that returns this schema then raised
+    #: `string_too_short` on that row, so a SINGLE erasure made `GET /patients` return
+    #: **500 for that caregiver's entire roster, permanently** — not just for the erased
+    #: patient. `GET /patients/{id}` and every other `response_model=PatientRead` route
+    #: failed the same way.
+    #:
+    #: The constraint is right for input and wrong for output: a read schema has to be able
+    #: to represent what the database legitimately holds. `PatientCreate` and
+    #: `PatientUpdate` still require a real name, so nothing can be created nameless.
+    name: str = Field(max_length=120)
     id: uuid.UUID
     caregiver_id: uuid.UUID
     clinician_id: uuid.UUID | None
@@ -112,6 +126,16 @@ class PatientRead(PatientBase):
     aphasia_mode: bool = False
     consent_version: str | None = None
     onboarding_complete: bool = False
+    #: Part 5.4. Non-NULL means this row is an erasure TOMBSTONE — every clinical
+    #: measurement is gone and every identifying field has been cleared, including `name`,
+    #: which is why it comes back as an empty string rather than anything readable.
+    #:
+    #: Exposed because `GET /patients` does not filter these out (and should not — the
+    #: caregiver who requested the erasure is entitled to see that it happened, and the row
+    #: really does still exist to keep `audit_log.patient_id` intact). Without this field a
+    #: client cannot tell a tombstone from a live patient whose name failed to load, so the
+    #: roster showed a blank, permanently broken-looking card with no explanation.
+    erased_at: datetime | None = None
 
 
 # --------------------------------------------------------------------------- sessions

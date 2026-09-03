@@ -20,7 +20,7 @@ differs? NO, NOT YET, without the fix this file also proves. `_refresh_baseline_
 `all(r.locked for r in rows)` — every module's own BaselineRow, including comprehensive-
 only ones, individually reaches `LOCK_AT_N_SESSIONS` (currently a flat 12 for every
 module regardless of cadence). At twice-weekly, 12 sessions takes roughly six weeks, not
-the ~21 days the product now positions as core (TASK_FINAL_TECHNICAL_COMPLETION.md Part
+the ~21 days the product now positions as core (docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md Part
 3). This is the real gap 2.4 was worried about — not silent numeric corruption, but a
 silent TIMELINE problem: the whole-patient baseline would not lock in 21 days once
 Comprehensive-only modules exist, because the slowest-cadence module gates the aggregate.

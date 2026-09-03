@@ -113,10 +113,18 @@ export function Clinic() {
             tone={rows.some((r) => r.unacknowledged_alerts > 0) ? "alert" : "neutral"}
             context={t("unacknowledged")}
           />
+          {/* Counts DOCTOR_REVIEW_PENDING only. It used to count every non-LOCKED
+              patient under an "awaiting review" caption, which folded patients still
+              collecting — waiting on nobody — into the number a clinician reads as their
+              own queue. */}
           <Metric
-            label={t("buildingBaseline")}
-            value={rows.filter((r) => r.baseline_state !== "LOCKED").length}
-            tone="watch"
+            label={t("reviewAwaitingCount")}
+            value={rows.filter((r) => r.baseline_state === "DOCTOR_REVIEW_PENDING").length}
+            tone={
+              rows.some((r) => r.baseline_state === "DOCTOR_REVIEW_PENDING")
+                ? "watch"
+                : "neutral"
+            }
             context={t("awaitingReview")}
           />
         </div>
@@ -140,10 +148,20 @@ export function Clinic() {
                     {row.age ? `${row.age} · ` : ""}
                     {row.baseline_state === "LOCKED"
                       ? `${t("lastSession")}: ${row.last_session ? formatDateTime(row.last_session, locale) : "—"}`
-                      : t("buildingBaseline")}
+                      : row.baseline_state === "DOCTOR_REVIEW_PENDING"
+                        ? t("reviewAwaiting")
+                        : t("buildingBaseline")}
                   </p>
 
                   <div className="ms-auto flex items-center gap-2">
+                    {/* Blocked on this clinician, and invisible until now: the row said
+                        "building baseline" for a patient who had finished building it. */}
+                    {row.baseline_state === "DOCTOR_REVIEW_PENDING" && (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-watch-soft px-2.5 py-1 text-sm font-medium text-watch">
+                        <Stethoscope className="h-4 w-4" aria-hidden />
+                        {t("reviewAwaiting")}
+                      </span>
+                    )}
                     {row.unacknowledged_alerts > 0 && (
                       <span className="inline-flex items-center gap-1.5 rounded-lg bg-alert-soft px-2.5 py-1 text-sm font-medium text-alert">
                         <AlertTriangle className="h-4 w-4" aria-hidden />

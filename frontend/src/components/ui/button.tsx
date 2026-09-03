@@ -25,7 +25,7 @@ const buttonVariants = cva(
         // 72px/24px is the PHONE size, and it was applied at every width — on a
         // 1900px laptop that renders a 384x72px button with 24px text inside a
         // 448px column, which is a phone layout blown up rather than a desktop one.
-        // DESIGN_LANGUAGE.md §6: touch devices get the big target, "pointer devices
+        // docs/DESIGN_LANGUAGE.md §6: touch devices get the big target, "pointer devices
         // keep compact sizing". Scoped to a LARGE screen WITH A MOUSE, so a phone or
         // a tablet in landscape is untouched. 56px is still a generous target.
         touch:

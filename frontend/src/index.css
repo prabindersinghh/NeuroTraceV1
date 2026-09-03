@@ -252,7 +252,7 @@
 
 @layer base {
   /* ---------------------------------------------------- typographic base rules
-   * DESIGN_LANGUAGE.md §2.2. The type SCALE lives in tailwind.config.js; these are the
+   * docs/DESIGN_LANGUAGE.md §2.2. The type SCALE lives in tailwind.config.js; these are the
    * rules that apply regardless of which token a callsite picks.
    *
    * `text-label` is uppercase by definition — the tracking in the token only reads
@@ -279,7 +279,7 @@
 @layer base {
   :root {
     /* ------------------------------------------------------ motion vocabulary
-     * DESIGN_LANGUAGE.md §2.3: one easing and duration vocabulary, nothing linear.
+     * docs/DESIGN_LANGUAGE.md §2.3: one easing and duration vocabulary, nothing linear.
      * The reduced-motion backstop already in this file collapses all of it. */
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);

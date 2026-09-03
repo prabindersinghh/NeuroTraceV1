@@ -27,7 +27,13 @@ grounding and its sources), `ML_STATUS.md` (**every model is synthetic — read 
 any accuracy claim**), `DEPLOY.md` (runbook), `PLAN_AWAAZ.md` (the communication feature),
 `COMPLETION_CHECKLIST.md` (line-by-line status).
 
+**`docs/README.md` is the index** — all thirty-nine documents, grouped by the question each
+one answers. Use it instead of guessing a filename. `CONTRIBUTING.md` carries the same
+invariants and verification commands as this file, written for a human contributor.
+
 `docs/CONTEXT_BRIEF.md` is competition strategy, not engineering context.
+`docs/archive/` is executed briefs and run reports — **nothing in it is current**, and some
+of it is cited by live code purely as provenance. Do not build from it.
 
 ## Navigating the code: use the graph
 
@@ -71,7 +77,7 @@ Each has a test. If one fails, that is the finding — do not route around it.
 ## Verifying your work
 
 ```bash
-cd backend && .venv/bin/python -m pytest -q      # 1191 tests
+cd backend && .venv/bin/python -m pytest -q      # 1456 tests
 cd frontend && npx vitest run && npx tsc -b && npm run build
 ./scripts/verify_deploy.sh                                 # against the live instance
 ```

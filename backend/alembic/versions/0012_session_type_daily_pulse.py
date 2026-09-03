@@ -1,6 +1,6 @@
 """Rename SessionType values: daily/weekly/monthly -> DAILY_PULSE/COMPREHENSIVE/MONTHLY/ASHA_VISIT.
 
-TASK_FINAL_TECHNICAL_COMPLETION.md Part 2, D-044. The old values described a MODULE's
+docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md Part 2, D-044. The old values described a MODULE's
 measurement schedule, not a SESSION, and never differentiated live session content — the
 frontend has always run the full battery under `type="daily"` regardless of what the old
 `weekly`/`monthly` values existed to mean. This migration makes `sessions.type` genuinely

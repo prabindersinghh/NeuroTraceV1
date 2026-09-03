@@ -1,5 +1,5 @@
 /**
- * Headings use the type scale, not ad-hoc sizes — DESIGN_LANGUAGE.md §2.2.
+ * Headings use the type scale, not ad-hoc sizes — docs/DESIGN_LANGUAGE.md §2.2.
  *
  * WHY THIS IS PINNED. The scale bakes size, line-height, weight and tracking into one
  * token so headings stay consistent without per-callsite tuning. That only holds if
@@ -7,7 +7,7 @@
  * font-semibold` looks fine on its own and only reads as inconsistent next to the others.
  * Twenty-one headings had already drifted that way before this test existed.
  *
- * FRONTEND_ENGINEERING.md §5b calls exactly this out — a structural test only protects you
+ * docs/FRONTEND_ENGINEERING.md §5b calls exactly this out — a structural test only protects you
  * if it runs. This one is in the default vitest suite.
  */
 import { describe, expect, it } from "vitest";

@@ -24,7 +24,7 @@ components is its own small state machine, and the safety rules (two-retry, neut
 visible non-invalidating pause) are enforced by discipline at each call site — pinned today
 by `taskFlow.test.ts`, but as **static source-string/regex scans of the raw file text**, not
 rendered/executed component tests (the project has no `jsdom`/React Testing Library
-dependency — a separately-tracked gap, `UX-CHANGES.md`).
+dependency — a separately-tracked gap, `docs/archive/UX-CHANGES.md`).
 
 TaskShell, by contrast, has a real internal phase machine (`demo → instruct → position →
 countdown → perform → quality → confirm`) but implements none of the things that make

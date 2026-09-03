@@ -346,7 +346,7 @@ async def test_the_audit_trail_records_access_and_is_not_patient_facing(client):
 
 
 async def test_the_report_endpoint_states_its_method_and_limits(client):
-    # `?lang=` explicitly: the method note exists in all three languages now (D-078), so a
+    # `?lang=` explicitly: the method note exists in all three languages now (D-084), so a
     # test asserting on English wording has to say which rendering it means. Without it the
     # note follows the patient record, which for this fixture is Hindi.
     token, _ = await register(client)

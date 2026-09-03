@@ -1,0 +1,20 @@
+# Matches what the codebase already does — 2 spaces for web, 4 for Python, no tabs.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.md]
+# Markdown gives meaning to trailing double-spaces (hard line break).
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

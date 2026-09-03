@@ -2,9 +2,27 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-## TASK_FINAL_TECHNICAL_COMPLETION.md — in progress
+**Last updated:** 2026-09-03 · **Repository structure only — no functional change, nothing
+pushed, nothing deployed.** The root went from sixteen visible entries to eight: nine
+documents moved into `docs/` (five of them to the new `docs/archive/`, which is history and
+is not current), and `content.md` was deleted after its revamp shipped into `Landing.tsx`.
+`docs/README.md` is new and indexes all thirty-nine documents — **start there rather than
+guessing a filename.** `CONTRIBUTING.md`, `.github/` (CI, PR and issue templates,
+CODEOWNERS), `.editorconfig` and `scripts/README.md` did not exist before and now do.
 
-Nine-part build (`TASK_FINAL_TECHNICAL_COMPLETION.md`, repo root). Order per the task:
+Every code edit was a comment, a docstring, or a test-scope constant. Two decisions came out
+of it — **D-078** (why `docs/` stays flat) and **D-079** (why `docs/archive/` is excluded
+from the claim-surface scan, and why that preserves coverage rather than relaxing it). Read
+D-079 before trusting the invariant suite's scope; it names the check that verifies it.
+
+Verified: backend **1453 passed, 3 skipped, exit 0** (1456 collected — the "1191 tests"
+figure in `CLAUDE.md` was stale and is corrected); frontend **180 passed**, `tsc -b`, build
+and `oxlint` all exit 0; zero broken relative links across `docs/**`, `README.md` and
+`CLAUDE.md`. `verify_deploy.sh` was not run — nothing here can reach the deployment.
+
+## TASK_FINAL_TECHNICAL_COMPLETION.md (now docs/archive/) — in progress
+
+Nine-part build (`docs/archive/TASK_FINAL_TECHNICAL_COMPLETION.md`). Order per the task:
 1 → 2 → 3 → 4 → 5 → 6 → 7, deploy, verify. Part 9's checklist is the definition of done.
 Updated as each part closes; a stranger resuming this should read the task file itself
 first, then this line, then `git log` since the last part closed.
@@ -96,9 +114,14 @@ is invented: the evidence already existed as a `clinician.link.granted` audit ev
 migration gives it a queryable home. Going forward `POST /clinician/links` creates the link
 and the C3 consent in one transaction, so no unreferenced link can be created at all.
 
-**Not done, deliberately:** the clinician baseline-review *frontend*. Backend first was the
-agreed order; the review view, the queue entry, and the ABANDONED reason surface are a
-follow-up commit.
+**~~Not done, deliberately: the clinician baseline-review frontend.~~ DONE 2026-09-03, and
+it was not a follow-up — it was the difference between a demo and a product.** Leaving it
+out made `DOCTOR_REVIEW_PENDING` terminal in practice: `record_review` is the only exit,
+its one route had no caller in `api.ts`, and a real patient therefore finished their
+baseline and was then never monitored, with the caregiver shown "progress 12 / 12" at 100%
+forever. The demo hid it because `services/seed.py` calls `record_review` in Python. See
+D-080 and the 2026-09-03 CHANGELOG entry. The ABANDONED reason surface is covered by
+`BaselineStatusCard`; a queue entry beyond the roster badge is still not built.
 
 ---
 
@@ -250,8 +273,120 @@ medical brand and using a gradient the design system otherwise forbids. Probably
 leftover. The icon inherits it faithfully rather than inventing a logo — artwork is the
 owner's call.
 
-**Last updated:** 2026-09-03 (latest) · **The signed-out landing page was rebuilt around one
-point cloud, on branch `feat/journey-experience` — NOT merged, NOT deployed.** The page now
+**Last updated:** 2026-09-03 (third slice) · **`feat/journey-experience` is merged into
+`main`. Every UI/UX upgrade on that branch is back in the tree it was missing from. NOT
+pushed, NOT deployed.**
+
+**The reported symptom was "the 3D model does not show on the login page", and the cause was
+not a rendering bug.** The login field is `components/auth/NeuralField.tsx` inside
+`components/auth/AuthShell.tsx`, driven by `lib/neural.ts` (D-064). None of those three files
+existed in the working tree. Nor did `landing/CortexField.tsx`, `landing/SignalScene.tsx`,
+`landing/HeroConsole.tsx`, `lib/cortex.ts`, the six `journey/` components, `lib/authForm.ts`,
+`lib/journey.ts`, `lib/journeyStore.ts`, `lib/haptic.ts` or `lib/prefs.ts` — **29 files in
+total, none of them present.** `feat/journey-experience` had been pushed and a PR opened, but
+never merged down; local `main` sat at the Awaaz merge `e1b8949`, which is an ancestor of the
+branch. There was nothing to debug in WebGL: the component was absent, so `Login.tsx` was
+main's plain form and the canvas was never mounted.
+
+Restored as two merges rather than a cherry-pick, because `main` was an ancestor of the
+branch and a fast-forward loses nothing: this session's uncommitted work was committed first
+to `local/consent-and-doctor-review` (nothing was stashed and nothing was discarded), `main`
+was fast-forwarded to `3be7a4d` — **zero conflicts, all 29 files back** — and the local
+branch was merged back on top. Twelve of the fifteen overlapping files auto-merged; the three
+that did not were `CHANGELOG.md`, `DECISIONS.md` and this file, all "both sides appended a
+section". **One real collision:** both lines had independently issued **D-078 and D-079**.
+Main's numbering stands and the branch's two are renumbered to **D-084** and **D-085**, the
+same rule the Awaaz integration used, with a mapping table in `DECISIONS.md`.
+
+The Awaaz merge was audited in the same pass and did **not** disturb the pre-existing UI:
+`git diff 43c8006 e1b8949` has no deletion or rename, touches no file under
+`components/ui/`, no `index.css`, no `tailwind.config.js`, and no dashboard; `Listen.tsx` and
+`ReviewQueue.tsx` lost **zero** design classes, and `Awaaz.tsx` lost one — `text-3xl` on the
+phrase-card emoji, replaced by a 32px lucide glyph. Erasure covers what Awaaz added:
+`0021`'s audio-pair receipt columns live on `utterance_log`, already in `_PATIENT_SCOPED`,
+and `awaaz_policy_events` carries no patient column by design (D-072) and ages out through
+`services/policy_retention.py`.
+
+
+**Last updated:** 2026-09-03 (second slice) · **Consent and erasure now have a UI, one live
+500 was fixed, and the Awaaz merge was driven end to end. NOT pushed, NOT deployed.**
+
+`/privacy/:patientId` lists all seven consents with their real state and carries the erasure
+(D-082). It states only what is true: C3 and C7 have a runtime gate — **verified live**, a C3
+withdrawal with the link still ACTIVE dropped the demo clinician's roster 1 → 0 and the
+dashboard 200 → 403, and re-granting restored both — while the other five are recorded
+decisions and say so. "Never asked" is spelled out, which immediately exposes that **the demo
+seed grants C3 but leaves C1 and C2 with no row at all**, so the demo patient is monitored
+with no recorded consent to use the product.
+
+**A live 500 was found by driving it.** `erase_patient_data` sets `name = ""`;
+`PatientRead` inherited `min_length=1`; so ONE erasure made `GET /patients` return **500 for
+that caregiver's whole roster, permanently**, including patients never erased. Fixed on the
+read schema only, with `test_erasure_roster.py` asserting create/update still refuse an empty
+name. `erased_at` is now exposed so a tombstone is distinguishable from a failed load.
+
+**The Awaaz merge is integrated and working** (D-083). Migrations 0021/0022 clean to one
+head; every Awaaz route 200; the listener link mints, opens for a stranger, leaks no patient
+name, and 404s after revocation; the policy contract enforces both gates (409 without logging
+consent, 409 off the confirmation path), draws its own propensity (0.92 on a 0.90/0.88
+near-tie), validates outcome evidence, and returns the SAME row on a replayed `event_id`. The
+table has no patient column.
+
+**One seam does not meet, deliberately.** `/awaaz/{id}/speak` returns `candidates: list[str]`
+— unscored, exactly one — and the decision endpoint needs ≥2 scored. So
+`scoredSlateFromSpeakResult` returns null and the whole logging pipeline is wired and inert.
+Fabricating scores would manufacture the tie structure the propensity is drawn over; it needs
+a real ranker, which is product work. **A second seam is a genuine collision:** policy-logging
+consent is a `localStorage` flag outside Part 4, so it cannot be seen or withdrawn on the new
+privacy screen and is unprovable server-side. It wants an eighth `ConsentType` — migration and
+enum value, deliberately not done as a footnote.
+
+Verified: backend suite exit 0 (incl. 3 new tests); frontend vitest **237** (was 189), `tsc`,
+build; three mutation checks all bite; consent, erasure and Awaaz driven over HTTP against
+`0001 → 0022`. **Not run:** deployed instance, `verify_deploy.sh`, a phone, a browser drive.
+
+Previous: **Last updated:** 2026-09-03 · **The doctor-in-the-loop baseline gate now has a frontend,
+and two dead ML twins are deleted. NOT pushed, NOT deployed.**
+
+A route-coverage audit — all 82 backend routes against every path `frontend/src` calls —
+found twelve routes with no client. One was load-bearing: **a patient who completed their
+baseline entered `DOCTOR_REVIEW_PENDING` and stayed there permanently**, unmonitored, because
+nothing in the app could call the one route that leaves that state. Every suite was green
+throughout; the demo worked because `services/seed.py` calls `record_review` in Python and
+skipped HTTP entirely. Fixed (D-080): `BaselineReviewPanel` for the clinician,
+`BaselineStatusCard` so a caregiver is told what the wait is instead of reading a 100%
+progress bar forever, a roster badge and a corrected queue metric on `Clinic.tsx`, and three
+client methods. `baselineGate.test.ts` pins reachability — its assertions run against the
+exported `api` object, because the first draft's source-text `toContain` still passed after
+the method was renamed.
+
+`app/ml/scoring.py` and `app/ml/face.py` deleted (D-081). `scoring.py` was a second complete
+alert implementation **with no laterality gate** — an ALERT on the symmetric Parkinsonian
+decline INV-2 exists to exclude — and its test was labelled the PRD §7 acceptance criterion
+while verifying the dead path; `test_engine.py`/`test_laterality.py` were confirmed to cover
+it against the live gate first. `face.py` opened a **video path with OpenCV** and was the
+sole reason `mediapipe`/`opencv-python`/`protobuf` were runtime deps and the sole reason this
+backend was pinned to Python 3.11 and numpy 1.x. INV-1 is now structural on the face path.
+
+Verified: backend full suite exit 0; frontend vitest **189** (was 180), `tsc -b`, `npm run
+build`; the new test's mutation check both directions. **Not run:** the deployed instance,
+`verify_deploy.sh`, a physical phone.
+
+**Still open, and now written down rather than rediscovered** — eleven routes with no UI, of
+which the ones that matter are **`GET/PUT /consents/{id}`: Part 4's six withdrawable consents
+cannot be viewed or withdrawn by anyone**, `POST/DELETE /clinician/links` (a caregiver cannot
+link a doctor; only the seed can), and `DELETE /patients/{id}` (erasure has no UI). Plus:
+`POST /awaaz/policy/retention/sweep` **has never been invoked** — no cron, no startup task,
+no control — so the 120-day retention policy has no mechanism to execute; the RL logging loop
+**is wired after all** — an earlier draft of this line said it was not, which was wrong:
+`Awaaz.tsx` calls it through `lib/awaazPolicyLog.ts` at ten sites, and what is actually
+dormant is that nothing READS the table; policy-logging consent is a `localStorage` flag
+outside Part 4, so it cannot be seen or withdrawn on the new privacy screen; and `PatientHome`
+dead-ends on "No check-ins yet." for an account with no patient record. Full list in the
+2026-09-03 CHANGELOG entry.
+
+Previous: **2026-09-03** · **The signed-out landing page was rebuilt around one
+point cloud, on branch `feat/journey-experience` — merged into `main` on 2026-09-03, NOT pushed, NOT deployed.** The page now
 opens with a six-act overture (`SignalScene`) in which a single cloud of points is *moved*
 between six arrangements as the section scrolls — scatter, seven domain lanes, a folded
 cortex, a ninety-day ribbon, a five-node ecosystem, a thin wide distribution — because the
@@ -262,7 +397,7 @@ library** — D-039 (no GSAP) and D-064 (no three.js) were re-examined and uphel
 signed-out entry chunk grew 100.17 → 108.32 kB gzipped with **no dependency added**. Two
 sections the page genuinely lacked were written: `#reach`, which names the six assumptions a
 deployment is normally allowed to make and what this one does instead, and the overture
-itself. The Parkinson's confound merged into `#gates`. D-079.
+itself. The Parkinson's confound merged into `#gates`. D-085.
 
 **The bug worth remembering** is that the WebGL fallback was rendering *everywhere*, on every
 device, with nothing in the console: `ResizeObserver` fires on `observe()`, so the still
@@ -283,7 +418,7 @@ exists**. `Landing.tsx` and `components/landing/` remain outside the i18n scan, 
 English copy makes that gap larger, not smaller.
 
 **Previously:** 2026-09-02 · **The language choice now holds across the whole
-app, on branch `feat/journey-experience` — NOT merged, NOT deployed.** The reported symptom
+app, on branch `feat/journey-experience` — merged into `main` on 2026-09-03, NOT pushed, NOT deployed.** The reported symptom
 was the red FAST card at the foot of the dashboard staying in the previous language after a
 toggle: it is rendered server-side and was keyed on `patient.languages[0]`, so it followed
 the record and not the reader. `safety/fast.resolve_lang()` now prefers the caller's
@@ -295,13 +430,13 @@ view, listener page, operator console and printed clinician report were all Engl
 translated header and the test passed. The glob is now `routes/**` + `components/**` with a
 written exclusion list, ~150 keys were added, and `formatDate` was routed through
 `usableLocale` (it printed "M08 31" on trimmed-ICU devices while `formatDateTime` beside it
-read "31 ਅਗ"). D-078. Still English on purpose: `Landing`, `LanguageGate`, `Diagnostics`,
+read "31 ਅਗ"). D-084. Still English on purpose: `Landing`, `LanguageGate`, `Diagnostics`,
 and `Score.reason` on the clinician report. Verified: backend `pytest -q` exit 0, frontend
 `tsc -b` + `vitest run` (208) + `build`, and a Chrome walkthrough at 430×900 toggling
 pa → en → hi with the FAST card and emergency-number labels following each time.
 
 **Previously (2026-09-02, later):** **Authentication hardened and redesigned, on branch
-`feat/journey-experience` — NOT merged, NOT deployed.** Server: refresh tokens rotated and
+`feat/journey-experience` — merged into `main` on 2026-09-03, NOT pushed, NOT deployed.** Server: refresh tokens rotated and
 revocable (migration `0023`, `refresh_tokens`), `POST /auth/logout`, `POST /auth/password`,
 in-memory rate limits on login/register/refresh, a common-password check, the dev JWT
 secret refused outside development/test, security headers (D-065). Client: three real
@@ -321,7 +456,7 @@ link would be worse than none; family accounts still await the invite flow; bear
 remain in `localStorage` behind the CSP rather than in HttpOnly cookies (D-065 says why).
 
 Previous: 2026-09-02 · **The patient journey is built on branch
-`feat/journey-experience` — NOT merged, NOT deployed.** The check-in is one path of lights
+`feat/journey-experience` — merged into `main` on 2026-09-03, NOT pushed, NOT deployed.** The check-in is one path of lights
 with chapters (D-063): welcome + warm-up, chapter intros with a rest offer, a spoken
 repeatable instruction card, the light in place of the circle, a ring in place of every
 countdown numeral, comfort switches (read aloud / less movement / bigger text), a neutral
@@ -437,7 +572,7 @@ pass** (`d40ae6f`, branch `ux/system-upgrade`) landed: an offline/sync strip on 
 surfaces, clinical status colours moved onto the token palette, and `frontend/src/lib/
 taskFlow.ts` extracted so the session's retry/confirm rules are pure and testable — which
 immediately exposed **two live retry bugs and one stale-closure bug that mislabelled every
-Daily Pulse session** (caught by oxlint, not by any test). `UX-CHANGES.md` carries the
+Daily Pulse session** (caught by oxlint, not by any test). `docs/archive/UX-CHANGES.md` carries the
 deferred items; **automatic offline drain is flagged there as a data-integrity fix, not
 polish** — an offline queue that never drains loses sessions silently. ·
 Earlier: two independent sessions landed the same day

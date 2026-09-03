@@ -46,7 +46,7 @@ export default {
         atypical: { DEFAULT: "hsl(var(--atypical))", soft: "hsl(var(--atypical-soft))" },
       },
       /* ------------------------------------------------------------------ type scale
-       * DESIGN_LANGUAGE.md §2.2. Size, line-height, weight and tracking are baked into
+       * docs/DESIGN_LANGUAGE.md §2.2. Size, line-height, weight and tracking are baked into
        * each token so headings stay consistent without per-callsite tuning — which is
        * exactly what had drifted here: screens picked text-lg / text-2xl / text-3xl
        * ad hoc, so nothing established a hierarchy and everything read the same weight.

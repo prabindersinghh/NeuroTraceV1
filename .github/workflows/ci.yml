@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    # The fourteen invariants are the product's safety contract. They run first and alone
+    # so a violation is legible in seconds rather than buried in the full suite.
+    name: Invariants (INV-1 … INV-14)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # test_regulatory_claims.py scans `git ls-files`; a shallow clone is enough,
+          # but the privacy check reads the object store and needs full history.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'   # MediaPipe 0.10.14 publishes no 3.12 wheels
+          cache: pip
+          cache-dependency-path: backend/requirements.lock.txt
+
+      - name: System libraries (OpenCV, MediaPipe, librosa)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 ffmpeg libsndfile1
+
+      - name: Install
+        working-directory: backend
+        run: pip install -r requirements.lock.txt
+
+      - name: Run the invariant tests
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: sqlite+aiosqlite:///./ci-invariants.sqlite3
+        run: |
+          python -m pytest -q \
+            tests/test_invariants.py \
+            tests/test_privacy.py \
+            tests/test_regulatory_claims.py \
+            tests/test_laterality.py \
+            tests/test_migration_portability.py
+
+  backend:
+    name: Backend suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # the suite outlives a 10-minute budget; see CONTRIBUTING.md §4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.lock.txt
+
+      - name: System libraries (OpenCV, MediaPipe, librosa)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 ffmpeg libsndfile1
+
+      - name: Install
+        working-directory: backend
+        run: pip install -r requirements.lock.txt
+
+      - name: pytest
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: sqlite+aiosqlite:///./ci.sqlite3
+        # Success is the exit code. Never grep the output for "error".
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm run test
+
+      - name: Build
+        # `prebuild` fetches the MediaPipe FaceMesh model (~4 MB, gitignored).
+        working-directory: frontend
+        run: npm run build
