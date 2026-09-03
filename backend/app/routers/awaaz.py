@@ -136,7 +136,7 @@ async def board(patient: AuthorisedPatient, db: Session) -> AwaazBoard:
 
     profile = await _profile(db, patient)
     # Emergency first and pinned, then most-used, then original order.
-    cards.sort(key=lambda c: (not c.is_emergency, -c.use_count, c.slot))
+    cards.sort(key=lambda c: (not c.is_emergency, -(c.use_count or 0), c.slot))
     return AwaazBoard(
         patient_id=patient.id,
         profile=AwaazProfileRead.model_validate(profile, from_attributes=True),
@@ -334,7 +334,7 @@ async def speak(payload: AwaazSpeakRequest, patient: AuthorisedPatient,
             )
 
     if card is not None:
-        card.use_count += 1
+        card.use_count = (card.use_count or 0) + 1
         utterance = UtteranceLog(
             patient_id=patient.id, text=card.text, lang=card.lang, card_id=card.id,
             mode="auto", confirmed=True, is_emergency=card.is_emergency,

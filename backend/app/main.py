@@ -4,8 +4,9 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from . import __version__
@@ -73,6 +74,28 @@ async def security_headers(request: Request, call_next):
     if request.url.path.startswith("/auth/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Ensure any unhandled 500 error carries CORS headers so browsers never mask it as a CORS violation."""
+    logger.exception("Unhandled server error handling %s %s: %s", request.method, request.url.path, exc)
+    origin = request.headers.get("origin")
+    headers: dict[str, str] = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+    }
+    if origin and (origin in settings.cors_origins or "*" in settings.cors_origins):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"},
+        headers=headers,
+    )
+
 
 
 app.include_router(auth_router.router)

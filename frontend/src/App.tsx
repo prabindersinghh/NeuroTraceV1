@@ -103,7 +103,22 @@ export default function App() {
   // First run only: nobody has picked a language yet. Held in state as well as storage so
   // the choice takes effect immediately rather than on the next load.
   const [needsLang, setNeedsLang] = useState(() => !hasChosenLang());
-  if (needsLang) return <LanguageGate onChosen={() => setNeedsLang(false)} />;
+  /**
+   * EXCEPT on a listener link.
+   *
+   * `/listen/:token` is the one surface in this product opened by a stranger — the
+   * shopkeeper, the bus conductor, the nephew on a video call — who has no account, is not
+   * installing anything, and was sent the link mid-conversation. It already takes its
+   * language from the link itself (`?lang=`), which is why `Listen` localises itself rather
+   * than using the app dictionary. Putting a first-run app-language chooser in front of it
+   * asks that person to answer a question about a product they are not using, and their
+   * answer changes nothing on the page they were sent to read: they got an onboarding
+   * screen instead of the sentence a survivor was trying to say to them.
+   */
+  const onListenerLink = useLocation().pathname.startsWith("/listen/");
+  if (needsLang && !onListenerLink) {
+    return <LanguageGate onChosen={() => setNeedsLang(false)} />;
+  }
 
   return (
     // One boundary for every split route. The exam is the only surface where a spinner

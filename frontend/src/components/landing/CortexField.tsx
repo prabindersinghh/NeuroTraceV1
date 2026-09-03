@@ -9,10 +9,14 @@
  * the geometry it draws is `lib/cortex.ts`, which is testable in Node because it never
  * touches a GL context.
  *
- * WHY THE MORPH IS FREE. All six arrangements live on the GPU at once as six position
- * attributes. Scrolling changes six floats — the blend weights — and nothing else. There
+ * WHY THE MORPH IS FREE. All seven arrangements live on the GPU at once as seven position
+ * attributes. Scrolling changes seven floats — the blend weights — and nothing else. There
  * is no per-frame work on the CPU proportional to the point count, so eighteen thousand
  * points cost the same to scrub as five hundred.
+ *
+ * THE ONE THING THAT IS NOT SCROLL-DRIVEN is the occlusion in the first act. It runs on
+ * its own clock: an artery closing is an event, and putting it on a wheel would make it a
+ * slider. See `eventClock`.
  *
  * IMPERATIVE ON PURPOSE, like `TraceLanes`. The state is NOT a prop. Scrubbing it through
  * React would reconcile the section's paragraphs sixty times a second for a picture whose
@@ -35,7 +39,8 @@ import {
 } from "react";
 
 import {
-  DOMAIN_COUNT, DOMAIN_RGB, FLARE_RGB, STATE, STATE_COUNT, STATE_VIEW,
+  CLOT_FLOW, DOMAIN_COUNT, DOMAIN_RGB, FLARE_RGB, STATE, STATE_COUNT, STATE_GAIN,
+  STATE_VIEW, STATE_WAVE,
   createField, particleBudget, readDevice, stateWeights, type Field,
 } from "@/lib/cortex";
 import { approach, project } from "@/lib/neural";
@@ -43,12 +48,27 @@ import { useCoarsePointer, usePrefersReducedMotion } from "@/lib/motion";
 
 const PLATE = "#0A121C";
 
+/**
+ * How long the first act's event takes, end to end: the tree fills, one vessel closes,
+ * and the territory it fed stops being lit.
+ *
+ * Slow. Roughly the pace of a held camera move rather than of an animation — the visitor
+ * should notice a territory going quiet, not watch a thing flash. Long enough that
+ * someone scrolling straight past sees only a perfused arterial tree, which is a fair
+ * picture on its own and not a half-played effect.
+ */
+const EVENT_SECONDS = 7.5;
+
 /* ─────────────────────────────────────────────────────────────────────── shaders */
 
 const POINT_VS = `#version 300 es
-in vec3 p0; in vec3 p1; in vec3 p2; in vec3 p3; in vec3 p4; in vec3 p5;
+in vec3 p0; in vec3 p1; in vec3 p2; in vec3 p3; in vec3 p4; in vec3 p5; in vec3 p6;
 in float aDomain; in float aSeed; in float aSize;
-uniform float uW[6];
+// How far along its own structure this point sits, and how far downstream of the
+// occlusion it is. See Field.flow and Field.risk in lib/cortex — one attribute each,
+// three meanings and one, because five attributes would be five buffers and one picture.
+in float aFlow; in float aRisk;
+uniform float uW[7];
 uniform mat3 uRot;
 uniform vec2 uViewport;
 uniform vec2 uCenter;
@@ -62,11 +82,18 @@ uniform vec3 uFlareRgb;
 // Pointer in the same device-pixel space as "screen", and 0/1 for whether it is over.
 uniform vec2 uPointer;
 uniform float uPointerOn;
+// [amplitude, bands, speed] for the one travelling wave, blended across the arrangements
+// by the same weights as the positions. The table is cortex.STATE_WAVE.
+uniform vec3 uWave;
+// Per-arrangement alpha, blended across the states. The table is cortex.STATE_GAIN.
+uniform float uGain;
+// The occlusion's own clock, 0..1. An event happens; it is not a scroll position.
+uniform float uEvent;
 out vec4 vColor;
 
 void main() {
-  vec3 p = p0 * uW[0] + p1 * uW[1] + p2 * uW[2]
-         + p3 * uW[3] + p4 * uW[4] + p5 * uW[5];
+  vec3 p = p0 * uW[0] + p1 * uW[1] + p2 * uW[2] + p3 * uW[3]
+         + p4 * uW[4] + p5 * uW[5] + p6 * uW[6];
 
   // The breath. Phase is per-point and constant, so the cloud never pulses in unison —
   // a field that breathes together reads as a logo, not as an organism.
@@ -89,26 +116,76 @@ void main() {
   float glow = uPointerOn * (1.0 - smoothstep(0.0, reach, distance(screen, uPointer)));
   glow *= glow;                              // tighter core, so it is a touch, not a wash
 
-  gl_PointSize = max(1.0, aSize * (0.55 + s * 1.4) * 1.72 * uDpr * (1.0 + glow * 1.15));
-
   int d = int(aDomain);
   float f = uFlare[d];
+
+  // ── THE EVENT ────────────────────────────────────────────────────────────────────
+  // Everything here is masked by uW[0], the territory's own blend weight, so at every
+  // other scroll position these four lines multiply out to zero and cost four mads. No
+  // branch: a divergent branch in a vertex shader over eighteen thousand points is worse
+  // than the arithmetic it saves.
+  float inEvent = uW[0];
+  // Perfusion falls where the vessel is closed, and ONLY there. Restraint is the whole
+  // register of this act: an unperfused territory is a territory that stops being lit,
+  // and a field that goes scarlet reads as an alarm this product is careful never to
+  // raise without cause.
+  float lost = aRisk * smoothstep(0.42, 0.86, uEvent) * inEvent;
+  // The occlusion itself. aRisk ramps ACROSS the clot, so the middle of the ramp is
+  // literally the place where it lodges — one warm band, the only warm thing in the act.
+  // A clot is a POSITION ON A VESSEL, so it is keyed off aFlow at cortex.CLOT_FLOW and
+  // gated to the occluded branch by aRisk. Keying it off the value of aRisk instead —
+  // which worked while risk was a plain ramp along one vessel — painted the whole penumbra
+  // margin gold the moment the territory became graded, because every point in that margin
+  // happened to hold the value the mark was looking for.
+  //
+  // It also carries a little alpha of its own: changing only the hue of points that are
+  // already dim changes nothing anyone can see. Measured — at the first width tried, the
+  // mark rendered ZERO warm pixels on the plate. It is still the only warm thing in the act.
+  float clot = exp(-(aFlow - ${CLOT_FLOW.toFixed(5)}) * (aFlow - ${CLOT_FLOW.toFixed(5)}) * 9000.0)
+             * step(0.02, aRisk) * smoothstep(0.28, 0.50, uEvent) * inEvent;
+
+  // ── THE WAVE ─────────────────────────────────────────────────────────────────────
+  // One wave for the whole page. What it means is uWave's job: blood out through an
+  // artery, a signal down a tract, ninety days along a ribbon. The per-domain term is
+  // why seven tracts do not pulse in step — which is the sentence that act is making.
+  // The crest is narrow. At 0.68 it was a third of the cycle wide, which on the tracts
+  // drew fat white lozenges that clipped rather than a signal passing along them.
+  float wave = smoothstep(0.80, 1.0, fract(aFlow * uWave.y - uTime * uWave.z * (0.7 + aDomain * 0.09)))
+             * uWave.x;
+  // Blood does not keep moving past a closed vessel. lost is zero everywhere else, so
+  // this is free in every other arrangement.
+  wave *= 1.0 - lost;
+  // The first act fades its flow in rather than starting mid-pulse, so a visitor arriving
+  // at the section sees the tree fill before anything happens to it.
+  wave *= mix(1.0, smoothstep(0.04, 0.26, uEvent), inEvent);
+
+  // TWO REGISTERS, one arrangement, and the arithmetic of an additive blend sets both.
+  // A vessel is a dense line of FAINT SMALL points: several land on every pixel of it, so
+  // anything but a low alpha clips to white and the tube stops being blue. The tissue is
+  // the opposite — sparse across a whole shell, so each point must carry more light to be
+  // seen at all. Drawing the vessel bigger and brighter, which is the intuitive move and
+  // was the first thing tried here, is precisely what turned it into a white bar.
+  // vessel is 1 on the trunk and 0 out in the territory; the cut is TREE_SHARE.
+  float vessel = 1.0 - smoothstep(0.0, 0.16, aFlow);
+  // Judged on screenshots at both ends. 2.35/1.20 for the vessel clipped it to a white
+  // bar; 0.80/0.34 buried it inside the tissue it runs through. What settles it is
+  // CONTRAST, not either value alone: the tissue is the ground and is pulled well below
+  // its own act's brightness so the tree can sit on top of it, which is also why the
+  // vessel never has to be bright enough to clip. These two were nearly equal for a while
+  // after the point budget went up — the tissue rose with it and swallowed the tree.
+  float canvasAreaScale = clamp(min(uViewport.x, uViewport.y) / (850.0 * uDpr), 0.60, 1.0);
+  float bore = mix(1.0, mix(1.02, 1.45, vessel), inEvent) * (1.0 + clot * 0.85);
+  float register = mix(1.0, mix(0.58, 1.00, vessel), inEvent);
+  gl_PointSize = max(1.0, aSize * (0.55 + s * 1.4) * 1.72 * uDpr * bore * canvasAreaScale
+                     * (1.0 + glow * 1.15 + wave * 0.55) * (1.0 - lost * 0.45));
+
   // Depth carries brightness rather than a fog colour: the plate has no atmosphere to
   // tint toward, and alpha is the only channel that survives additive blending honestly.
   float depth = clamp((s - 0.66) / 0.78, 0.0, 1.0);
-  // Raised from 0.18/0.45, then pulled back. At the old floor a point on the far face of
-  // the shell carried 0.18 alpha into an ADDITIVE blend, which on the near-black plate is
-  // very nearly nothing, so the cloud read as bright specks with emptiness behind them
-  // rather than a volume with a far side.
-  //
-  // But alpha and count multiply here. Raising the budget ~1.55x and the floor ~1.67x at
-  // the same time put roughly three times the light on the plate and the two lobes
-  // saturated to flat white — denser, and LESS legible, because blowout destroys exactly
-  // the depth the density was added to show. Density carries visibility now and the floor
-  // only has to lift the far face off the background, so these are lower than a
-  // brightness-only pass would set them. Judged on a screenshot, not from the numbers.
-  vColor = vec4(mix(uDomainRgb[d], uFlareRgb, max(f, glow * 0.55)),
-                (0.225 + depth * depth * 0.43) * (1.0 + f * 2.2) * (1.0 + glow * 0.85));
+  float alpha = (0.225 + depth * depth * 0.43) * uGain * (1.0 + f * 2.2) * (1.0 + glow * 0.85)
+              * (0.50 + 0.50 * canvasAreaScale);
+  vColor = vec4(mix(uDomainRgb[d], uFlareRgb, max(max(f, glow * 0.55), clot)) + wave * 0.14,
+                alpha * register * (1.0 - lost * 0.86) * (1.0 + wave * 1.0 + clot * 1.7));
 }`;
 
 const POINT_FS = `#version 300 es
@@ -123,9 +200,9 @@ void main() {
 }`;
 
 const LINE_VS = `#version 300 es
-in vec3 p0; in vec3 p1; in vec3 p2; in vec3 p3; in vec3 p4; in vec3 p5;
+in vec3 p0; in vec3 p1; in vec3 p2; in vec3 p3; in vec3 p4; in vec3 p5; in vec3 p6;
 in float aT; in float aSeed; in float aDomain;
-uniform float uW[6];
+uniform float uW[7];
 uniform mat3 uRot;
 uniform vec2 uViewport;
 uniform vec2 uCenter;
@@ -136,8 +213,8 @@ out float vSeed;
 out vec3 vRgb;
 out float vDepth;
 void main() {
-  vec3 p = p0 * uW[0] + p1 * uW[1] + p2 * uW[2]
-         + p3 * uW[3] + p4 * uW[4] + p5 * uW[5];
+  vec3 p = p0 * uW[0] + p1 * uW[1] + p2 * uW[2] + p3 * uW[3]
+         + p4 * uW[4] + p5 * uW[5] + p6 * uW[6];
   vec3 r = uRot * p;
   float s = 3.2 / (3.2 + r.z);
   vec2 screen = uCenter + vec2(r.x, -r.y) * s * uZoom;
@@ -258,7 +335,11 @@ function drawStill(canvas: HTMLCanvasElement, field: Field, w: number, h: number
       { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] },
       STATE_VIEW[STATE.cortex * 2], STATE_VIEW[STATE.cortex * 2 + 1], w / 2, h / 2, zoom,
     );
-    order.push({ x: p.x, y: p.y, s: p.s, d: field.domain[i] });
+    // `project` returns world +y as INCREASING canvas y; the vertex shader flips it
+    // (`vec2(r.x, -r.y)`). Mirroring here is what keeps the still plate the same way up as
+    // the GL one — invisible while the shape was near enough symmetric, and not invisible
+    // at all now that it has a cerebellum and a brainstem hanging off the bottom of it.
+    order.push({ x: p.x, y: h - p.y, s: p.s, d: field.domain[i] });
   }
   order.sort((a, b) => a.s - b.s);          // far to near, so the front of the shell reads
   for (const p of order) {
@@ -295,11 +376,22 @@ export interface CortexFieldProps {
   density?: number;
   /** Lines are structure; turn them off where the arrangement is about mass, not joins. */
   lines?: boolean;
+  /**
+   * Radians per second of continuous yaw, on top of everything else the camera is doing.
+   *
+   * Off by default, because the scrolling scene's camera is the argument — a state that
+   * spins while it is also rotating INTO its arrangement reads as two things fighting.
+   * The hero is the one place it belongs: nothing there is scrubbing the state, so the
+   * only motion is the object turning, and a form only reads as a volume once you have
+   * seen its far side. Frozen under `prefers-reduced-motion`, like every other motion
+   * here — it rides the same clock, which does not advance when motion is reduced.
+   */
+  spin?: number;
   className?: string;
 }
 
 export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function CortexField(
-  { initialState = STATE.cortex, zoom = 1, density = 1, lines = true, className },
+  { initialState = STATE.cortex, zoom = 1, density = 1, lines = true, spin = 0, className },
   handleRef,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -315,6 +407,9 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
     dragYaw: 0, dragPitch: 0, velYaw: 0, velPitch: 0, dragging: false,
   });
   const flareTarget = useRef(new Float32Array(DOMAIN_COUNT));
+  /** Read through a ref so a changed spin rate does not rebuild the scene. */
+  const spinRef = useRef(spin);
+  spinRef.current = spin;
   const reduced = usePrefersReducedMotion();
   const coarse = useCoarsePointer();
 
@@ -471,6 +566,8 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
       attrib(pointProgram, "aDomain", buffer(field.domain), 1);
       attrib(pointProgram, "aSeed", buffer(field.seed), 1);
       attrib(pointProgram, "aSize", buffer(field.size), 1);
+      attrib(pointProgram, "aFlow", buffer(field.flow), 1);
+      attrib(pointProgram, "aRisk", buffer(field.risk), 1);
 
       // ── lines VAO. Endpoints are duplicated into their own buffers rather than drawn
       // with an index buffer, because the two ends need DIFFERENT values of `aT` — that
@@ -521,6 +618,9 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         lineAlpha: context.getUniformLocation(program, "uLineAlpha"),
         pointer: context.getUniformLocation(program, "uPointer"),
         pointerOn: context.getUniformLocation(program, "uPointerOn"),
+        wave: context.getUniformLocation(program, "uWave"),
+        gain: context.getUniformLocation(program, "uGain"),
+        event: context.getUniformLocation(program, "uEvent"),
       });
       const pointU = uniforms(pointProgram);
       const lineU = lineProgram ? uniforms(lineProgram) : null;
@@ -543,6 +643,18 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
       };
       let clock = 0;
       let nextFrame = 0;
+      /**
+       * The occlusion's own clock, in seconds since the first act came on screen.
+       *
+       * Deliberately NOT the scroll position. An artery closing is a thing that HAPPENS,
+       * and scrubbing it back and forth with a wheel would turn the one event on this page
+       * into a slider — which is both worse to watch and a quietly dishonest register for
+       * it. So it runs forward while the act is on screen, holds at the end, and resets
+       * when the visitor leaves so that arriving at the section always shows it from the
+       * beginning rather than from wherever it had got to.
+       */
+      let eventClock = 0;
+      const wave = new Float32Array(3);
 
       render = (now: number) => {
         raf = requestAnimationFrame(render!);
@@ -598,7 +710,11 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
           flare[i] = approach(flare[i], flareTarget.current[i], dt, 9);
         }
 
-        rotation(shown.yaw, shown.pitch, rot);
+        // Applied AFTER the easing rather than folded into `wantYaw`: an exponential
+        // approach toward a target that never stops moving tracks it at a fixed lag, so
+        // the drag and the state change would each land a few degrees off where they were
+        // aimed. Added here it is a pure turntable under an otherwise untouched camera.
+        rotation(shown.yaw + clock * spinRef.current, shown.pitch, rot);
         // Fit the arrangement the visitor is actually looking at, blended across the two
         // that are live. 0.35 rather than 0.5 leaves room for the perspective divide,
         // which makes the near face of the cloud up to half again as large.
@@ -610,6 +726,27 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         }
         const fit = Math.min(cssW * 0.35 / hx, cssH * 0.35 / hy) * zoom * dpr;
 
+        // The motion vocabulary, blended by the same weights as everything else, so the
+        // wave changes character as the cloud arrives rather than switching. `STATE_WAVE`
+        // is the table; this is three multiply-adds over seven rows, once per frame.
+        wave[0] = 0; wave[1] = 0; wave[2] = 0;
+        let gain = 0;
+        for (let i = 0; i < STATE_COUNT; i += 1) {
+          wave[0] += weights[i] * STATE_WAVE[i * 3];
+          wave[1] += weights[i] * STATE_WAVE[i * 3 + 1];
+          wave[2] += weights[i] * STATE_WAVE[i * 3 + 2];
+          gain += weights[i] * STATE_GAIN[i];
+        }
+        // EVENT_SECONDS is the whole arc: the tree fills, the vessel closes, the territory
+        // it fed goes quiet. Slow enough to be watched rather than noticed. Under reduced
+        // motion `clock` never advances and neither does this, so the act holds on the
+        // perfused tree — a picture of an arterial territory, which is still the point.
+        if (weights[STATE.territory] > 0.02 && !reduced) {
+          eventClock = Math.min(EVENT_SECONDS, eventClock + dt);
+        } else if (weights[STATE.territory] <= 0.02) {
+          eventClock = 0;
+        }
+
         context.viewport(0, 0, canvas.width, canvas.height);
         context.clearColor(0, 0, 0, 0);
         context.clear(context.COLOR_BUFFER_BIT);
@@ -617,8 +754,16 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         // Lines under points, and only where the arrangement is ABOUT structure: the
         // scatter and reach states are about mass and a mesh there would assert a
         // coherence the page is at that moment saying does not exist.
+        // Lines are STRUCTURE, and they are drawn only where the arrangement is making a
+        // claim about structure. The scatter gets none: a mesh over the act that says
+        // nothing is being measured would assert the opposite. The territory gets none
+        // either — the arterial tree is already a structure and a second web over it
+        // reads as a wireframe. The network gets a little, and that is new: the links
+        // follow their endpoints, so in that arrangement they become long thin spans from
+        // a household in the tail to a hub, which is the act's entire sentence.
         const structure = weights[STATE.cortex] + weights[STATE.ecosystem] * 0.85
-          + weights[STATE.pathway] * 0.5 + weights[STATE.domains] * 0.2;
+          + weights[STATE.ribbon] * 0.5 + weights[STATE.pathways] * 0.35
+          + weights[STATE.network] * 0.45;
         if (lineVao && lineProgram && lineU && structure > 0.01) {
           context.useProgram(lineProgram);
           context.uniform1fv(lineU.w, weights);
@@ -651,6 +796,9 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
         // canvas size, not the CSS size.
         context.uniform2f(pointU.pointer, t.pointerX * canvas.width, t.pointerY * canvas.height);
         context.uniform1f(pointU.pointerOn, shown.pointerOn);
+        context.uniform3fv(pointU.wave, wave);
+        context.uniform1f(pointU.gain, gain);
+        context.uniform1f(pointU.event, eventClock / EVENT_SECONDS);
         context.bindVertexArray(pointVao);
         context.drawArrays(context.POINTS, 0, field!.count);
         context.bindVertexArray(null);
@@ -675,6 +823,34 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
       ro.observe(box);
       return () => { disposed = true; ro.disconnect(); };
     }
+
+    /**
+     * The driver took the context away, and everything we own with it.
+     *
+     * Not hypothetical on the hardware this product is for: a cheap Android backgrounds
+     * the tab, the GPU resets, or another tab exhausts it, and every buffer, VAO and
+     * program is gone. `preventDefault` is the whole thing — without it the browser never
+     * fires `webglcontextrestored` and the visitor is left looking at a permanently blank
+     * rectangle. That is the same silent-failure shape the `mode` flag exists to prevent
+     * further up this file, arriving by a different door.
+     *
+     * `mode` deliberately stays "gl": the canvas still holds a GL context, so the still
+     * plate cannot take a 2D one on it. If the restore never comes, the section loses its
+     * picture and keeps its text, which is what every other refusal here does too.
+     */
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      stop();
+      owned.buffers.length = 0;
+      owned.vaos.length = 0;
+      owned.programs.length = 0;
+      render = null;
+      gl = null;
+      building = false;
+    };
+    const onContextRestored = () => { if (!disposed && visible) start(); };
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    canvas.addEventListener("webglcontextrestored", onContextRestored);
 
     const io = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting;
@@ -701,6 +877,8 @@ export const CortexField = forwardRef<CortexHandle, CortexFieldProps>(function C
       io.disconnect();
       ro.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       // Every buffer, VAO and program we created, then the context itself. A landing page
       // the visitor navigates away from must not leave a live GL context behind —
       // browsers cap them, and the sixteenth one silently kills the first.

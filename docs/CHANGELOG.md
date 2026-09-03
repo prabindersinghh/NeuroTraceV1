@@ -5,7 +5,215 @@ Dated entries per work session: what changed, what was verified, and how.
 ---
 
 
-## 2026-09-03 (latest) — `feat/journey-experience` merged down: the missing 29 files
+## 2026-09-04 (latest) — Awaaz becomes a communication instrument, and the microphone closes itself
+
+`/awaaz/:patientId` was a flat column of same-weight boxes with the caregiver's **practice
+capture** panel sitting between the emergency control and the phrase board — a training
+feature in the path of somebody trying to ask for the toilet. On a phone the first tile
+started around 560 px down. It is **two zones** now: a **speaking surface** (emergency, the
+utterance plate, the board, type-to-speak) carrying `.patient-scale` — the 20 px floor and
+64 px tap target every other patient screen already had and this one never did — and a
+**caregiver zone** below a rule, deliberately outside that class, holding practice, phrase
+management, the offline emergency voice, the listener link and the analytics consent. **D-088.**
+
+**The utterance plate is the new surface.** A communication board has two readers and there
+was nowhere for the second one to look: what had been said was one 20 px line that scrolled
+away the moment the board was used. The plate is sticky under the header, holds the phrase at
+up to 48 px, keeps it after the voice stops, and carries a **Say it again** control the
+product did not have at all. That repeat is local and files no communication event — saying
+something twice for a listener who missed it is not a second thing said, and counting it would
+corrupt the frequency ranking the board is ordered by. Its three states (empty, holding,
+voicing) are carried by the surface itself rather than a status word, so none of them need
+translating; the bars run off the utterance's own `end` event, so on a handset with no
+Gurmukhi voice they never rise.
+
+**A duplicated speech path is deleted.** `Awaaz.tsx` had its own `voice()` that set
+`utterance.lang` and nothing else, so on most handsets a Gurmukhi phrase was read by the
+default English voice. Speech now goes through `lib/speech-synthesis.ts` like the rest of the
+app. Its one new option, `essential`, is there because the comfort switch it would otherwise
+obey means "do not read the screen aloud" — everywhere else a preference, here the difference
+between a person speaking and a person being silenced.
+
+**The microphone closes itself.** Every capture already released its tracks on unmount; none
+could see a locked phone, an app switch, or a component that unmounted while
+`startAudioRecording` was still awaiting the permission prompt. `lib/recording.ts` (the two
+user-driven recorders) now releases on `visibilitychange` → hidden **and** `pagehide`;
+`lib/capture.ts` (the exam) releases on `pagehide` only, so a notification shade cannot kill a
+measurement in progress. Speech is deliberately **not** stopped on hide — a screen dimming two
+seconds after a tap would otherwise cut the patient off mid-sentence.
+
+**One defect found while driving it.** `App.tsx` returned the first-run `LanguageGate` before
+the router, so `/listen/:token` — the one surface opened by a stranger with no account, which
+already takes its language from the link — showed that stranger a language chooser instead of
+the sentence a survivor was trying to say. The gate now skips that path.
+
+**The speech assessment finally has a control.** `PATCH /awaaz/{id}/profile` accepted
+`speech_profile`, audited it, and was reachable only by curl — so every patient sat at
+`unassessed`, which the gate treats as aphasia, and the one profile INV-9 is built around
+could not be recorded. It is now a collapsed panel in the caregiver zone: three radio options
+named after what is *hard* rather than after two near-homophone clinical terms, each with the
+sentence saying what the board will then do. The auto-speak switch renders only under the
+profile the server accepts it for, moving away from that profile carries the switch off in the
+same request (so the server's 409 is never reached), and the threshold slider floors at 70%
+where `MIN_AUTO_SPEAK_THRESHOLD` does. **D-089.**
+
+**It immediately exposed a lie that was already in the code.** The type field branched its
+label on the profile, which nobody had ever seen because nobody could leave `unassessed`: a
+dysarthria-dominant patient was shown **"Say it"**, pressed it, and got the options list
+anyway. The gate takes a *confidence* — it governs speech the app recognised — and typing
+carries none, so `decide()` sees 0.0 and confirms for every profile. The label is unconditional
+now. `awaazDysarthriaNote`'s claim that "clear enough speech is said aloud automatically" was
+corrected for the same reason (this build has no transcriber; there is no `SpeechRecognition`
+anywhere in the frontend), and enabling auto-speak now states in the panel that it changes
+nothing on screen yet and why.
+
+**Verified.** Frontend **341 passed** (an earlier `cortex.test.ts` device-budget failure was
+pre-existing in the working tree's uncommitted landing work, and was fixed there during this
+session); `mediaRelease.test.ts` is new and **caught `startVideoRecording` having no release
+at all** on its first run. `tsc -b`, `oxlint` and `npm run build` all exit 0. Backend suite
+exit 0, unchanged.
+
+Driven headless in Chrome against a local backend on `:8010`, signed in as the demo clinician:
+card tap → `POST /speak` 200 and the tile marks itself speaking; **Say it again** repeats with
+no second request; free text → `POST /speak` (confirm path, profile `unassessed`) → candidate
+tap → `POST /speak` 200; add phrase → `POST /cards` **201** and the tile appears; listener mint
+→ `POST /listener` 200, and the link **now opens for a stranger** and shows the phrase within
+one poll. Zero console errors at 390 px and 1440 px.
+
+The assessment panel was driven the same way: three `PATCH /profile` **200**s and no 409 — the
+auto-speak switch is absent under "finding words is hard", present under "speaking is hard",
+the threshold slider comes up at 85%, the pending-ASR notice shows, and typed text still
+returns candidates under every profile. The server's guard was checked separately and still
+refuses `aphasia_dominant` + `auto_speak_enabled` with a **409**.
+
+**The microphone release was measured, not assumed**: with `getUserMedia` wrapped to expose
+its streams, the track reads `live` while recording and `ended` after
+`document.visibilityState` is forced to `hidden` — and the panel comes back holding the
+partial take, with the audio player and the "now tap the matching card" prompt intact, rather
+than losing it.
+
+Not deployed. Nothing in the backend changed.
+
+---
+
+## 2026-09-04 — the overture gains the act it was always downstream of
+
+`SignalScene` runs **seven** acts now, not six, against the same single point cloud. The new
+one is first — **the event**: an arterial tree fills, one middle cerebral artery closes, and
+the territory it fed stops being lit. The page's premise had never had a picture; act one
+said "the emergency ends, the recovery does not" over a cube of random dust. **D-086.**
+
+The honesty guard is the act's own text, not a disclaimer: *"NeuroTrace is not for that hour.
+It reasons over days, and cannot see a stroke that is happening now."* Two details are
+clinically specific and no more: the closed vessel takes **domains 3 and 1 together** (a
+middle cerebral occlusion takes the motor strip and the speech territory), on **one
+hemisphere** (INV-2), and the territory is **graded from its core outward** rather than
+switched off. That grading is conceptual — a falloff around a vessel endpoint, not a
+perfusion model — and no number anywhere derives from it.
+
+**Two arrangements were rebuilt, not added.** `pathways` (was `domains`) was seven flat rows
+of noise, which argued the opposite of its own act: seven identical rows say the seven
+readings are the same measurement seven times. Each tract now leaves the lobe it belongs to
+and carries its own amplitude, wavelength and scatter, so one runs smooth and one wanders.
+`network` (was `reach`) was a formless spread, so the overture ended on the picture it began
+with; it is now dense hubs and a long sparse tail, joined by the structural lines, which is
+the act's sentence drawn. Deliberately **not** a map of India — that would be both the cliché
+this page avoids and a coverage claim we have not earned.
+
+**Two new attributes and one new uniform carry all of it.** `Field.flow` is how far along its
+own structure a point sits, and the vertex shader runs exactly one travelling wave along it;
+`STATE_WAVE` decides what that wave means per arrangement (blood, a signal, ninety days).
+`Field.risk` is how far downstream of the occlusion a point is. `STATE_GAIN` is new too — a
+per-arrangement alpha trim.
+
+**A silent failure closed.** `CortexField` never handled `webglcontextlost`, so a GPU reset on
+the cheap Android this product is for left a permanently blank rectangle with nothing in the
+console.
+
+**Three things measured rather than judged by eye**, each of which had first been got wrong:
+a vessel drawn *bigger and brighter* clips to a white bar, because an additive blend lands
+twenty points on every pixel of a thin tube; the clot mark keyed off the *value* of `risk`
+painted the whole penumbra gold once the territory became graded, and is keyed off vessel
+position now; and clipped-pixels-as-a-fraction-of-lit-pixels **lied for three passes** —
+trimming alpha made it worse by shrinking its own denominator, while as a fraction of the
+canvas every arrangement blows out the same ~0.1%. The lanes' real problem was area, and it
+was fixed in the geometry — which also fixed the ribbon, which predates this work.
+
+One published number is corrected rather than quietly left: D-085 measured
+`createField(18000)` at 12.8 ms, and it is **23.8 ms** now (28.3 ms at the 28 000-point
+desktop budget). Off the critical path — the field is built lazily, a fifth of a viewport
+before the section arrives — and per-frame cost is unchanged, but the old figure was stale
+the moment a seventh arrangement existed.
+
+**Verified.** Frontend **337 passed** (`cortex.test.ts` gained six: the tree grows from one
+shared stem, it terminates exactly in the tissue it feeds, the occlusion stays on one vessel
+and one side, the territory stays graded rather than binary, the clot mark sits where the
+clot is, and the seven tracts behave measurably differently from each other). `tsc -b`,
+`oxlint`, `vite build` all exit 0. **Bundle: +3.88 kB gzipped** on the signed-out entry chunk
+(106.55 → 110.43), measured by building with and without the change; **no dependency added**.
+Rendered in Chrome at all seven acts and at three points across the event; at 1440, 768, 390
+and 320 px with **no horizontal overflow and no console errors at any width**; under
+`prefers-reduced-motion` (still plate) and with WebGL disabled (still plate). Context loss
+forced through `WEBGL_lose_context`: **38 116 lit pixels before, 38 965 after restore** — and
+with `preventDefault()` removed and nothing else changed, **0**, which is what makes that
+handler load-bearing rather than decorative.
+
+---
+
+## 2026-09-03 — the hero cortex turns, and is shaped like a brain
+
+The hero instrument's cloud (`HeroConsole` → `CortexField`, `initialState = STATE.cortex`)
+now **revolves continuously** — one turn every ~29 seconds — and the `cortex` arrangement in
+`lib/cortex.ts` was reshaped from a folded ovoid into something a stranger reads as a brain.
+
+**The turn** is a new `spin` prop on `CortexField`, radians per second, **0 by default**. It
+is applied after the camera easing rather than folded into it: an exponential approach
+toward a target that never stops moving tracks it at a fixed lag, which would land every
+drag and every state change a few degrees off where it was aimed. Added afterwards it is a
+pure turntable under an otherwise untouched camera. Only the hero passes it — the scrolling
+`SignalScene` rotates *into* each arrangement, and a spin on top of that is two motions
+fighting. It rides the existing `clock`, which does not advance under
+`prefers-reduced-motion`, so reduced motion still gets a still plate and no rotation.
+
+**The shape.** Was: seven lobes normalised onto a folded shell with an empty midline. Now
+also has cerebrum proportions (longest front-to-back, flattest top-to-bottom) with the
+frontal pole tapered smaller than the parietal bulge, a **flat floor and a domed top**, a
+**temporal lobe** swelling out below a creased **Sylvian fissure**, and — from domain 5,
+which *is* posterior/vestibular — a **cerebellum** under the back of it with its own finer
+folia, and a short **brainstem** dropping from underneath.
+
+Two changes fell out of the rotation rather than the shape:
+
+- **The shell is no longer a thin band.** A surface-only shell seen edge-on under an
+  additive blend is a hollow ring, which did not matter while the view was fixed and does
+  once the form presents its narrow axis every revolution. Radius is now surface-weighted
+  with a tail inward (`1.03 − rng()**5 * 0.55`), which fills the middle enough to read as a
+  body from any angle without the wash a uniform fill would give.
+- **The still plate was upside down.** `project()` returns world +y as *increasing* canvas
+  y; the vertex shader flips it (`vec2(r.x, -r.y)`). The 2D fallback in `drawStill` never
+  compensated. Invisible while the shape was near enough symmetric top-to-bottom — not
+  invisible at all once a cerebellum and a brainstem hang off the bottom of it. Fixed in
+  `drawStill`.
+
+Fold amplitude came down (0.115/0.055 → 0.095/0.045) for the same reason: at the old
+amplitude the ridges reached the silhouette, and a turning form showed them as a burr on the
+outline rather than as relief on a surface.
+
+**Verified.** Frontend **329 passed** (`cortex.test.ts` gained one: the midline stays empty
+and the cerebellum's mean sits below and behind the cerebrum's — the two features a tuning
+pass could silently delete), `tsc -b` exit 0, `oxlint` exit 0, `vite build` exit 0. Rendered
+in Chrome against `vite preview` at four points across one revolution: the cloud is at a
+different angle each time, the hemispheres and the midline gap read from the front, and the
+cerebellum and stem read from the side. Hero density was tried at 0.60 and put back to
+**0.42** — the extra points saturated the lateral surface to flat white, which is the
+density × alpha blowout the point shader's comment already warns about.
+
+No new dependency, no library, nothing added to the bundle: D-039 and D-064 hold.
+
+---
+
+
+## 2026-09-03 — `feat/journey-experience` merged down: the missing 29 files
 
 **Reported as "the 3D model does not show on the login page."** It was not a rendering
 defect. The login field is `components/auth/NeuralField.tsx` — a brain-shell node network

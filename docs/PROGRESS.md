@@ -2,7 +2,72 @@
 
 Current state of NeuroTrace. A stranger should be able to continue from this file alone.
 
-**Last updated:** 2026-09-03 · **Repository structure only — no functional change, nothing
+**Last updated:** 2026-09-04 · **Landing overture, after a Playwright audit of the running
+page.** The audit found the scene drawing the hero's own geometry at **2.36× less screen
+density** (the fit scales the cloud with the canvas, so a bigger canvas gets a bigger cloud,
+not a denser one) and pointing the camera at the interhemispheric gap from three quarters,
+where a gap is edge-on and therefore invisible. Act 04 read as a dark cloud; it reads as a
+brain now. Point budgets raised (38 000 / 16 000 / 8 000), `SignalScene` pulls its fit in on
+desktop, cortex and territory cameras turned near face-on. `LandingNav` also had **no
+active-section state at all** — the bar, the picture and the words disagreed about where the
+visitor was — and now marks the section under the header. **D-087.**
+
+**Also 2026-09-04, and unrelated to the landing page — Awaaz.** `/awaaz/:patientId` is now two
+zones: a **speaking surface** (emergency, a new sticky **utterance plate**, the board,
+type-to-speak) carrying `.patient-scale` — the 20 px floor and 64 px tap target every other
+patient screen already had and this one did not — and a **caregiver zone** below a rule,
+outside that class, holding practice capture (which used to sit *between* the emergency
+control and the board), phrase management, the offline emergency voice, the listener link and
+the analytics consent. The plate holds what was said at up to 48 px for the person listening,
+keeps it after the voice stops, and carries a **Say it again** control that repeats locally and
+files no new communication event. `Awaaz.tsx`'s duplicated local `voice()` is deleted — speech
+goes through `lib/speech-synthesis.ts`, so a Gurmukhi phrase gets a `pa-IN` voice instead of
+the default English one. **D-088.**
+
+**`speech_profile` finally has a control.** INV-9's only input had no UI at all, so every
+patient sat at `unassessed` and the dysarthria path was unreachable from the app built around
+it. It is a collapsed panel in the caregiver zone: three options named after what is *hard*
+rather than after two near-homophone clinical terms, the auto-speak switch rendered only under
+the profile the server accepts it for, a 70 %-floored threshold slider. Adding it exposed a lie
+already in the code — the type field said **"Say it"** for a dysarthria profile and then showed
+options anyway, because the gate takes an ASR *confidence* and typing carries none. That label,
+`awaazDysarthriaNote`'s "spoken automatically" claim, and the absence of any transcriber in
+this build are all stated plainly now. **D-089.**
+
+**Media hardware releases itself at the opener.** `lib/recording.ts` (Awaaz practice, the
+review queue) releases on `visibilitychange` → hidden and `pagehide`; `lib/capture.ts` (the
+exam) on `pagehide` only, so a notification shade cannot kill a measurement. Speech is
+deliberately not stopped on hide. `mediaRelease.test.ts` pins it and caught
+`startVideoRecording` having no release at all. **One defect fixed while driving it:**
+`/listen/:token` — the one surface a stranger opens with no account — was behind the first-run
+`LanguageGate`, so a listener got a language chooser instead of the phrase they were sent.
+
+Frontend **341 passed**, `tsc -b`, `oxlint`, build all exit 0; backend suite exit 0, unchanged.
+Driven headless in Chrome at 390/1440 px with zero console errors: card tap, say-again, the
+confirm loop, add-phrase (201), listener mint, emergency, the listener page, and three
+`PATCH /profile` 200s with no 409. The microphone release was measured — the track goes
+`live` → `ended` on hide, and the partial take survives. Nothing deployed.
+
+Earlier the same day, the overture went from six acts to seven: the new first act is **the
+event** — an arterial tree fills, one middle cerebral artery closes, and the territory it fed
+stops being lit — because the page's own premise had never had a picture. `pathways` (was
+`domains`) and `network` (was `reach`) were rebuilt rather than added. Two new per-point
+attributes (`flow`, `risk`), two tables (`STATE_WAVE`, `STATE_GAIN`), one travelling wave in
+the shader. `CortexField` now survives `webglcontextlost`, which it did not. **D-086.**
+
+Frontend **341 tests** / `tsc -b` / `oxlint` / `vite build` all exit 0. Entry chunk **110.90 kB
+gzipped, +4.35 kB across the day, no new dependency** — three.js and GSAP were asked for by
+name twice and declined twice, per D-039/D-064/D-085. Scroll continuity measured slow, fast
+and reverse: no stuck frames, no snapping, no errors. Rendered at 1920/1440/1366/1024/430/390/
+320 px, under reduced motion, with WebGL disabled, and across a forced context loss.
+
+**Before that, 2026-09-03** · The hero cortex cloud revolves continuously (one turn per ~29 s,
+via a `spin` prop on `CortexField`, off everywhere else) and the `cortex` arrangement was
+reshaped — cerebrum proportions, flat floor and domed top, temporal lobe under a Sylvian
+fissure, cerebellum and brainstem. A latent bug surfaced with it: the no-WebGL still plate
+drew the cloud upside down, which only became visible once the shape had a bottom.
+
+**Before that, also 2026-09-03** · **Repository structure only — no functional change, nothing
 pushed, nothing deployed.** The root went from sixteen visible entries to eight: nine
 documents moved into `docs/` (five of them to the new `docs/archive/`, which is history and
 is not current), and `content.md` was deleted after its revamp shipped into `Landing.tsx`.

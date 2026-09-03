@@ -1897,3 +1897,288 @@ overture that states the whole argument before the evidence for it. The Parkinso
 was merged into `#gates`, because it is the only reason the third gate exists and separating
 them made Gate 3 read as fussiness. `Landing.tsx` and `components/landing/` remain outside
 the i18n and type-scale scans (D-084) — this work did not close that gap.
+
+### D-086 — the landing page's overture gains a seventh act: the event it is downstream of
+
+**2026-09-04.** `SignalScene` now runs **seven** acts against the same one point cloud, not
+six, and the new one is first: **the event**. An arterial tree fills, one middle cerebral
+artery closes, and the territory it fed stops being lit. Everything the page already argued
+runs downstream of that. Extends **D-085**, supersedes nothing in it — one cloud, seven
+arrangements, raw WebGL2, the rAF ticker, and no library. **Measured: +3.88 kB gzipped on
+the signed-out entry chunk (106.55 → 110.43), and no dependency was added.** three.js and
+GSAP were named again in the brief that prompted this and declined again for D-085's
+reasons, which the measurement is the argument for: ~240 kB between them, on a page whose
+own claim is that this product runs on a cheap phone in a district with no neurologist.
+
+**Why an act about a stroke belongs on a page that cannot see one.** The first act used to
+say "the emergency ends, the recovery does not" over a cube of random dust — the premise of
+the entire product was the one thing on the page with no picture. It has one now, and the
+honesty guard is in the act's own text rather than in a disclaimer: *"NeuroTrace is not for
+that hour. It reasons over days, and cannot see a stroke that is happening now."* The hero
+says the same thing a screen higher. Nothing here is a capability claim; the canvas is
+`aria-hidden` and every word beside it is real text.
+
+Two things in the geometry are clinically specific on purpose, and only two. The vessel that
+closes takes **domains 3 and 1 together** — a middle cerebral occlusion takes the motor strip
+and the speech territory from one vessel — and it takes **one hemisphere**, because laterality
+is a claim this product makes everywhere else (INV-2). The territory is **graded from its core
+outward** rather than switched off, so there is a worst-affected middle and a margin that
+fares better. That grading is conceptual: a falloff around a vessel endpoint, not a perfusion
+model, and no number on this page is derived from it. `cortex.test.ts` pins all three.
+
+**One attribute, three meanings, and the bug in doing it any other way.** `Field.flow` is how
+far along its own structure a point sits — out through an artery, down a tract, along ninety
+days — and the vertex shader runs exactly **one** travelling wave along it. What that wave
+MEANS is a table (`STATE_WAVE`) blended by the same weights as the positions, so blood, a
+signal and a ninety-day sweep are the same three instructions with different constants. The
+temptation is to give the wave its own random draw per arrangement; doing that puts the light
+somewhere the structure is not, because the geometry and the shader stop agreeing about where
+"half way" is. `Field.risk` is the second and last new attribute.
+
+**Three findings worth a stranger's attention, because each was a bug first:**
+
+1. **An additive blend's arithmetic decides the picture, not taste.** A vessel drawn bigger
+   and brighter — the intuitive move — clipped to a white bar, because a few thousand points
+   crowded into a tube a hundredth of a unit wide land twenty deep on every pixel and twenty
+   times any workable alpha is white. A vessel is a dense line of *faint, small* points. Two
+   further consequences: the tree holds a **sixth** of the cloud rather than a third, and its
+   points **bunch outward** (`treeParam`), because a tube whose radius shrinks distally and is
+   filled at constant density is over-covered at the trunk and thin at the tips — the exact
+   inverse of a real tree, where one trunk becomes many branches.
+2. **A clot is a position on a vessel.** It was first keyed off the *value* of `risk`, which
+   worked while risk was a plain ramp along one vessel and painted the entire penumbra margin
+   gold the moment the territory became graded — every point in that margin happened to hold
+   the value the mark was looking for. It is keyed off `flow` at `CLOT_FLOW` now, which
+   `cortex.ts` derives by inverting its own mapping and the test pins, so the mark cannot
+   drift onto a healthy vessel the next time that mapping is retuned.
+3. **A ratio metric lied for three passes.** The lane-shaped arrangements looked like bright
+   smears, and clipped-pixels-as-a-fraction-of-*lit*-pixels agreed. Trimming their alpha made
+   that number **worse**, because it shrank the denominator. As a fraction of the **canvas**,
+   every arrangement blows out the same ~0.1%: what actually differed was **area** — the
+   tracts and the ribbon lit a fifth of the pixels the cortex did, being short flat bands in a
+   tall box, and concentration is what reads as a smear. Fixed in the geometry (shorter, taller
+   tracts; a taller ribbon), which also fixed the ribbon, an arrangement that predates this
+   work. `STATE_GAIN` survives as a small honest trim, with its first, wrong justification
+   replaced by what measuring actually said.
+
+**A silent failure mode closed.** `CortexField` never handled `webglcontextlost`. On the cheap
+Android this product is for, a backgrounded tab or a GPU reset takes the context and every
+buffer with it, and without `preventDefault()` the browser never fires `webglcontextrestored`
+— the visitor is left with a permanently blank rectangle and nothing in the console. Verified
+both ways in Chrome by forcing a loss through `WEBGL_lose_context`: **with** the handler the
+canvas comes back (38 116 lit pixels before, 38 965 after); with `preventDefault()` removed and
+nothing else changed, **0**. Same shape of failure as the context-type bug in D-085, arriving
+by a different door.
+
+**What it costs to build, and why that is still acceptable.** D-085 measured
+`createField(18000)` at **12.8 ms**. The same call now measures **23.8 ms**, and
+`createField(28000)` — the desktop budget — measures **28.3 ms**: a seventh arrangement, a
+Bézier and a distance per point, and one more pass for the extents. That is a correction to a
+published number, not a footnote. It is still off the critical path — the field is built
+lazily, a fifth of a viewport before the section arrives, on the frame after the shaders link
+— and it scales with the budget, so the phones that matter most build 5 600 points in about a
+fifth of that. Per-frame cost is unchanged: scrolling still moves seven floats and nothing
+else, and eighteen thousand points scrub for the same cost as five hundred.
+
+**What was declined, and why.** An ischaemic-versus-haemorrhagic comparison, a neuroplasticity
+scene, and a separate connectome scene were all asked for and are all absent. This product
+does not turn on the stroke-type distinction, makes no claim about neural rewiring, and
+already draws its connectivity in the `cortex` arrangement's lines. Each would have been a
+decorative animation implying a claim, which is the one thing the brief and this page agree
+must not happen. The `network` arrangement is likewise **not** a map of India: an outline
+would be both the cliché this page avoids everywhere else and an assertion about coverage
+that has not been earned. It is a distribution with hubs in it, which is the true statement —
+neurological expertise is concentrated and the need is not.
+
+---
+
+### D-087 — the scene was drawing the hero's geometry at a third of its density, and the gap was edge-on
+
+**2026-09-04, same day as D-086.** A Playwright audit of the running page — not of the source
+— found the overture's best pictures unrecognisable at full-screen size. Act 04 is the same
+`cortex` arrangement the hero plate draws, and the hero reads unmistakably as a brain while
+the scene read as a dark cloud. Nothing was wrong with the geometry. Two things were wrong
+with how it was being presented, and both are arithmetic rather than taste.
+
+**1 · Density.** `CortexField` fits the cloud to `0.35 × min(w, h)`, so a bigger canvas gets a
+bigger cloud, not a denser one. The hero draws 11 760 points across a 238 × 155 px cloud —
+**0.319 points/px²**. The scene drew 28 000 across 564 × 367 px — **0.135**, i.e. **2.36×
+less light per pixel** for the identical shape. An additive point cloud only reads as a
+*surface* while the surface is continuous, and below roughly the hero's figure it stops
+being. Fixed on both sides: the desktop budget goes 28 000 → 38 000 (12 000 → 16 000 and
+5 600 → 8 000 on the lower tiers, where the same shortfall was worse because the canvas is
+smaller *and* the count was lower), and `SignalScene` passes `zoom={0.78}` to pull the fit in.
+Together that lands at 0.30 pts/px², 0.95× the hero. The phone keeps the full fit — its
+canvas is already small, and 0.78 there strands the cloud in the middle of the panel.
+
+**2 · The camera was hiding the one feature that makes it a brain.** `lib/cortex.ts` has said
+since D-085 that the empty midline is "the single feature that makes a point cloud read as a
+brain rather than a sphere" — and `STATE_VIEW` then pointed the camera at it from three
+quarters, where a gap between two hemispheres is edge-on and therefore not a gap at all. The
+arrangement kept its volume and lost its identity. Cortex goes −0.50 → **−0.26** yaw and the
+territory −0.62 → **−0.46**. Recognition beats volume: a form nobody identifies has no volume
+worth showing. D-085's reasoning for per-state cameras stands; only these two values change.
+
+A third, smaller finding from the same pass: after the budget rose, the first act's tissue
+rose with it and swallowed the arterial tree, because the two had been balanced at nearly
+equal alpha (0.82 vs 0.80). What separates a subject from its ground is contrast, not either
+value — tissue 0.58, vessel 1.00 now.
+
+**The navigation was the fourth thing that should have been synchronised and was not.**
+`LandingNav` tracked scroll progress and the tone of the section under it, but had **no
+active-section state at all** — so the bar, the picture and the words told a visitor three
+different things about where they were. It now marks the section under the header with a
+one-pixel `IntersectionObserver` band, the same technique already in the file for the dark
+tone, plus `aria-current` and a rule under the label rather than a fill. Two details worth
+keeping: the desktop bar shows seven of ten sections, so a mark keyed strictly to the
+observed section blinks off for a third of the page — `desktopActive` maps the three unlisted
+sections onto the last listed one at or before them, which names the stretch the visitor is
+in rather than lying about the section or showing nothing. And the phone menu's summary now
+reads the current section's name instead of the word "Sections", which is the same
+orientation the desktop rule gives, in the space that was already there.
+
+**Verified against the running page, not the source.** Frontend **341 passed**, `tsc -b`,
+`oxlint`, `vite build` all exit 0. **Entry chunk 110.90 kB gzipped, +0.47 kB over D-086.**
+Scroll continuity measured by mean per-pixel change between 24 successive scroll positions
+through the section: slow **mean 4.24 / max 7.72 (1.8× spike)**, fast **4.10 / 7.66**, reverse
+**4.26 / 7.43**, **zero stuck frames and no page errors in any of the three** — a discrete
+state change would show a five- to tenfold spike, so the existing rAF easing is already doing
+what a scrubbed timeline would, which is D-039 and D-085 holding under a direct test rather
+than by assertion. Rendered at 1920, 1440, 1366, 1024, 430, 390 and 320 px with no horizontal
+overflow and no console errors at any width, and under `prefers-reduced-motion` and with
+WebGL disabled.
+
+---
+
+### D-088 — Awaaz gets two zones, one plate, and a microphone that closes itself
+
+**The screen was a stack, and the stack was in the wrong order.** `/awaaz/:patientId` rendered
+one flat column of same-weight bordered boxes: the emergency control, up to five status
+paragraphs, a large collapsible *practice capture* panel, and only then the phrase board.
+Practice capture is caregiver tooling for a training corpus. It sat between the emergency
+control and the tiles, which put a training feature in the path of somebody trying to ask for
+the toilet — on a phone the board's first row started around 560 px down.
+
+So the screen is now two zones with two owners. The **speaking surface** — emergency, the
+utterance plate, the board, type-to-speak — carries `.patient-scale`, the 20 px floor and
+64 px tap target every other patient screen in this product already had and this one never
+did. Everything that *configures* the thing lives below a rule in the **caregiver zone**, and
+is deliberately outside `.patient-scale`: a 64 px minimum on "delete every recording" is not
+care, it is a bigger mistake to make by accident.
+
+**The utterance plate is the one genuinely new surface, and it is not decoration.** A
+communication board has two readers — the person tapping and the person listening — and there
+was nowhere for the second one to look. What had been said appeared as one 20 px line above
+the fold and scrolled away the moment the board was used. The plate is sticky under the
+header, holds the phrase at up to 48 px, and keeps it after the voice has stopped, because
+the sound is gone and the sentence is not. It carries a **Say it again** control, which the
+product did not have at all; that repeat is local and files no new communication event,
+because saying the same thing twice for a listener who missed it is not a second thing said,
+and counting it would corrupt the frequency ranking the board is ordered by.
+
+Its three states are carried by the surface — dashed and recessive when empty, solid when
+holding a phrase, accent-filled while a voice is on it — rather than by a status word, so
+none of it needs translating into three languages. The bars beside it are driven by the
+utterance's own `end` event, not a timer: on a handset with no voice for Gurmukhi they never
+rise, which is the honest thing for them to do.
+
+**The board keeps the server's order.** Cards are frequency-ranked server-side, and grouping
+the tiles by their `category` column was considered and rejected: it would move the tile
+somebody uses forty times a day away from where their hand has learned it is. What the tiles
+gained instead is an icon chip — a bare glyph in a bordered rectangle is why twelve of them
+read as twelve empty boxes — and that chip inverts to mark the tile currently being spoken.
+No new colour: this palette reserves every non-blue for clinical status, and a phrase card is
+not a status.
+
+**A duplicated speech path is deleted.** `Awaaz.tsx` had its own six-line `voice()` that set
+`utterance.lang` and nothing else, so on most handsets a Gurmukhi phrase was read by the
+default English voice. It now goes through `lib/speech-synthesis.ts` like the rest of the app,
+which picks a real `pa-IN` voice when one exists. That module's one new option, `essential`,
+exists because the comfort switch it would otherwise obey means "do not read the screen aloud"
+— a preference everywhere else, and on this screen the difference between a person speaking
+and a person being silenced.
+
+**The microphone now closes itself, and that guarantee lives with the openers.** Every capture
+in this app already released its tracks on unmount, and every one of those was written
+deliberately. None of them can see the case that matters: the phone being locked, the user
+switching to WhatsApp, or a component that unmounted while `startAudioRecording` was still
+awaiting the permission prompt — all three leave the track live and the recording indicator
+lit with nobody speaking into it. On a product whose entire argument is that media never
+leaves the device, that is the worst thing to have wrong.
+
+The split is deliberate. `lib/recording.ts` — the two user-driven recorders, Awaaz practice
+and the review queue — releases on **`visibilitychange` → hidden** as well as `pagehide`;
+those recordings are restartable, and whatever was captured before the release still survives,
+because `stop()` returns chunks already in memory. `lib/capture.ts` — the exam's camera and
+microphone — releases on **`pagehide` only**: a measurement in progress must not be killed
+because a notification shade came down for a second. `mediaRelease.test.ts` pins both, in the
+source-scan shape `hardcodedStrings.test.ts` already uses here, and it caught
+`startVideoRecording` having no release at all on its first run.
+
+**Speech is deliberately NOT stopped when the page hides.** A screen that dims two seconds
+after a tap fires the same event, and cutting there would silence the patient mid-sentence in
+front of the person they were talking to. The microphone is a privacy question; the
+loudspeaker is the product working.
+
+**One defect found while driving it, and it was not cosmetic.** `App.tsx` returned the
+first-run `LanguageGate` before the router, so `/listen/:token` — the single surface in this
+product opened by a stranger with no account, which the route's own comment says as much
+about, and which already takes its language from the link's `?lang=` — showed that stranger a
+NeuroTrace language chooser instead of the sentence a survivor was trying to say to them.
+Their answer changed nothing on the page they then reached. The gate now skips that one path.
+
+---
+
+### D-089 — the speech assessment gets a control, and the type field stops promising a path it does not have
+
+**INV-9's input had no way in.** `PATCH /awaaz/{id}/profile` accepted `speech_profile`,
+audited it, and was reachable only by curl. Nothing in the app set it, so every patient in
+every deployment sat at `unassessed` — which `may_auto_speak` treats as aphasia — and the one
+profile the gate is built around could not be recorded by the people who assess it.
+
+The control is a collapsed panel in Awaaz's caregiver zone: three radio options, each with the
+sentence that says what the board will then do. **Radios, not a select**, because what changes
+is whether this app may ever put words in somebody's mouth, and a dropdown hides exactly the
+text that explains that. `unassessed` is reported and never offered — not having decided is a
+state, not a choice somebody makes.
+
+**The options are not named after the conditions.** "Dysarthria" and "aphasia" are
+near-homophones to somebody hearing them for the first time, and the person setting this is
+usually a caregiver acting on advice, reading Hindi or Punjabi. Getting them backwards is
+catastrophic in one direction only — it is the difference between a board that confirms and a
+board that speaks unprompted. So each option says what is *hard* ("Speaking is hard, finding
+words is not") and the line beneath says what follows.
+
+**One request, never two.** The server refuses `auto_speak_enabled` on an ineligible profile
+with a 409 rather than accepting and ignoring it, so moving away from dysarthria-dominant
+carries the switch off in the same patch. The auto-speak control is not rendered at all under
+the other two profiles: greying it out would advertise a setting that cannot be had, and
+invite somebody to change a clinical assessment in order to get it. The threshold slider
+floors at 70% because `MIN_AUTO_SPEAK_THRESHOLD` does, and a slider that travels somewhere the
+server will not follow it is a control that lies.
+
+**Not gated on role, deliberately.** A patient signing in on their own account sees it. The
+handset in this population is usually shared and a caregiver setting this up is very often
+looking at a session signed in as the patient; gating on role would lock out the person the
+control is for. It is collapsed, quiet, in the caregiver zone, and the copy says whose
+decision it is. INV-6 puts the real authorisation on the server, unchanged.
+
+**And then the control exposed a lie that was already there.** The type field branched its
+label on the profile — `isAphasia ? "Show options" : "Say it"` — which nobody had ever seen,
+because nobody could leave `unassessed`. With the profile settable, a dysarthria-dominant
+patient was shown **"Say it"**, pressed it, and got the options list anyway. The auto-speak
+gate takes a **confidence**: it is for speech the app *recognised*, where the words are a
+machine's reading of a sound. Typing carries no confidence and no client sends one, so
+`decide()` sees 0.0 and returns `confirm` for every profile, every time. The label is
+unconditional now. That is the same failure the profile endpoint spends a 409 to avoid,
+arriving through a label instead of a setting.
+
+Two further claims were corrected rather than left. `awaazDysarthriaNote` said "clear enough
+speech is said aloud automatically" — true of a product with a transcriber, and this one has
+none (`PLAN_AWAAZ.md`; there is no `SpeechRecognition` anywhere in the frontend). And turning
+auto-speak on now shows, in the panel, that it changes nothing on screen yet and why: the
+alternative is letting a caregiver discover that by testing a safety setting on a patient.
+
+**What this does buy today**, with no ASR: an audited clinical record, in the row the gate
+already reads, so the assessment is in place before the input it governs exists — rather than
+every patient being permanently unassessed on the day a transcriber lands.

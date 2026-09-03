@@ -46,7 +46,8 @@ export DEMO_MODE="${DEMO_MODE:-true}"
 
 # 3. Apply migrations
 echo "🔄 Checking database schema..."
-$ALEMBIC upgrade head >/dev/null 2>&1 || true
+$ALEMBIC upgrade head || echo "⚠️  Migration check completed with warnings."
+
 
 # 4. Optional / Initial demo seed
 if [[ "$*" == *"--seed"* ]] || [ ! -f "neurotrace.db" ]; then
