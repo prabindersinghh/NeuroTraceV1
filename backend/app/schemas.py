@@ -773,6 +773,33 @@ class AwaazSpeakResult(BaseModel):
     audio_pair_registered: bool = False
 
 
+class AwaazSpeechDecodeRequest(BaseModel):
+    """Muffled speech decoding request for the neural speech reconstruction pipeline."""
+
+    target_lang: str = Field(default="en", max_length=8)
+    preset_id: str | None = Field(default=None, max_length=64)
+    muffled_text_hint: str | None = Field(default=None, max_length=500)
+    audio_duration_seconds: float | None = Field(default=None, ge=0.1, le=30.0)
+    simulated_dysarthria_level: float = Field(default=0.75, ge=0.0, le=1.0)
+    audio_base64: str | None = None
+
+
+class AwaazSpeechDecodeResult(BaseModel):
+    """Reconstructed human-understandable speech result with acoustic telemetry."""
+
+    patient_id: uuid.UUID
+    reconstructed_text: str
+    lang: str
+    confidence: float
+    dysarthria_likelihood: float
+    acoustic_metrics: dict[str, float]
+    candidates: list[str]
+    auto_speak: bool
+    mode: str
+    reason: str
+    requires_confirmation: bool
+
+
 class AwaazReviewLabelRequest(BaseModel):
     """A caregiver-verified label, optionally paired with a local patient repeat.
 

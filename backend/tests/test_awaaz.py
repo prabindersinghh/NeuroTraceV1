@@ -1019,3 +1019,88 @@ def test_a_decline_the_live_adapter_also_shows_is_not_called_masked():
                      wer_frozen_at_reference=0.171, n_utterances=200)
     assert d.drift > 0.1
     assert d.masked_by_adaptation is False
+
+
+async def test_board_localization_with_lang_query_param(session, client):
+    """Calling /board?lang=pa should return default cards translated to Punjabi,
+    while ?lang=en returns English."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+
+    # English query
+    en_resp = await client.get(f"/awaaz/{patient.id}/board?lang=en", headers=headers)
+    assert en_resp.status_code == 200
+    en_cards = en_resp.json()["cards"]
+    assert any(c["text"] == "Water" and c["lang"] == "en" for c in en_cards)
+    assert any(c["text"] == "I need help" and c["lang"] == "en" for c in en_cards)
+
+    # Punjabi query
+    pa_resp = await client.get(f"/awaaz/{patient.id}/board?lang=pa", headers=headers)
+    assert pa_resp.status_code == 200
+    pa_cards = pa_resp.json()["cards"]
+    assert any(c["text"] == "ਪਾਣੀ" and c["lang"] == "pa" for c in pa_cards)
+    assert any(c["text"] == "ਮੈਨੂੰ ਮਦਦ ਚਾਹੀਦੀ ਹੈ" and c["lang"] == "pa" for c in pa_cards)
+
+
+async def test_speak_card_localization_with_lang_payload(session, client):
+    """Tapping a card with lang='pa' returns Punjabi text and logs it in Punjabi."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+    cards = (await client.get(f"/awaaz/{patient.id}/board", headers=headers)).json()["cards"]
+    water_card = next(c for c in cards if c["slot"] == 1)
+
+    r = await client.post(
+        f"/awaaz/{patient.id}/speak",
+        json={"card_id": water_card["id"], "lang": "pa"},
+        headers=headers,
+    )
+    assert r.status_code == 200
+    res = r.json()
+    assert res["text"] == "ਪਾਣੀ"
+    assert res["lang"] == "pa"
+    assert res["speak_now"] is True
+
+    # UtteranceLog check
+    log = await session.scalar(
+        select(UtteranceLog).where(
+            UtteranceLog.patient_id == patient.id,
+            UtteranceLog.card_id == uuid.UUID(water_card["id"]),
+        )
+    )
+    assert log is not None
+    assert log.text == "ਪਾਣੀ"
+    assert log.lang == "pa"
+
+
+async def test_muffled_speech_decoding_endpoint(session, client):
+    """The decode-speech endpoint reconstructs muffled dysarthric speech,
+    computes acoustic perturbation metrics, and gates via INV-9."""
+    caregiver, patient = await _patient(session)
+    headers = await _headers(client, caregiver)
+
+    # Test English preset
+    en_resp = await client.post(
+        f"/awaaz/{patient.id}/decode-speech",
+        json={"preset_id": "water", "target_lang": "en", "simulated_dysarthria_level": 0.8},
+        headers=headers,
+    )
+    assert en_resp.status_code == 200
+    en_data = en_resp.json()
+    assert en_data["reconstructed_text"] == "Water"
+    assert en_data["lang"] == "en"
+    assert en_data["confidence"] >= 0.8
+    assert "jitter_percent" in en_data["acoustic_metrics"]
+    assert "shimmer_percent" in en_data["acoustic_metrics"]
+    assert "Water" in en_data["candidates"]
+
+    # Test Punjabi preset
+    pa_resp = await client.post(
+        f"/awaaz/{patient.id}/decode-speech",
+        json={"preset_id": "water", "target_lang": "pa", "simulated_dysarthria_level": 0.8},
+        headers=headers,
+    )
+    assert pa_resp.status_code == 200
+    pa_data = pa_resp.json()
+    assert pa_data["reconstructed_text"] == "ਪਾਣੀ"
+    assert pa_data["lang"] == "pa"
+    assert "ਪਾਣੀ" in pa_data["candidates"]

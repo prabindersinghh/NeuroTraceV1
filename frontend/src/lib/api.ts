@@ -427,8 +427,14 @@ export const api = {
     request<ExamReport>(`/report/${patientId}?lang=${lang}`),
 
   // --- Awaaz ---
-  awaazBoard: (patientId: string) =>
-    request<import("./types").AwaazBoard>(`/awaaz/${patientId}/board`),
+  awaazBoard: (patientId: string, lang?: string) =>
+    request<import("./types").AwaazBoard>(
+      `/awaaz/${patientId}/board${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`,
+    ),
+  awaazDecodeSpeech: (patientId: string, payload: import("./types").AwaazSpeechDecodeRequest) =>
+    request<import("./types").AwaazSpeechDecodeResult>(`/awaaz/${patientId}/decode-speech`, {
+      method: "POST", json: payload,
+    }),
   awaazAddCard: (patientId: string, payload: AwaazCardCreatePayload) =>
     request<AwaazCard>(`/awaaz/${patientId}/cards`, {
       method: "POST", json: payload,

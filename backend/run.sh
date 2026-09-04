@@ -77,6 +77,18 @@ echo "     • Patient:   ramesh@neurotrace.app"
 echo "     • Caregiver: demo@neurotrace.app"
 echo "     • Admin:     admin@neurotrace.app"
 echo "──────────────────────────────────────────────"
-echo ""
+# Check if port 8000 is already in use
+EXISTING_PID=$(lsof -nP -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null | head -n1 || true)
+if [ -n "$EXISTING_PID" ]; then
+    if curl -s -f http://127.0.0.1:8000/health >/dev/null 2>&1; then
+        echo "⚡ NeuroTrace Backend is already running and healthy on http://localhost:8000 (PID: $EXISTING_PID)."
+        echo "   To restart it, run: kill $EXISTING_PID && ./run.sh"
+        exit 0
+    else
+        echo "⚠️  Port 8000 is occupied by PID $EXISTING_PID (not responding). Clearing port..."
+        kill -9 $(lsof -nP -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null) 2>/dev/null || true
+        sleep 1
+    fi
+fi
 
 exec $UVICORN app.main:app --reload --host 127.0.0.1 --port 8000

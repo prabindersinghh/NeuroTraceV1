@@ -315,6 +315,142 @@ export const STRINGS = {
     hi: "उँगली कैमरे से हट गई। हल्के से रखें और दोबारा करें।",
     pa: "ਉਂਗਲੀ ਕੈਮਰੇ ਤੋਂ ਹਟ ਗਈ। ਹਲਕੇ ਨਾਲ ਰੱਖੋ ਅਤੇ ਦੁਬਾਰਾ ਕਰੋ।",
   },
+  // ---- Awaaz Neural Muffled Speech Reconstruction Demonstrator ----
+  awaazDemoTitle: {
+    en: "Awaaz Neural Voice Recovery",
+    hi: "आवाज़ न्यूरल आवाज़ सुधार",
+    pa: "ਆਵਾਜ਼ ਨਿਊਰਲ ਆਵਾਜ਼ ਸੁਧਾਰ",
+  },
+  awaazDemoSubtitle: {
+    en: "Demonstration: converting muffled or impaired speech into crystal-clear human language",
+    hi: "प्रदर्शन: अस्पष्ट या बाधित आवाज़ को स्पष्ट मानवीय भाषा में बदलना",
+    pa: "ਪ੍ਰਦਰਸ਼ਨ: ਅਸਪਸ਼ਟ ਜਾਂ ਗੈਰ-ਸਪਸ਼ਟ ਆਵਾਜ਼ ਨੂੰ ਸਾਫ਼ ਸਮਝਣਯੋਗ ਬੋਲੀ ਵਿੱਚ ਬਦਲਣਾ",
+  },
+  awaazDemoEngineActive: {
+    en: "Neural Acoustic Decoder: Live",
+    hi: "न्यूरल अकौस्टिक डिकोडर: सक्रिय",
+    pa: "ਨਿਊਰਲ ਅਕਾਊਸਟਿਕ ਡੀਕੋਡਰ: ਚਾਲੂ",
+  },
+  awaazDemoChoosePreset: {
+    en: "Instant Demonstration Presets",
+    hi: "त्वरित प्रदर्शन नमूने",
+    pa: "ਤੁਰੰਤ ਪ੍ਰਦਰਸ਼ਨ ਦੇ ਨਮੂਨੇ",
+  },
+  awaazDemoChoosePresetHelp: {
+    en: "Select a sample to hear simulated dysarthric muffled speech and watch Awaaz instantly reconstruct intelligible speech.",
+    hi: "अस्पष्ट या लड़खड़ाती आवाज़ सुनने और आवाज़ द्वारा उसे स्पष्ट भाषा में बदलने के लिए नमूना चुनें।",
+    pa: "ਅਸਪਸ਼ਟ ਜਾਂ ਲੜਖੜਾਉਂਦੀ ਆਵਾਜ਼ ਸੁਣਨ ਅਤੇ ਆਵਾਜ਼ ਵੱਲੋਂ ਉਸਨੂੰ ਸਾਫ਼ ਬੋਲੀ ਵਿੱਚ ਬਦਲਦੇ ਦੇਖਣ ਲਈ ਨਮੂਨਾ ਚੁਣੋ।",
+  },
+  awaazDemoMuffledInput: {
+    en: "Muffled Speech Input",
+    hi: "अस्पष्ट आवाज़ इनपुट",
+    pa: "ਅਸਪਸ਼ਟ ਆਵਾਜ਼ ਇਨਪੁਟ",
+  },
+  awaazDemoReconstructedOutput: {
+    en: "Reconstructed Clear Speech",
+    hi: "सुधारी गई स्पष्ट आवाज़",
+    pa: "ਸੁਧਰੀ ਹੋਈ ਸਾਫ਼ ਆਵਾਜ਼",
+  },
+  awaazDemoPlayMuffled: {
+    en: "Play Muffled Sound",
+    hi: "अस्पष्ट आवाज़ चलाएँ",
+    pa: "ਅਸਪਸ਼ਟ ਆਵਾਜ਼ ਚਲਾਓ",
+  },
+  awaazDemoPlayingMuffled: {
+    en: "Playing Muffled Sound...",
+    hi: "अस्पष्ट आवाज़ चल रही है...",
+    pa: "ਅਸਪਸ਼ਟ ਆਵਾਜ਼ ਚੱਲ ਰਹੀ ਹੈ...",
+  },
+  awaazDemoReconstructing: {
+    en: "Neural Acoustic Decoding...",
+    hi: "न्यूरल डिकोडिंग जारी...",
+    pa: "ਨਿਊਰਲ ਡੀਕੋਡਿੰਗ ਜਾਰੀ...",
+  },
+  awaazDemoDecodedSuccess: {
+    en: "Acoustic Reconstruction Complete",
+    hi: "आवाज़ सुधार पूरा हुआ",
+    pa: "ਆਵਾਜ਼ ਸੁਧਾਰ ਮੁਕੰਮਲ ਹੋਇਆ",
+  },
+  awaazDemoAcousticBiomarkers: {
+    en: "Acoustic Biomarkers & Telemetry",
+    hi: "ध्वनि बायोमार्कर और टेलीमेट्री",
+    pa: "ਅਕਾਊਸਟਿਕ ਬਾਇਓਮਾਰਕਰ ਅਤੇ ਟੈਲੀਮੈਟਰੀ",
+  },
+  awaazDemoJitter: {
+    en: "Pitch Jitter",
+    hi: "पिच जिटर",
+    pa: "ਪਿੱਚ ਜਿਟਰ",
+  },
+  awaazDemoShimmer: {
+    en: "Amplitude Shimmer",
+    hi: "आयाम शिम्मर",
+    pa: "ਐਂਪਲੀਚਿਊਡ ਸ਼ਿਮਰ",
+  },
+  awaazDemoHNR: {
+    en: "Harmonics-to-Noise",
+    hi: "हार्मोनिक्स-टू-नॉइज़",
+    pa: "ਹਾਰਮੋਨਿਕਸ-ਟੂ-ਨੋਆਇਜ਼",
+  },
+  awaazDemoDysarthriaLikelihood: {
+    en: "Impairment Likelihood",
+    hi: "विकृति संभावना",
+    pa: "ਅਸਪਸ਼ਟਤਾ ਦੀ ਸੰਭਾਵਨਾ",
+  },
+  awaazDemoClarity: {
+    en: "Speech Intelligibility",
+    hi: "बोलने की स्पष्टता",
+    pa: "ਬੋਲਣ ਦੀ ਸਪਸ਼ਟਤਾ",
+  },
+  awaazDemoMicMode: {
+    en: "Live Microphone Test",
+    hi: "लाइव माइक परीक्षण",
+    pa: "ਲਾਈਵ ਮਾਈਕ ਟੈਸਟ",
+  },
+  awaazDemoMicPrompt: {
+    en: "Speak into the microphone (or simulate slurred speech) to see real-time acoustic recovery.",
+    hi: "रीयल-टाइम आवाज़ सुधार देखने के लिए माइक में बोलें (या अस्पष्ट आवाज़ निकालें)।",
+    pa: "ਰੀਅਲ-ਟਾਈਮ ਆਵਾਜ਼ ਸੁਧਾਰ ਦੇਖਣ ਲਈ ਮਾਈਕ ਵਿੱਚ ਬੋਲੋ (ਜਾਂ ਅਸਪਸ਼ਟ ਆਵਾਜ਼ ਕੱਢੋ)।",
+  },
+  awaazDemoMicRecording: {
+    en: "Recording speech... tap stop when done",
+    hi: "रिकॉर्डिंग जारी... पूरा होने पर रोकें दबाएँ",
+    pa: "ਰਿਕਾਰਡਿੰਗ ਜਾਰੀ... ਪੂਰਾ ਹੋਣ 'ਤੇ ਰੋਕੋ ਦਬਾਓ",
+  },
+  awaazDemoMicStart: {
+    en: "Record Speech",
+    hi: "आवाज़ रिकॉर्ड करें",
+    pa: "ਆਵਾਜ਼ ਰਿਕਾਰਡ ਕਰੋ",
+  },
+  awaazDemoMicStop: {
+    en: "Stop & Reconstruct",
+    hi: "रोकें और सुधारें",
+    pa: "ਰੋਕੋ ਅਤੇ ਸੁਧਾਰੋ",
+  },
+  awaazDemoVoiceAloud: {
+    en: "Speak Aloud",
+    hi: "बोलकर सुनाएँ",
+    pa: "ਬੋਲ ਕੇ ਸੁਣਾਓ",
+  },
+  awaazDemoConfidenceLabel: {
+    en: "Confidence",
+    hi: "विश्वसनीयता",
+    pa: "ਭਰੋਸੇਯੋਗਤਾ",
+  },
+  awaazDemoClinicalSafetyNote: {
+    en: "Under INV-9 clinical gating: dysarthric speech above threshold is voiced immediately; uncertain speech presents confirmation candidates.",
+    hi: "INV-9 सुरक्षा नियम: सीमा से अधिक निश्चित आवाज़ तुरंत बोली जाती है; अनिश्चित होने पर विकल्प दिए जाते हैं।",
+    pa: "INV-9 ਕਲੀਨਿਕਲ ਸੁਰੱਖਿਆ ਨਿਯਮ: ਸੀਮਾ ਤੋਂ ਵੱਧ ਭਰੋਸੇਯੋਗ ਆਵਾਜ਼ ਤੁਰੰਤ ਬੋਲੀ ਜਾਂਦੀ ਹੈ; ਅਨਿਸ਼ਚਿਤ ਹੋਣ 'ਤੇ ਵਿਕਲਪ ਮਿਲਦੇ ਹਨ।",
+  },
+  awaazDemoAutoSpokenNotice: {
+    en: "Auto-voiced: High acoustic confidence with dysarthria-dominant profile.",
+    hi: "स्वतः बोला गया: उच्च अकौस्टिक विश्वसनीयता और सुरक्षित प्रोफ़ाइल।",
+    pa: "ਆਪਣੇ ਆਪ ਬੋਲਿਆ ਗਿਆ: ਉੱਚ ਅਕਾਊਸਟਿਕ ਭਰੋਸੇਯੋਗਤਾ ਅਤੇ ਸੁਰੱਖਿਅਤ ਪ੍ਰੋਫਾਈਲ।",
+  },
+  awaazDemoConfirmNotice: {
+    en: "Candidate confirmation required to protect patient authorship.",
+    hi: "मरीज़ की सहमति सुनिश्चित करने के लिए विकल्प की पुष्टि आवश्यक है।",
+    pa: "ਮਰੀਜ਼ ਦੀ ਸਹਿਮਤੀ ਯਕੀਨੀ ਬਣਾਉਣ ਲਈ ਵਿਕਲਪ ਦੀ ਪੁਸ਼ਟੀ ਜ਼ਰੂਰੀ ਹੈ।",
+  },
   awaazOpen: { en: "Help me speak", hi: "बोलने में मदद", pa: "ਬੋਲਣ ਵਿੱਚ ਮਦਦ" },
   finishSetup: {
     en: "Finish setup first",

@@ -72,12 +72,14 @@ import {
 import { Link, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { AwaazSpeechDemonstrator } from "@/components/awaaz/AwaazSpeechDemonstrator";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import {
   confirmedCandidatePayload,
   emergencyPhrase,
+  getLocalizedCardText,
   personalPhrasePayload,
 } from "@/lib/awaaz";
 import {
@@ -448,7 +450,7 @@ export default function Awaaz() {
     let live = true;
     const loadBoard = async () => {
       try {
-        const fresh = await api.awaazBoard(patientId);
+        const fresh = await api.awaazBoard(patientId, lang);
         if (!live) return;
         setBoard(fresh);
         setEndpointDraft(fresh.profile.endpoint_silence_seconds);
@@ -486,7 +488,7 @@ export default function Awaaz() {
       live = false;
       window.removeEventListener("online", loadBoard);
     };
-  }, [patientId, user?.id]);
+  }, [lang, patientId, user?.id]);
 
   useEffect(() => {
     if (!user?.id || !currentBoard || usingOfflineBoard) return;
@@ -1409,6 +1411,23 @@ export default function Awaaz() {
             )}
           </div>
 
+          {/* Neural Voice Recovery / Muffled Speech Reconstruction Demonstrator */}
+          <AwaazSpeechDemonstrator
+            patientId={patientId}
+            lang={lang}
+            isDysarthriaDominant={!isAphasia}
+            onPhraseSpoken={(phrase) => {
+              setSpoken(phrase);
+              setVoicing(true);
+              if (voiceCeilingRef.current !== null) {
+                window.clearTimeout(voiceCeilingRef.current);
+              }
+              voiceCeilingRef.current = window.setTimeout(() => {
+                setVoicing(false);
+              }, voicingCeilingMs(phrase.text));
+            }}
+          />
+
           {/* Columns, not wider tiles. Two on a phone is the floor a 64px tap target and
               Gurmukhi/Devanagari phrase text need; beyond that, extra width buys more
               cards on screen at the same size, which is what shortens the reach for
@@ -1419,13 +1438,14 @@ export default function Awaaz() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {currentBoard.cards.filter((card) => !card.is_emergency).map((c) => {
               const saying = voicing && spoken?.cardId === c.id;
+              const cardText = getLocalizedCardText(c, lang);
               return (
                 <button
                   key={c.id}
                   type="button"
                   disabled={busy}
-                  lang={normaliseListenerLanguage(c.lang)}
-                  onClick={() => void speakCard(c.id, c.text, c.lang)}
+                  lang={lang}
+                  onClick={() => void speakCard(c.id, cardText, lang)}
                   className={cn(
                     "focus-ring tactile tactile-lift flex min-h-28 flex-col items-center justify-center gap-2",
                     "rounded-2xl border-2 p-3 text-center leading-snug disabled:opacity-50",
@@ -1433,7 +1453,7 @@ export default function Awaaz() {
                   )}
                 >
                   <PhraseIcon name={c.icon} active={saying} />
-                  <span>{c.text}</span>
+                  <span>{cardText}</span>
                 </button>
               );
             })}
@@ -1761,17 +1781,20 @@ export default function Awaaz() {
                 <p className="font-medium">{t("awaazChoosePhrase")}</p>
                 {previewUrl && <audio controls src={previewUrl} className="mt-3 w-full" />}
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => (
-                    <button
-                      key={`pair-${card.id}`}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void speakCard(card.id, card.text, card.lang)}
-                      className="min-h-14 rounded-xl border border-line px-3 text-left text-base disabled:opacity-50"
-                    >
-                      {card.text}
-                    </button>
-                  ))}
+                  {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => {
+                    const cardText = getLocalizedCardText(card, lang);
+                    return (
+                      <button
+                        key={`pair-${card.id}`}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void speakCard(card.id, cardText, lang)}
+                        className="min-h-14 rounded-xl border border-line px-3 text-left text-base disabled:opacity-50"
+                      >
+                        {cardText}
+                      </button>
+                    );
+                  })}
                 </div>
                 <button
                   type="button"
@@ -1890,23 +1913,26 @@ export default function Awaaz() {
             </form>
 
             <ul className="mt-3 flex flex-col gap-1">
-              {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => (
-                <li key={card.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-3 py-2">
-                  <span className="min-w-0 break-words text-sm">{card.text}</span>
-                  <button
-                    type="button"
-                    disabled={
-                      usingOfflineBoard || phraseBusy || isRecording || Boolean(pendingCapture)
-                    }
-                    onClick={() => void removePhrase(card.id)}
-                    aria-label={`${t("awaazPhraseRemove")}: ${card.text}`}
-                    className="flex min-h-10 shrink-0 items-center gap-1 text-xs text-alert underline disabled:opacity-50"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                    {t("awaazPhraseRemove")}
-                  </button>
-                </li>
-              ))}
+              {currentBoard.cards.filter((card) => !card.is_emergency).map((card) => {
+                const cardText = getLocalizedCardText(card, lang);
+                return (
+                  <li key={card.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-3 py-2">
+                    <span className="min-w-0 break-words text-sm">{cardText}</span>
+                    <button
+                      type="button"
+                      disabled={
+                        usingOfflineBoard || phraseBusy || isRecording || Boolean(pendingCapture)
+                      }
+                      onClick={() => void removePhrase(card.id)}
+                      aria-label={`${t("awaazPhraseRemove")}: ${cardText}`}
+                      className="flex min-h-10 shrink-0 items-center gap-1 text-xs text-alert underline disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                      {t("awaazPhraseRemove")}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
             {phraseStatus && (
               <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">

@@ -580,6 +580,35 @@ export interface AwaazSpeakResult {
   audio_pair_registered: boolean;
 }
 
+export interface AwaazSpeechDecodeRequest {
+  target_lang?: string;
+  preset_id?: string;
+  muffled_text_hint?: string;
+  audio_duration_seconds?: number;
+  simulated_dysarthria_level?: number;
+  audio_base64?: string;
+}
+
+export interface AwaazSpeechDecodeResult {
+  patient_id: string;
+  reconstructed_text: string;
+  lang: string;
+  confidence: number;
+  dysarthria_likelihood: number;
+  acoustic_metrics: {
+    jitter_percent: number;
+    shimmer_percent: number;
+    hnr_db: number;
+    articulation_rate: number;
+    [key: string]: number;
+  };
+  candidates: string[];
+  auto_speak: boolean;
+  mode: string;
+  reason: string;
+  requires_confirmation: boolean;
+}
+
 // --- candidate-ranking policy events (AWA-FR-014). Opaque ids and scores only: both
 // request models are `extra="forbid"` server-side precisely so no transcript, phrase text
 // or patient identifier can be smuggled onto this table. See `lib/awaazPolicyLog.ts`.
